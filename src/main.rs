@@ -44,71 +44,88 @@ fn prettybyte(count: u64) -> String {
     }
 }
 
-fn write_mode(hasher: &mut Sha512, file: &mut File, path: &Path) {
+fn write_mode_finalize(file: &mut File, bytes_written: u64) {
+    println!("Wrote {}. Syncing...", prettybyte(bytes_written));
+    if let Err(e) = file.sync_all() {
+        println!("Sync error: {}", e);
+    }
+}
+
+fn write_mode(hasher: &mut Sha512, file: &mut File, path: &Path, max_bytes: u64) {
     println!("Writing {:?} ...", path);
 
-    let mut bytecount = 0u64;
-    let mut logcount = 0;
+    let mut bytes_left = max_bytes;
+    let mut bytes_written = 0u64;
+    let mut log_count = 0;
 
     const WRITEBUFLEN: usize = HASHSIZE * 1024 * 10;
-    let mut writebuf = [0; WRITEBUFLEN];
+    let mut buffer = [0; WRITEBUFLEN];
 
     loop {
         // Fill the write buffer with a pseudo random pattern.
-        for i in (0..WRITEBUFLEN).step_by(HASHSIZE) {
+        let write_len = min(WRITEBUFLEN as u64, bytes_left) as usize;
+        for i in (0..write_len).step_by(HASHSIZE) {
             let hashdata = hasher.result_reset();
-            for j in 0..HASHSIZE {
-                writebuf[i+j] = hashdata[j];
+            for j in 0..min(HASHSIZE, write_len - i) {
+                buffer[i+j] = hashdata[j];
             }
             hasher.input(&hashdata[0..REHASHSLICE]);
         }
 
         // Write the buffer to disk.
-        if let Err(e) = file.write_all(&writebuf) {
+        if let Err(e) = file.write_all(&buffer[0..write_len]) {
             println!("Write error: {}", e);
-            println!("Wrote {}. Syncing...", prettybyte(bytecount));
-            if let Err(e) = file.sync_all() {
-                println!("Sync error: {}", e);
-            }
+            write_mode_finalize(file, bytes_written);
             //TODO ENOSPC -> result 0. Other errors -> result 1.
             break;
         }
 
         // Account for the written bytes.
-        bytecount += WRITEBUFLEN as u64;
-        logcount += WRITEBUFLEN;
-        if logcount >= LOGTHRES {
-            println!("Wrote {}.", prettybyte(bytecount));
-            logcount -= LOGTHRES;
+        bytes_written += write_len as u64;
+        bytes_left -= write_len as u64;
+        if bytes_left == 0 {
+            write_mode_finalize(file, bytes_written);
+            break;
+        }
+        log_count += write_len;
+        if log_count >= LOGTHRES {
+            println!("Wrote {}.", prettybyte(bytes_written));
+            log_count -= LOGTHRES;
         }
     }
 }
 
-fn read_mode(hasher: &mut Sha512, file: &mut File, path: &Path) {
+fn read_mode_finalize(bytes_read: u64) {
+    println!("Done. Verified {}.", prettybyte(bytes_read));
+}
+
+fn read_mode(hasher: &mut Sha512, file: &mut File, path: &Path, max_bytes: u64) {
     println!("Reading {:?} ...", path);
 
-    let mut bytecount = 0u64;
-    let mut logcount = 0;
+    let mut bytes_left = max_bytes;
+    let mut bytes_read = 0u64;
+    let mut log_count = 0;
 
     const READBUFLEN: usize = HASHSIZE * 1024 * 10;
-    let mut readbuf = [0; READBUFLEN];
-    let mut readcount = 0;
+    let mut buffer = [0; READBUFLEN];
+    let mut read_count = 0;
 
+    let mut read_len = min(READBUFLEN as u64, bytes_left) as usize;
     loop {
         // Read the next chunk from disk.
-        match file.read(&mut readbuf[readcount..readcount+(READBUFLEN-readcount)]) {
+        match file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
             Ok(n) => {
-                readcount += n;
+                read_count += n;
 
                 // Check if the read buffer is full, or if we are the the end of the disk.
-                assert!(readcount <= READBUFLEN);
-                if readcount == READBUFLEN || (readcount > 0 && n == 0) {
+                assert!(read_count <= read_len);
+                if read_count == read_len || (read_count > 0 && n == 0) {
                     // Calculate and compare the read buffer to the pseudo random sequence.
-                    for i in (0..readcount).step_by(HASHSIZE) {
+                    for i in (0..read_count).step_by(HASHSIZE) {
                         let hashdata = hasher.result_reset();
-                        for j in 0..min(HASHSIZE, readcount - i) {
-                            if readbuf[i+j] != hashdata[j] {
-                                println!("Data MISMATCH at Byte {}!", bytecount + (i as u64) + (j as u64));
+                        for j in 0..min(HASHSIZE, read_count - i) {
+                            if buffer[i+j] != hashdata[j] {
+                                println!("Data MISMATCH at Byte {}!", bytes_read + (i as u64) + (j as u64));
                                 std::process::exit(1);
                             }
                         }
@@ -116,23 +133,29 @@ fn read_mode(hasher: &mut Sha512, file: &mut File, path: &Path) {
                     }
 
                     // Account for the read bytes.
-                    bytecount += readcount as u64;
-                    logcount += readcount;
-                    if logcount >= LOGTHRES {
-                        println!("Verified {}.", prettybyte(bytecount));
-                        logcount -= LOGTHRES;
+                    bytes_read += read_count as u64;
+                    bytes_left -= read_count as u64;
+                    if bytes_left == 0 {
+                        read_mode_finalize(bytes_read);
+                        break;
                     }
-                    readcount = 0;
+                    log_count += read_count;
+                    if log_count >= LOGTHRES {
+                        println!("Verified {}.", prettybyte(bytes_read));
+                        log_count -= LOGTHRES;
+                    }
+                    read_count = 0;
+                    read_len = min(READBUFLEN as u64, bytes_left) as usize;
                 }
 
                 // End of the disk?
                 if n == 0 {
-                    println!("Done. No more bytes. Verified {}.", prettybyte(bytecount));
+                    read_mode_finalize(bytes_read);
                     break;
                 }
             },
             Err(e) => {
-                println!("Read error at {}: {}", prettybyte(bytecount), e);
+                println!("Read error at {}: {}", prettybyte(bytes_read), e);
                 break;
             },
         };
@@ -150,6 +173,11 @@ fn main() {
                     .long("write")
                     .short("w")
                     .help("Write to the device."))
+               .arg(clap::Arg::with_name("bytes")
+                    .long("bytes")
+                    .short("b")
+                    .takes_value(true)
+                    .help("Number of bytes to read/write."))
                .arg(clap::Arg::with_name("seed")
                     .long("seed")
                     .short("s")
@@ -159,6 +187,8 @@ fn main() {
 
     let device = args.value_of("device").unwrap();
     let write = args.is_present("write");
+    let max_bytes = args.value_of("bytes").unwrap_or(&u64::MAX.to_string()[..])
+                    .parse::<u64>().expect("Invalid --bytes parameter.");
     let seed = args.value_of("seed").unwrap_or("42");
 
     // Open the disk device.
@@ -180,9 +210,9 @@ fn main() {
     hasher.input(seed.as_bytes());
 
     if write {
-        write_mode(&mut hasher, &mut file, &path);
+        write_mode(&mut hasher, &mut file, &path, max_bytes);
     } else {
-        read_mode(&mut hasher, &mut file, &path);
+        read_mode(&mut hasher, &mut file, &path, max_bytes);
     }
 }
 
