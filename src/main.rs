@@ -24,11 +24,41 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::cmp::min;
 use sha2::{Sha512, Digest};
-
-const HASHSIZE: usize = 512 / 8;
-const REHASHSLICE: usize = 256 / 8;
+use sha2::digest::generic_array::{GenericArray, typenum};
 
 const LOGTHRES: usize = 1024 * 1024 * 10;
+
+struct Hasher {
+    alg:    Sha512,
+    seed:   Vec<u8>,
+    count:  u64,
+    prev:   [u8; Hasher::PREVSIZE],
+}
+
+impl Hasher {
+    const SIZE: usize = 512 / 8;
+    const PREVSIZE: usize = Hasher::SIZE / 2;
+    const OUTSIZE: usize = Hasher::SIZE;
+
+    fn new(seed: Vec<u8>) -> Hasher {
+        Hasher {
+            alg:    Sha512::new(),
+            seed:   seed,
+            count:  0,
+            prev:   [0; Hasher::PREVSIZE],
+        }
+    }
+
+    fn next(&mut self) -> GenericArray<u8, typenum::U64> {
+        self.alg.input(&self.seed);
+        self.alg.input(&self.prev[..]);
+        self.alg.input(self.count.to_le_bytes());
+        self.count += 1;
+        let result = self.alg.result_reset();
+        self.prev.copy_from_slice(&result[0..Hasher::PREVSIZE]);
+        return result;
+    }
+}
 
 fn prettybyte(count: u64) -> String {
     if count >= 1024 * 1024 * 1024 * 1024 {
@@ -51,25 +81,23 @@ fn write_mode_finalize(file: &mut File, bytes_written: u64) {
     }
 }
 
-fn write_mode(hasher: &mut Sha512, file: &mut File, path: &Path, max_bytes: u64) {
+fn write_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) {
     println!("Writing {:?} ...", path);
 
     let mut bytes_left = max_bytes;
     let mut bytes_written = 0u64;
     let mut log_count = 0;
 
-    const WRITEBUFLEN: usize = HASHSIZE * 1024 * 10;
+    const WRITEBUFLEN: usize = Hasher::OUTSIZE * 1024 * 10;
     let mut buffer = [0; WRITEBUFLEN];
 
     loop {
         // Fill the write buffer with a pseudo random pattern.
         let write_len = min(WRITEBUFLEN as u64, bytes_left) as usize;
-        for i in (0..write_len).step_by(HASHSIZE) {
-            let hashdata = hasher.result_reset();
-            for j in 0..min(HASHSIZE, write_len - i) {
-                buffer[i+j] = hashdata[j];
-            }
-            hasher.input(&hashdata[0..REHASHSLICE]);
+        for i in (0..write_len).step_by(Hasher::OUTSIZE) {
+            let hashdata = hasher.next();
+            let chunk_len = min(Hasher::OUTSIZE, write_len - i);
+            buffer[i..i+chunk_len].copy_from_slice(&hashdata[0..chunk_len]);
         }
 
         // Write the buffer to disk.
@@ -99,14 +127,14 @@ fn read_mode_finalize(bytes_read: u64) {
     println!("Done. Verified {}.", prettybyte(bytes_read));
 }
 
-fn read_mode(hasher: &mut Sha512, file: &mut File, path: &Path, max_bytes: u64) {
+fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) {
     println!("Reading {:?} ...", path);
 
     let mut bytes_left = max_bytes;
     let mut bytes_read = 0u64;
     let mut log_count = 0;
 
-    const READBUFLEN: usize = HASHSIZE * 1024 * 10;
+    const READBUFLEN: usize = Hasher::OUTSIZE * 1024 * 10;
     let mut buffer = [0; READBUFLEN];
     let mut read_count = 0;
 
@@ -121,15 +149,14 @@ fn read_mode(hasher: &mut Sha512, file: &mut File, path: &Path, max_bytes: u64) 
                 assert!(read_count <= read_len);
                 if read_count == read_len || (read_count > 0 && n == 0) {
                     // Calculate and compare the read buffer to the pseudo random sequence.
-                    for i in (0..read_count).step_by(HASHSIZE) {
-                        let hashdata = hasher.result_reset();
-                        for j in 0..min(HASHSIZE, read_count - i) {
+                    for i in (0..read_count).step_by(Hasher::OUTSIZE) {
+                        let hashdata = hasher.next();
+                        for j in 0..min(Hasher::OUTSIZE, read_count - i) {
                             if buffer[i+j] != hashdata[j] {
                                 println!("Data MISMATCH at Byte {}!", bytes_read + (i as u64) + (j as u64));
                                 std::process::exit(1);
                             }
                         }
-                        hasher.input(&hashdata[0..REHASHSLICE]);
                     }
 
                     // Account for the read bytes.
@@ -205,10 +232,7 @@ fn main() {
         Ok(file) => file,
     };
 
-    // Create the hasher for pseudo random sequence generation and seed it.
-    let mut hasher = Sha512::new();
-    hasher.input(seed.as_bytes());
-
+    let mut hasher = Hasher::new(seed.as_bytes().to_vec());
     if write {
         write_mode(&mut hasher, &mut file, &path, max_bytes);
     } else {
