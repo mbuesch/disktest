@@ -122,12 +122,12 @@ fn write_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64)
             log_count -= LOGTHRES;
         }
     }
-    return Ok(())
+    return Ok(());
 }
 
 fn read_mode_finalize(bytes_read: u64) -> Result<(), Box<dyn Error>> {
     println!("Done. Verified {}.", prettybyte(bytes_read));
-    return Ok(())
+    return Ok(());
 }
 
 fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) -> Result<(), Box<dyn Error>> {
@@ -191,7 +191,7 @@ fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) 
             },
         };
     }
-    return Ok(())
+    return Ok(());
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -243,7 +243,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else {
         read_mode(&mut hasher, &mut file, &path, max_bytes)?;
     }
-    return Ok(())
+    return Ok(());
 }
 
 // vim: ts=4 sw=4 expandtab
