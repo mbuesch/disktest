@@ -19,7 +19,9 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
+use std::error::Error;
 use std::fs::{File, OpenOptions};
+use std::io;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::cmp::min;
@@ -74,14 +76,13 @@ fn prettybyte(count: u64) -> String {
     }
 }
 
-fn write_mode_finalize(file: &mut File, bytes_written: u64) {
+fn write_mode_finalize(file: &mut File, bytes_written: u64) -> Result<(), Box<dyn Error>> {
     println!("Wrote {}. Syncing...", prettybyte(bytes_written));
-    if let Err(e) = file.sync_all() {
-        println!("Sync error: {}", e);
-    }
+    file.sync_all()?;
+    return Ok(());
 }
 
-fn write_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) {
+fn write_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) -> Result<(), Box<dyn Error>> {
     println!("Writing {:?} ...", path);
 
     let mut bytes_left = max_bytes;
@@ -103,7 +104,7 @@ fn write_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64)
         // Write the buffer to disk.
         if let Err(e) = file.write_all(&buffer[0..write_len]) {
             println!("Write error: {}", e);
-            write_mode_finalize(file, bytes_written);
+            write_mode_finalize(file, bytes_written)?;
             //TODO ENOSPC -> result 0. Other errors -> result 1.
             break;
         }
@@ -112,7 +113,7 @@ fn write_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64)
         bytes_written += write_len as u64;
         bytes_left -= write_len as u64;
         if bytes_left == 0 {
-            write_mode_finalize(file, bytes_written);
+            write_mode_finalize(file, bytes_written)?;
             break;
         }
         log_count += write_len;
@@ -121,13 +122,15 @@ fn write_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64)
             log_count -= LOGTHRES;
         }
     }
+    return Ok(())
 }
 
-fn read_mode_finalize(bytes_read: u64) {
+fn read_mode_finalize(bytes_read: u64) -> Result<(), Box<dyn Error>> {
     println!("Done. Verified {}.", prettybyte(bytes_read));
+    return Ok(())
 }
 
-fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) {
+fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) -> Result<(), Box<dyn Error>> {
     println!("Reading {:?} ...", path);
 
     let mut bytes_left = max_bytes;
@@ -153,8 +156,9 @@ fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) 
                         let hashdata = hasher.next();
                         for j in 0..min(Hasher::OUTSIZE, read_count - i) {
                             if buffer[i+j] != hashdata[j] {
-                                println!("Data MISMATCH at Byte {}!", bytes_read + (i as u64) + (j as u64));
-                                std::process::exit(1);
+                                let msg = format!("Data MISMATCH at Byte {}!", bytes_read + (i as u64) + (j as u64));
+                                println!("{}", msg);
+                                return Err(Box::new(io::Error::new(io::ErrorKind::Other, msg)));
                             }
                         }
                     }
@@ -163,7 +167,7 @@ fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) 
                     bytes_read += read_count as u64;
                     bytes_left -= read_count as u64;
                     if bytes_left == 0 {
-                        read_mode_finalize(bytes_read);
+                        read_mode_finalize(bytes_read)?;
                         break;
                     }
                     log_count += read_count;
@@ -177,7 +181,7 @@ fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) 
 
                 // End of the disk?
                 if n == 0 {
-                    read_mode_finalize(bytes_read);
+                    read_mode_finalize(bytes_read)?;
                     break;
                 }
             },
@@ -187,9 +191,10 @@ fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) 
             },
         };
     }
+    return Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let args = clap::App::new("disktest")
                .about("Hard drive tester")
                .arg(clap::Arg::with_name("device")
@@ -227,17 +232,18 @@ fn main() {
                                            .open(path) {
         Err(e) => {
             println!("Failed to open file {:?}: {}", path, e);
-            std::process::exit(1);
+            return Err(Box::new(e));
         },
         Ok(file) => file,
     };
 
     let mut hasher = Hasher::new(seed.as_bytes().to_vec());
     if write {
-        write_mode(&mut hasher, &mut file, &path, max_bytes);
+        write_mode(&mut hasher, &mut file, &path, max_bytes)?;
     } else {
-        read_mode(&mut hasher, &mut file, &path, max_bytes);
+        read_mode(&mut hasher, &mut file, &path, max_bytes)?;
     }
+    return Ok(())
 }
 
 // vim: ts=4 sw=4 expandtab
