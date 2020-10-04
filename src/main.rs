@@ -30,19 +30,19 @@ use sha2::digest::generic_array::{GenericArray, typenum};
 
 const LOGTHRES: usize = 1024 * 1024 * 10;
 
-struct Hasher {
+pub struct Hasher<'a> {
     alg:    Sha512,
-    seed:   Vec<u8>,
+    seed:   &'a Vec<u8>,
     count:  u64,
     prev:   [u8; Hasher::PREVSIZE],
 }
 
-impl Hasher {
+impl<'a> Hasher<'a> {
     const SIZE: usize = 512 / 8;
     const PREVSIZE: usize = Hasher::SIZE / 2;
     const OUTSIZE: usize = Hasher::SIZE;
 
-    fn new(seed: Vec<u8>) -> Hasher {
+    pub fn new(seed: &'a Vec<u8>) -> Hasher<'a> {
         Hasher {
             alg:    Sha512::new(),
             seed:   seed,
@@ -51,8 +51,8 @@ impl Hasher {
         }
     }
 
-    fn next(&mut self) -> GenericArray<u8, typenum::U64> {
-        self.alg.input(&self.seed);
+    pub fn next(&mut self) -> GenericArray<u8, typenum::U64> {
+        self.alg.input(self.seed);
         self.alg.input(&self.prev[..]);
         self.alg.input(self.count.to_le_bytes());
         self.count += 1;
@@ -76,122 +76,140 @@ fn prettybyte(count: u64) -> String {
     }
 }
 
-fn write_mode_finalize(file: &mut File, bytes_written: u64) -> Result<(), Box<dyn Error>> {
-    println!("Wrote {}. Syncing...", prettybyte(bytes_written));
-    file.sync_all()?;
-    return Ok(());
+pub struct Disktest<'a> {
+    hasher: &'a mut Hasher<'a>,
+    file:   &'a mut File,
+    path:   &'a Path,
 }
 
-fn write_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) -> Result<(), Box<dyn Error>> {
-    println!("Writing {:?} ...", path);
-
-    let mut bytes_left = max_bytes;
-    let mut bytes_written = 0u64;
-    let mut log_count = 0;
-
-    const WRITEBUFLEN: usize = Hasher::OUTSIZE * 1024 * 10;
-    let mut buffer = [0; WRITEBUFLEN];
-
-    loop {
-        // Fill the write buffer with a pseudo random pattern.
-        let write_len = min(WRITEBUFLEN as u64, bytes_left) as usize;
-        for i in (0..write_len).step_by(Hasher::OUTSIZE) {
-            let hashdata = hasher.next();
-            let chunk_len = min(Hasher::OUTSIZE, write_len - i);
-            buffer[i..i+chunk_len].copy_from_slice(&hashdata[0..chunk_len]);
-        }
-
-        // Write the buffer to disk.
-        if let Err(e) = file.write_all(&buffer[0..write_len]) {
-            println!("Write error: {}", e);
-            write_mode_finalize(file, bytes_written)?;
-            //TODO ENOSPC -> result 0. Other errors -> result 1.
-            break;
-        }
-
-        // Account for the written bytes.
-        bytes_written += write_len as u64;
-        bytes_left -= write_len as u64;
-        if bytes_left == 0 {
-            write_mode_finalize(file, bytes_written)?;
-            break;
-        }
-        log_count += write_len;
-        if log_count >= LOGTHRES {
-            println!("Wrote {}.", prettybyte(bytes_written));
-            log_count -= LOGTHRES;
+impl<'a> Disktest<'a> {
+    pub fn new(hasher: &'a mut Hasher<'a>,
+           file: &'a mut File,
+           path: &'a Path) -> Disktest<'a> {
+        Disktest {
+            hasher,
+            file,
+            path,
         }
     }
-    return Ok(());
-}
 
-fn read_mode_finalize(bytes_read: u64) -> Result<(), Box<dyn Error>> {
-    println!("Done. Verified {}.", prettybyte(bytes_read));
-    return Ok(());
-}
+    fn write_mode_finalize(&mut self, bytes_written: u64) -> Result<(), Box<dyn Error>> {
+        println!("Wrote {}. Syncing...", prettybyte(bytes_written));
+        self.file.sync_all()?;
+        return Ok(());
+    }
 
-fn read_mode(hasher: &mut Hasher, file: &mut File, path: &Path, max_bytes: u64) -> Result<(), Box<dyn Error>> {
-    println!("Reading {:?} ...", path);
+    pub fn write_mode(&mut self, max_bytes: u64) -> Result<(), Box<dyn Error>> {
+        println!("Writing {:?} ...", self.path);
 
-    let mut bytes_left = max_bytes;
-    let mut bytes_read = 0u64;
-    let mut log_count = 0;
+        let mut bytes_left = max_bytes;
+        let mut bytes_written = 0u64;
+        let mut log_count = 0;
 
-    const READBUFLEN: usize = Hasher::OUTSIZE * 1024 * 10;
-    let mut buffer = [0; READBUFLEN];
-    let mut read_count = 0;
+        const WRITEBUFLEN: usize = Hasher::OUTSIZE * 1024 * 10;
+        let mut buffer = [0; WRITEBUFLEN];
 
-    let mut read_len = min(READBUFLEN as u64, bytes_left) as usize;
-    loop {
-        // Read the next chunk from disk.
-        match file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
-            Ok(n) => {
-                read_count += n;
+        loop {
+            // Fill the write buffer with a pseudo random pattern.
+            let write_len = min(WRITEBUFLEN as u64, bytes_left) as usize;
+            for i in (0..write_len).step_by(Hasher::OUTSIZE) {
+                let hashdata = self.hasher.next();
+                let chunk_len = min(Hasher::OUTSIZE, write_len - i);
+                buffer[i..i+chunk_len].copy_from_slice(&hashdata[0..chunk_len]);
+            }
 
-                // Check if the read buffer is full, or if we are the the end of the disk.
-                assert!(read_count <= read_len);
-                if read_count == read_len || (read_count > 0 && n == 0) {
-                    // Calculate and compare the read buffer to the pseudo random sequence.
-                    for i in (0..read_count).step_by(Hasher::OUTSIZE) {
-                        let hashdata = hasher.next();
-                        for j in 0..min(Hasher::OUTSIZE, read_count - i) {
-                            if buffer[i+j] != hashdata[j] {
-                                let msg = format!("Data MISMATCH at Byte {}!", bytes_read + (i as u64) + (j as u64));
-                                println!("{}", msg);
-                                return Err(Box::new(io::Error::new(io::ErrorKind::Other, msg)));
+            // Write the buffer to disk.
+            if let Err(e) = self.file.write_all(&buffer[0..write_len]) {
+                println!("Write error: {}", e);
+                self.write_mode_finalize(bytes_written)?;
+                //TODO ENOSPC -> result 0. Other errors -> result 1.
+                break;
+            }
+
+            // Account for the written bytes.
+            bytes_written += write_len as u64;
+            bytes_left -= write_len as u64;
+            if bytes_left == 0 {
+                self.write_mode_finalize(bytes_written)?;
+                break;
+            }
+            log_count += write_len;
+            if log_count >= LOGTHRES {
+                println!("Wrote {}.", prettybyte(bytes_written));
+                log_count -= LOGTHRES;
+            }
+        }
+        return Ok(());
+    }
+
+    fn read_mode_finalize(&mut self, bytes_read: u64) -> Result<(), Box<dyn Error>> {
+        println!("Done. Verified {}.", prettybyte(bytes_read));
+        return Ok(());
+    }
+
+    pub fn read_mode(&mut self, max_bytes: u64) -> Result<(), Box<dyn Error>> {
+        println!("Reading {:?} ...", self.path);
+
+        let mut bytes_left = max_bytes;
+        let mut bytes_read = 0u64;
+        let mut log_count = 0;
+
+        const READBUFLEN: usize = Hasher::OUTSIZE * 1024 * 10;
+        let mut buffer = [0; READBUFLEN];
+        let mut read_count = 0;
+
+        let mut read_len = min(READBUFLEN as u64, bytes_left) as usize;
+        loop {
+            // Read the next chunk from disk.
+            match self.file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
+                Ok(n) => {
+                    read_count += n;
+
+                    // Check if the read buffer is full, or if we are the the end of the disk.
+                    assert!(read_count <= read_len);
+                    if read_count == read_len || (read_count > 0 && n == 0) {
+                        // Calculate and compare the read buffer to the pseudo random sequence.
+                        for i in (0..read_count).step_by(Hasher::OUTSIZE) {
+                            let hashdata = self.hasher.next();
+                            for j in 0..min(Hasher::OUTSIZE, read_count - i) {
+                                if buffer[i+j] != hashdata[j] {
+                                    let msg = format!("Data MISMATCH at Byte {}!", bytes_read + (i as u64) + (j as u64));
+                                    println!("{}", msg);
+                                    return Err(Box::new(io::Error::new(io::ErrorKind::Other, msg)));
+                                }
                             }
                         }
+
+                        // Account for the read bytes.
+                        bytes_read += read_count as u64;
+                        bytes_left -= read_count as u64;
+                        if bytes_left == 0 {
+                            self.read_mode_finalize(bytes_read)?;
+                            break;
+                        }
+                        log_count += read_count;
+                        if log_count >= LOGTHRES {
+                            println!("Verified {}.", prettybyte(bytes_read));
+                            log_count -= LOGTHRES;
+                        }
+                        read_count = 0;
+                        read_len = min(READBUFLEN as u64, bytes_left) as usize;
                     }
 
-                    // Account for the read bytes.
-                    bytes_read += read_count as u64;
-                    bytes_left -= read_count as u64;
-                    if bytes_left == 0 {
-                        read_mode_finalize(bytes_read)?;
+                    // End of the disk?
+                    if n == 0 {
+                        self.read_mode_finalize(bytes_read)?;
                         break;
                     }
-                    log_count += read_count;
-                    if log_count >= LOGTHRES {
-                        println!("Verified {}.", prettybyte(bytes_read));
-                        log_count -= LOGTHRES;
-                    }
-                    read_count = 0;
-                    read_len = min(READBUFLEN as u64, bytes_left) as usize;
-                }
-
-                // End of the disk?
-                if n == 0 {
-                    read_mode_finalize(bytes_read)?;
+                },
+                Err(e) => {
+                    println!("Read error at {}: {}", prettybyte(bytes_read), e);
                     break;
-                }
-            },
-            Err(e) => {
-                println!("Read error at {}: {}", prettybyte(bytes_read), e);
-                break;
-            },
-        };
+                },
+            };
+        }
+        return Ok(());
     }
-    return Ok(());
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -237,11 +255,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         Ok(file) => file,
     };
 
-    let mut hasher = Hasher::new(seed.as_bytes().to_vec());
+    let seed = seed.as_bytes().to_vec();
+    let mut hasher = Hasher::new(&seed);
+    let mut disktest = Disktest::new(&mut hasher, &mut file, &path);
     if write {
-        write_mode(&mut hasher, &mut file, &path, max_bytes)?;
+        disktest.write_mode(max_bytes)?;
     } else {
-        read_mode(&mut hasher, &mut file, &path, max_bytes)?;
+        disktest.read_mode(max_bytes)?;
     }
     return Ok(());
 }
