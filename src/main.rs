@@ -203,8 +203,9 @@ impl<'a> Disktest<'a> {
                     }
                 },
                 Err(e) => {
-                    println!("Read error at {}: {}", prettybyte(bytes_read), e);
-                    break;
+                    let msg = format!("Read error at {}: {}", prettybyte(bytes_read), e);
+                    println!("{}", msg);
+                    return Err(Box::new(io::Error::new(io::ErrorKind::Other, msg)));
                 },
             };
         }
