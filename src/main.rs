@@ -237,7 +237,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let device = args.value_of("device").unwrap();
     let write = args.is_present("write");
-    let max_bytes = args.value_of("bytes").unwrap_or(&u64::MAX.to_string()[..])
+    let max_bytes = args.value_of("bytes").unwrap_or("18446744073709551615")
                     .parse::<u64>().expect("Invalid --bytes parameter.");
     let seed = args.value_of("seed").unwrap_or("42");
 
