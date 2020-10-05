@@ -25,8 +25,7 @@ use std::io;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::cmp::min;
-use sha2::{Sha512, Digest};
-use sha2::digest::generic_array::{GenericArray, typenum};
+use crypto::{sha2::Sha512, digest::Digest};
 
 const LOGTHRES: usize = 1024 * 1024 * 10;
 
@@ -34,7 +33,7 @@ pub struct Hasher<'a> {
     alg:    Sha512,
     seed:   &'a Vec<u8>,
     count:  u64,
-    prev:   [u8; Hasher::PREVSIZE],
+    result: [u8; Hasher::SIZE],
 }
 
 impl<'a> Hasher<'a> {
@@ -47,18 +46,18 @@ impl<'a> Hasher<'a> {
             alg:    Sha512::new(),
             seed:   seed,
             count:  0,
-            prev:   [0; Hasher::PREVSIZE],
+            result: [0; Hasher::SIZE],
         }
     }
 
-    pub fn next(&mut self) -> GenericArray<u8, typenum::U64> {
+    pub fn next(&mut self) -> &[u8] {
         self.alg.input(self.seed);
-        self.alg.input(&self.prev[..]);
-        self.alg.input(self.count.to_le_bytes());
+        self.alg.input(&self.result[..Hasher::PREVSIZE]);
+        self.alg.input(&self.count.to_le_bytes());
         self.count += 1;
-        let result = self.alg.result_reset();
-        self.prev.copy_from_slice(&result[0..Hasher::PREVSIZE]);
-        return result;
+        self.alg.result(&mut self.result);
+        self.alg.reset();
+        return &self.result;
     }
 }
 
@@ -77,17 +76,17 @@ fn prettybyte(count: u64) -> String {
 }
 
 pub struct Disktest<'a> {
-    hasher: &'a mut Hasher<'a>,
+    hasher: Hasher<'a>,
     file:   &'a mut File,
     path:   &'a Path,
 }
 
 impl<'a> Disktest<'a> {
-    pub fn new(hasher: &'a mut Hasher<'a>,
-           file: &'a mut File,
-           path: &'a Path) -> Disktest<'a> {
+    pub fn new(seed: &'a Vec<u8>,
+               file: &'a mut File,
+               path: &'a Path) -> Disktest<'a> {
         Disktest {
-            hasher,
+            hasher: Hasher::new(seed),
             file,
             path,
         }
@@ -257,8 +256,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let seed = seed.as_bytes().to_vec();
-    let mut hasher = Hasher::new(&seed);
-    let mut disktest = Disktest::new(&mut hasher, &mut file, &path);
+    let mut disktest = Disktest::new(&seed, &mut file, &path);
     if write {
         disktest.write_mode(max_bytes)?;
     } else {

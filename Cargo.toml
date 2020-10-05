@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies]
 
-sha2 = "0.8.0"
+rust-crypto = "0.2.36"
 clap = "2.33.3"
