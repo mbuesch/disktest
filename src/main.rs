@@ -57,7 +57,7 @@ impl<'a> Hasher<'a> {
         self.count += 1;
         self.alg.result(&mut self.result);
         self.alg.reset();
-        return &self.result;
+        return &self.result[..Hasher::OUTSIZE];
     }
 }
 
