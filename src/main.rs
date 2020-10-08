@@ -20,48 +20,17 @@
 //
 
 mod error;
+mod hasher;
 
 use crate::error::Error;
+use crate::hasher::Hasher;
 
-use crypto::{sha2::Sha512, digest::Digest};
 use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 
 const LOGTHRES: usize = 1024 * 1024 * 10;
-
-pub struct Hasher<'a> {
-    alg:    Sha512,
-    seed:   &'a Vec<u8>,
-    count:  u64,
-    result: [u8; Hasher::SIZE],
-}
-
-impl<'a> Hasher<'a> {
-    const SIZE: usize = 512 / 8;
-    const PREVSIZE: usize = Hasher::SIZE / 2;
-    const OUTSIZE: usize = Hasher::SIZE;
-
-    pub fn new(seed: &'a Vec<u8>) -> Hasher<'a> {
-        Hasher {
-            alg:    Sha512::new(),
-            seed:   seed,
-            count:  0,
-            result: [0; Hasher::SIZE],
-        }
-    }
-
-    pub fn next(&mut self) -> &[u8] {
-        self.alg.input(self.seed);
-        self.alg.input(&self.result[..Hasher::PREVSIZE]);
-        self.alg.input(&self.count.to_le_bytes());
-        self.count += 1;
-        self.alg.result(&mut self.result);
-        self.alg.reset();
-        return &self.result[..Hasher::OUTSIZE];
-    }
-}
 
 fn prettybyte(count: u64) -> String {
     if count >= 1024 * 1024 * 1024 * 1024 {
