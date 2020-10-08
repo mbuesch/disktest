@@ -19,13 +19,15 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use std::error::Error;
+mod error;
+
+use crate::error::Error;
+
+use crypto::{sha2::Sha512, digest::Digest};
+use std::cmp::min;
 use std::fs::{File, OpenOptions};
-use std::io;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::cmp::min;
-use crypto::{sha2::Sha512, digest::Digest};
 
 const LOGTHRES: usize = 1024 * 1024 * 10;
 
@@ -92,13 +94,15 @@ impl<'a> Disktest<'a> {
         }
     }
 
-    fn write_mode_finalize(&mut self, bytes_written: u64) -> Result<(), Box<dyn Error>> {
+    fn write_mode_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
         println!("Wrote {}. Syncing...", prettybyte(bytes_written));
-        self.file.sync_all()?;
+        if let Err(e) = self.file.sync_all() {
+            return Err(Error::new(&format!("Sync failed: {}", e)));
+        }
         return Ok(());
     }
 
-    pub fn write_mode(&mut self, max_bytes: u64) -> Result<(), Box<dyn Error>> {
+    pub fn write_mode(&mut self, max_bytes: u64) -> Result<(), Error> {
         println!("Writing {:?} ...", self.path);
 
         let mut bytes_left = max_bytes;
@@ -141,12 +145,12 @@ impl<'a> Disktest<'a> {
         return Ok(());
     }
 
-    fn read_mode_finalize(&mut self, bytes_read: u64) -> Result<(), Box<dyn Error>> {
+    fn read_mode_finalize(&mut self, bytes_read: u64) -> Result<(), Error> {
         println!("Done. Verified {}.", prettybyte(bytes_read));
         return Ok(());
     }
 
-    pub fn read_mode(&mut self, max_bytes: u64) -> Result<(), Box<dyn Error>> {
+    pub fn read_mode(&mut self, max_bytes: u64) -> Result<(), Error> {
         println!("Reading {:?} ...", self.path);
 
         let mut bytes_left = max_bytes;
@@ -173,8 +177,7 @@ impl<'a> Disktest<'a> {
                             for j in 0..min(Hasher::OUTSIZE, read_count - i) {
                                 if buffer[i+j] != hashdata[j] {
                                     let msg = format!("Data MISMATCH at Byte {}!", bytes_read + (i as u64) + (j as u64));
-                                    println!("{}", msg);
-                                    return Err(Box::new(io::Error::new(io::ErrorKind::Other, msg)));
+                                    return Err(Error::new(&msg));
                                 }
                             }
                         }
@@ -203,8 +206,7 @@ impl<'a> Disktest<'a> {
                 },
                 Err(e) => {
                     let msg = format!("Read error at {}: {}", prettybyte(bytes_read), e);
-                    println!("{}", msg);
-                    return Err(Box::new(io::Error::new(io::ErrorKind::Other, msg)));
+                    return Err(Error::new(&msg));
                 },
             };
         }
@@ -212,7 +214,7 @@ impl<'a> Disktest<'a> {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = clap::App::new("disktest")
                .about("Hard drive tester")
                .arg(clap::Arg::with_name("device")
@@ -258,9 +260,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let seed = seed.as_bytes().to_vec();
     let mut disktest = Disktest::new(&seed, &mut file, &path);
     if write {
-        disktest.write_mode(max_bytes)?;
+        if let Err(e) = disktest.write_mode(max_bytes) {
+            return Err(Box::new(e))
+        }
     } else {
-        disktest.read_mode(max_bytes)?;
+        if let Err(e) = disktest.read_mode(max_bytes) {
+            return Err(Box::new(e))
+        }
     }
     return Ok(());
 }
