@@ -31,8 +31,12 @@ use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use libc::ENOSPC;
+
+use signal_hook;
 
 const LOGTHRES: usize = 1024 * 1024 * 10;
 
@@ -40,17 +44,29 @@ pub struct Disktest<'a> {
     hasher: Hasher<'a>,
     file:   &'a mut File,
     path:   &'a Path,
+    abort:  Arc<AtomicBool>,
 }
 
 impl<'a> Disktest<'a> {
     pub fn new(seed: &'a Vec<u8>,
                file: &'a mut File,
-               path: &'a Path) -> Disktest<'a> {
-        Disktest {
+               path: &'a Path) -> Result<Disktest<'a>, Error> {
+
+        let abort = Arc::new(AtomicBool::new(false));
+        for sig in &[signal_hook::SIGTERM,
+                     signal_hook::SIGINT] {
+            if let Err(e) = signal_hook::flag::register(*sig, Arc::clone(&abort)) {
+                return Err(Error::new(&format!("Failed to register signal {}: {}",
+                                               sig, e)));
+            }
+
+        }
+        return Ok(Disktest {
             hasher: Hasher::new(seed),
             file,
             path,
-        }
+            abort,
+        })
     }
 
     fn write_mode_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
@@ -103,6 +119,11 @@ impl<'a> Disktest<'a> {
             if log_count >= LOGTHRES {
                 println!("Wrote {}.", prettybyte(bytes_written));
                 log_count -= LOGTHRES;
+            }
+
+            if self.abort.load(Ordering::Relaxed) {
+                self.write_mode_finalize(bytes_written)?;
+                return Err(Error::new("Aborted by signal!"));
             }
         }
         return Ok(());
@@ -172,6 +193,11 @@ impl<'a> Disktest<'a> {
                                                    prettybyte(bytes_read), e)));
                 },
             };
+
+            if self.abort.load(Ordering::Relaxed) {
+                self.read_mode_finalize(bytes_read)?;
+                return Err(Error::new("Aborted by signal!"));
+            }
         }
         return Ok(());
     }
@@ -223,7 +249,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let seed = seed.as_bytes().to_vec();
-    let mut disktest = Disktest::new(&seed, &mut file, &path);
+    let mut disktest = match Disktest::new(&seed, &mut file, &path) {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(Box::new(e))
+        },
+    };
     if write {
         if let Err(e) = disktest.write_mode(max_bytes) {
             return Err(Box::new(e))
