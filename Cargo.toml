@@ -10,3 +10,10 @@ edition = "2018"
 
 rust-crypto = "0.2.36"
 clap = "2.33.3"
+
+[profile.release]
+lto = "thin"
+panic = "abort"
+
+[profile.bench]
+lto = "thin"
