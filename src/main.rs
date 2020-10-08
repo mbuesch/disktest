@@ -41,7 +41,7 @@ use signal_hook;
 const LOGTHRES: usize = 1024 * 1024 * 10;
 
 pub struct Disktest<'a> {
-    hasher: Hasher<'a>,
+    hasher: Hasher,
     file:   &'a mut File,
     path:   &'a Path,
     abort:  Arc<AtomicBool>,
