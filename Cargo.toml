@@ -10,6 +10,7 @@ edition = "2018"
 
 rust-crypto = "0.2.36"
 clap = "2.33.3"
+libc = "0.2.79"
 
 [profile.release]
 lto = "thin"

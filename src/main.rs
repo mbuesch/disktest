@@ -32,6 +32,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 
+use libc::ENOSPC;
+
 const LOGTHRES: usize = 1024 * 1024 * 10;
 
 pub struct Disktest<'a> {
@@ -52,7 +54,7 @@ impl<'a> Disktest<'a> {
     }
 
     fn write_mode_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
-        println!("Wrote {}. Syncing...", prettybyte(bytes_written));
+        println!("Done. Wrote {}. Syncing...", prettybyte(bytes_written));
         if let Err(e) = self.file.sync_all() {
             return Err(Error::new(&format!("Sync failed: {}", e)));
         }
@@ -80,10 +82,14 @@ impl<'a> Disktest<'a> {
 
             // Write the buffer to disk.
             if let Err(e) = self.file.write_all(&buffer[0..write_len]) {
-                println!("Write error: {}", e);
+                if let Some(err_code) = e.raw_os_error() {
+                    if err_code == ENOSPC {
+                        self.write_mode_finalize(bytes_written)?;
+                        break; // End of device. -> Success.
+                    }
+                }
                 self.write_mode_finalize(bytes_written)?;
-                //TODO ENOSPC -> result 0. Other errors -> result 1.
-                break;
+                return Err(Error::new(&format!("Write error: {}", e)));
             }
 
             // Account for the written bytes.
@@ -133,8 +139,8 @@ impl<'a> Disktest<'a> {
                             let hashdata = self.hasher.next();
                             for j in 0..min(Hasher::OUTSIZE, read_count - i) {
                                 if buffer[i+j] != hashdata[j] {
-                                    let msg = format!("Data MISMATCH at Byte {}!", bytes_read + (i as u64) + (j as u64));
-                                    return Err(Error::new(&msg));
+                                    return Err(Error::new(&format!("Data MISMATCH at Byte {}!",
+                                                                   bytes_read + (i as u64) + (j as u64))));
                                 }
                             }
                         }
@@ -162,8 +168,8 @@ impl<'a> Disktest<'a> {
                     }
                 },
                 Err(e) => {
-                    let msg = format!("Read error at {}: {}", prettybyte(bytes_read), e);
-                    return Err(Error::new(&msg));
+                    return Err(Error::new(&format!("Read error at {}: {}",
+                                                   prettybyte(bytes_read), e)));
                 },
             };
         }
