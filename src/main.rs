@@ -21,9 +21,11 @@
 
 mod error;
 mod hasher;
+mod util;
 
 use crate::error::Error;
 use crate::hasher::Hasher;
+use crate::util::prettybyte;
 
 use std::cmp::min;
 use std::fs::{File, OpenOptions};
@@ -31,20 +33,6 @@ use std::io::{Read, Write};
 use std::path::Path;
 
 const LOGTHRES: usize = 1024 * 1024 * 10;
-
-fn prettybyte(count: u64) -> String {
-    if count >= 1024 * 1024 * 1024 * 1024 {
-        return format!("{:.4} TiB", ((count / (1024 * 1024)) as f64) / (1024.0 * 1024.0));
-    } else if count >= 1024 * 1024 * 1024 {
-        return format!("{:.2} GiB", ((count / (1024 * 1024)) as f64) / 1024.0);
-    } else if count >= 1024 * 1024 {
-        return format!("{:.1} MiB", (count as f64) / (1024.0 * 1024.0));
-    } else if count >= 1024 {
-        return format!("{:.1} kiB", (count as f64) / 1024.0);
-    } else {
-        return format!("{} Bytes", count);
-    }
-}
 
 pub struct Disktest<'a> {
     hasher: Hasher<'a>,
