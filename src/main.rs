@@ -173,31 +173,33 @@ impl<'a> Disktest<'a> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = clap::App::new("disktest")
-               .about("Hard drive tester")
-               .arg(clap::Arg::with_name("device")
-                    .index(1)
-                    .required(true)
-                    .help("Device file of the disk."))
-               .arg(clap::Arg::with_name("write")
-                    .long("write")
-                    .short("w")
-                    .help("Write to the device."))
-               .arg(clap::Arg::with_name("bytes")
-                    .long("bytes")
-                    .short("b")
-                    .takes_value(true)
-                    .help("Number of bytes to read/write."))
-               .arg(clap::Arg::with_name("seed")
-                    .long("seed")
-                    .short("s")
-                    .takes_value(true)
-                    .help("The seed to use for random data generation."))
-               .get_matches();
+        .about("Hard drive tester")
+        .arg(clap::Arg::with_name("device")
+             .index(1)
+             .required(true)
+             .help("Device file of the disk."))
+        .arg(clap::Arg::with_name("write")
+             .long("write")
+             .short("w")
+             .help("Write to the device."))
+        .arg(clap::Arg::with_name("bytes")
+             .long("bytes")
+             .short("b")
+             .takes_value(true)
+             .help("Number of bytes to read/write."))
+        .arg(clap::Arg::with_name("seed")
+             .long("seed")
+             .short("s")
+             .takes_value(true)
+             .help("The seed to use for random data generation."))
+        .get_matches();
 
     let device = args.value_of("device").unwrap();
     let write = args.is_present("write");
-    let max_bytes = args.value_of("bytes").unwrap_or("18446744073709551615")
-                    .parse::<u64>().expect("Invalid --bytes parameter.");
+    let max_bytes: u64 = match args.value_of("bytes").unwrap_or("18446744073709551615").parse() {
+        Ok(x) => x,
+        Err(e) => return Err(Box::new(Error::new(&format!("Invalid --bytes value: {}", e)))),
+    };
     let seed = args.value_of("seed").unwrap_or("42");
 
     // Open the disk device.
