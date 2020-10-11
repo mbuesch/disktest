@@ -242,7 +242,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                            .truncate(write)
                                            .open(path) {
         Err(e) => {
-            println!("Failed to open file {:?}: {}", path, e);
+            eprintln!("Failed to open file {:?}: {}", path, e);
             return Err(Box::new(e));
         },
         Ok(file) => file,
