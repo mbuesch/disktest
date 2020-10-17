@@ -62,7 +62,7 @@ impl<'a> Disktest<'a> {
 
         }
         return Ok(Disktest {
-            hasher: Hasher::new(seed),
+            hasher: Hasher::new(seed, 0),
             file,
             path,
             abort,
