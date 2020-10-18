@@ -22,10 +22,11 @@
 mod error;
 mod hasher;
 mod stream;
+mod stream_aggregator;
 mod util;
 
 use crate::error::Error;
-use crate::stream::DtStream;
+use crate::stream_aggregator::DtStreamAgg;
 use crate::util::prettybyte;
 
 use std::cmp::min;
@@ -42,16 +43,17 @@ use signal_hook;
 const LOGTHRES: usize = 1024 * 1024 * 10;
 
 pub struct Disktest<'a> {
-    stream: DtStream,
-    file:   &'a mut File,
-    path:   &'a Path,
-    abort:  Arc<AtomicBool>,
+    stream_agg:     DtStreamAgg,
+    file:           &'a mut File,
+    path:           &'a Path,
+    abort:          Arc<AtomicBool>,
 }
 
 impl<'a> Disktest<'a> {
-    pub fn new(seed: &'a Vec<u8>,
-               file: &'a mut File,
-               path: &'a Path) -> Result<Disktest<'a>, Error> {
+    pub fn new(seed:        &'a Vec<u8>,
+               nr_threads:  usize,
+               file:        &'a mut File,
+               path:        &'a Path) -> Result<Disktest<'a>, Error> {
 
         let abort = Arc::new(AtomicBool::new(false));
         for sig in &[signal_hook::SIGTERM,
@@ -62,8 +64,9 @@ impl<'a> Disktest<'a> {
             }
 
         }
+        let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
         return Ok(Disktest {
-            stream: DtStream::new(seed, 0),
+            stream_agg: DtStreamAgg::new(seed, nr_threads),
             file,
             path,
             abort,
@@ -85,11 +88,11 @@ impl<'a> Disktest<'a> {
         let mut bytes_written = 0u64;
         let mut log_count = 0;
 
-        self.stream.activate();
+        self.stream_agg.activate();
         loop {
             // Get the next data chunk.
-            let chunk = self.stream.wait_chunk();
-            let write_len = min(DtStream::CHUNKSIZE as u64, bytes_left) as usize;
+            let chunk = self.stream_agg.wait_chunk();
+            let write_len = min(self.stream_agg.get_chunksize() as u64, bytes_left) as usize;
 
             // Write the chunk to disk.
             if let Err(e) = self.file.write_all(&chunk.data[0..write_len]) {
@@ -136,12 +139,12 @@ impl<'a> Disktest<'a> {
         let mut bytes_read = 0u64;
         let mut log_count = 0;
 
-        const READBUFLEN: usize = DtStream::CHUNKSIZE;
-        let mut buffer = vec![0; READBUFLEN];
+        let readbuf_len = self.stream_agg.get_chunksize();
+        let mut buffer = vec![0; readbuf_len];
         let mut read_count = 0;
 
-        let mut read_len = min(READBUFLEN as u64, bytes_left) as usize;
-        self.stream.activate();
+        let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
+        self.stream_agg.activate();
         loop {
             // Read the next chunk from disk.
             match self.file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
@@ -152,7 +155,7 @@ impl<'a> Disktest<'a> {
                     assert!(read_count <= read_len);
                     if read_count == read_len || (read_count > 0 && n == 0) {
                         // Calculate and compare the read buffer to the pseudo random sequence.
-                        let chunk = self.stream.wait_chunk();
+                        let chunk = self.stream_agg.wait_chunk();
                         for i in 0..read_count {
                             if buffer[i] != chunk.data[i] {
                                 return Err(Error::new(&format!("Data MISMATCH at Byte {}!",
@@ -173,7 +176,7 @@ impl<'a> Disktest<'a> {
                             log_count -= LOGTHRES;
                         }
                         read_count = 0;
-                        read_len = min(READBUFLEN as u64, bytes_left) as usize;
+                        read_len = min(readbuf_len as u64, bytes_left) as usize;
                     }
 
                     // End of the disk?
@@ -218,6 +221,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
              .short("s")
              .takes_value(true)
              .help("The seed to use for random data generation."))
+        .arg(clap::Arg::with_name("threads")
+             .long("threads")
+             .short("j")
+             .takes_value(true)
+             .help("The number of CPUs to use. \
+The special value 0 will select the maximum number of online CPUs in the system. \
+If the number of threads is equal to number of CPUs it is optimal for performance. \
+This parameter must be equal during read and --write modes. \
+Otherwise the verification fails. Default: 1"))
         .get_matches();
 
     let device = args.value_of("device").unwrap();
@@ -227,6 +239,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => return Err(Box::new(Error::new(&format!("Invalid --bytes value: {}", e)))),
     };
     let seed = args.value_of("seed").unwrap_or("42");
+    let threads: usize = match args.value_of("threads").unwrap_or("1").parse() {
+        Ok(x) => {
+            if x >= std::u16::MAX as usize + 1 {
+                return Err(Box::new(Error::new(&format!("Invalid --threads value: Out of range"))))
+            }
+            x
+        },
+        Err(e) => return Err(Box::new(Error::new(&format!("Invalid --threads value: {}", e)))),
+    };
 
     // Open the disk device.
     let path = Path::new(&device);
@@ -243,7 +264,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let seed = seed.as_bytes().to_vec();
-    let mut disktest = match Disktest::new(&seed, &mut file, &path) {
+    let mut disktest = match Disktest::new(&seed, threads, &mut file, &path) {
         Ok(x) => x,
         Err(e) => {
             return Err(Box::new(e))

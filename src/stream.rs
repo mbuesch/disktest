@@ -125,6 +125,7 @@ impl DtStream {
         self.run_thread.store(true, Ordering::Release);
     }
 
+    #[inline]
     pub fn is_active(&self) -> bool {
         self.run_thread.load(Ordering::Relaxed) &&
         !self.abort_thread.load(Ordering::Relaxed)
@@ -141,19 +142,6 @@ impl DtStream {
             }
         } else {
             None
-        }
-    }
-
-    pub fn wait_chunk(&mut self) -> DtStreamChunk {
-        if self.is_active() {
-            loop {
-                if let Some(chunk) = self.get_chunk() {
-                    break chunk;
-                }
-                thread::sleep(Duration::from_millis(1));
-            }
-        } else {
-            panic!("wait_chunk() called, but stream is stopped.");
         }
     }
 
