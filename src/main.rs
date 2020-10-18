@@ -85,6 +85,7 @@ impl<'a> Disktest<'a> {
         let mut bytes_written = 0u64;
         let mut log_count = 0;
 
+        self.stream.activate();
         loop {
             // Get the next data chunk.
             let chunk = self.stream.wait_chunk();
@@ -140,6 +141,7 @@ impl<'a> Disktest<'a> {
         let mut read_count = 0;
 
         let mut read_len = min(READBUFLEN as u64, bytes_left) as usize;
+        self.stream.activate();
         loop {
             // Read the next chunk from disk.
             match self.file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {

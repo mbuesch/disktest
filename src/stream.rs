@@ -35,6 +35,7 @@ pub struct DtStreamChunk {
 
 struct DtStreamWorker {
     hasher:         Hasher,
+    run:            Arc<AtomicBool>,
     abort:          Arc<AtomicBool>,
     level:          Arc<AtomicIsize>,
     tx:             Sender<DtStreamChunk>,
@@ -47,11 +48,13 @@ impl DtStreamWorker {
     fn new(seed: &Vec<u8>,
            serial:  u16,
            tx:      Sender<DtStreamChunk>,
+           run:     Arc<AtomicBool>,
            abort:   Arc<AtomicBool>,
            level:   Arc<AtomicIsize>) -> DtStreamWorker {
 
         DtStreamWorker {
             hasher: Hasher::new(seed, serial),
+            run,
             abort,
             level,
             tx,
@@ -61,7 +64,9 @@ impl DtStreamWorker {
 
     fn worker(&mut self) {
         while !self.abort.load(Ordering::Relaxed) {
-            if self.level.load(Ordering::Relaxed) < DtStreamWorker::LEVEL_THRES {
+            if (self.level.load(Ordering::Relaxed) < DtStreamWorker::LEVEL_THRES) &&
+               self.run.load(Ordering::Relaxed) {
+
                 let mut chunk = DtStreamChunk {
                     data: Vec::with_capacity(DtStream::CHUNKSIZE),
                     index: self.index,
@@ -86,6 +91,7 @@ pub struct DtStream {
     level:          Arc<AtomicIsize>,
     rx:             Receiver<DtStreamChunk>,
     thread_join:    RefCell<Option<thread::JoinHandle<()>>>,
+    run_thread:     Arc<AtomicBool>,
     abort_thread:   Arc<AtomicBool>,
 }
 
@@ -96,11 +102,13 @@ impl DtStream {
                serial: u16) -> DtStream {
 
         let abort_thread = Arc::new(AtomicBool::new(false));
+        let run_thread = Arc::new(AtomicBool::new(false));
         let level = Arc::new(AtomicIsize::new(0));
         let (tx, rx) = channel();
         let mut w = DtStreamWorker::new(seed,
                                         serial,
                                         tx,
+                                        Arc::clone(&run_thread),
                                         Arc::clone(&abort_thread),
                                         Arc::clone(&level));
         let thread_join = thread::spawn(move || w.worker());
@@ -108,8 +116,13 @@ impl DtStream {
             level,
             rx,
             thread_join: RefCell::new(Some(thread_join)),
+            run_thread,
             abort_thread,
         }
+    }
+
+    pub fn activate(&mut self) {
+        self.run_thread.store(true, Ordering::Release);
     }
 
     pub fn get_chunk(&mut self) -> Option<DtStreamChunk> {
@@ -153,6 +166,7 @@ mod tests {
     #[test]
     fn test_basic() {
         let mut s = DtStream::new(&vec![1,2,3], 0);
+        s.activate();
         let mut count = 0;
         while count < 5 {
             if let Some(chunk) = s.get_chunk() {
