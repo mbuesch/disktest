@@ -21,10 +21,11 @@
 
 mod error;
 mod hasher;
+mod stream;
 mod util;
 
 use crate::error::Error;
-use crate::hasher::Hasher;
+use crate::stream::DtStream;
 use crate::util::prettybyte;
 
 use std::cmp::min;
@@ -41,7 +42,7 @@ use signal_hook;
 const LOGTHRES: usize = 1024 * 1024 * 10;
 
 pub struct Disktest<'a> {
-    hasher: Hasher,
+    stream: DtStream,
     file:   &'a mut File,
     path:   &'a Path,
     abort:  Arc<AtomicBool>,
@@ -62,7 +63,7 @@ impl<'a> Disktest<'a> {
 
         }
         return Ok(Disktest {
-            hasher: Hasher::new(seed, 0),
+            stream: DtStream::new(seed, 0),
             file,
             path,
             abort,
@@ -84,20 +85,13 @@ impl<'a> Disktest<'a> {
         let mut bytes_written = 0u64;
         let mut log_count = 0;
 
-        const WRITEBUFLEN: usize = Hasher::OUTSIZE * 1024 * 10;
-        let mut buffer = [0; WRITEBUFLEN];
-
         loop {
-            // Fill the write buffer with a pseudo random pattern.
-            let write_len = min(WRITEBUFLEN as u64, bytes_left) as usize;
-            for i in (0..write_len).step_by(Hasher::OUTSIZE) {
-                let hashdata = self.hasher.next();
-                let chunk_len = min(Hasher::OUTSIZE, write_len - i);
-                buffer[i..i+chunk_len].copy_from_slice(&hashdata[0..chunk_len]);
-            }
+            // Get the next data chunk.
+            let chunk = self.stream.wait_chunk();
+            let write_len = min(DtStream::CHUNKSIZE as u64, bytes_left) as usize;
 
-            // Write the buffer to disk.
-            if let Err(e) = self.file.write_all(&buffer[0..write_len]) {
+            // Write the chunk to disk.
+            if let Err(e) = self.file.write_all(&chunk.data[0..write_len]) {
                 if let Some(err_code) = e.raw_os_error() {
                     if err_code == ENOSPC {
                         self.write_mode_finalize(bytes_written)?;
@@ -141,7 +135,7 @@ impl<'a> Disktest<'a> {
         let mut bytes_read = 0u64;
         let mut log_count = 0;
 
-        const READBUFLEN: usize = Hasher::OUTSIZE * 1024 * 10;
+        const READBUFLEN: usize = DtStream::CHUNKSIZE;
         let mut buffer = [0; READBUFLEN];
         let mut read_count = 0;
 
@@ -156,13 +150,11 @@ impl<'a> Disktest<'a> {
                     assert!(read_count <= read_len);
                     if read_count == read_len || (read_count > 0 && n == 0) {
                         // Calculate and compare the read buffer to the pseudo random sequence.
-                        for i in (0..read_count).step_by(Hasher::OUTSIZE) {
-                            let hashdata = self.hasher.next();
-                            for j in 0..min(Hasher::OUTSIZE, read_count - i) {
-                                if buffer[i+j] != hashdata[j] {
-                                    return Err(Error::new(&format!("Data MISMATCH at Byte {}!",
-                                                                   bytes_read + (i as u64) + (j as u64))));
-                                }
+                        let chunk = self.stream.wait_chunk();
+                        for i in 0..read_count {
+                            if buffer[i] != chunk.data[i] {
+                                return Err(Error::new(&format!("Data MISMATCH at Byte {}!",
+                                                               bytes_read + i as u64)));
                             }
                         }
 
