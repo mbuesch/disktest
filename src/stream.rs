@@ -125,22 +125,35 @@ impl DtStream {
         self.run_thread.store(true, Ordering::Release);
     }
 
+    pub fn is_active(&self) -> bool {
+        self.run_thread.load(Ordering::Relaxed) &&
+        !self.abort_thread.load(Ordering::Relaxed)
+    }
+
     pub fn get_chunk(&mut self) -> Option<DtStreamChunk> {
-        match self.rx.try_recv() {
-            Ok(chunk) => {
-                self.level.fetch_sub(1, Ordering::Relaxed);
-                Some(chunk)
-            },
-            Err(_) => None,
+        if self.is_active() {
+            match self.rx.try_recv() {
+                Ok(chunk) => {
+                    self.level.fetch_sub(1, Ordering::Relaxed);
+                    Some(chunk)
+                },
+                Err(_) => None,
+            }
+        } else {
+            None
         }
     }
 
     pub fn wait_chunk(&mut self) -> DtStreamChunk {
-        loop {
-            if let Some(chunk) = self.get_chunk() {
-                break chunk;
+        if self.is_active() {
+            loop {
+                if let Some(chunk) = self.get_chunk() {
+                    break chunk;
+                }
+                thread::sleep(Duration::from_millis(1));
             }
-            thread::sleep(Duration::from_millis(1));
+        } else {
+            panic!("wait_chunk() called, but stream is stopped.");
         }
     }
 
@@ -167,6 +180,8 @@ mod tests {
     fn test_basic() {
         let mut s = DtStream::new(&vec![1,2,3], 0);
         s.activate();
+        assert_eq!(s.is_active(), true);
+
         let mut count = 0;
         while count < 5 {
             if let Some(chunk) = s.get_chunk() {
