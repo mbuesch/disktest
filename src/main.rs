@@ -136,7 +136,7 @@ impl<'a> Disktest<'a> {
         let mut log_count = 0;
 
         const READBUFLEN: usize = DtStream::CHUNKSIZE;
-        let mut buffer = [0; READBUFLEN];
+        let mut buffer = vec![0; READBUFLEN];
         let mut read_count = 0;
 
         let mut read_len = min(READBUFLEN as u64, bytes_left) as usize;
