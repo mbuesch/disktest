@@ -30,7 +30,7 @@ use crate::hasher::Hasher;
 
 pub struct DtStreamChunk {
     pub index: u64,
-    pub data: Box<[u8; DtStream::CHUNKSIZE]>,
+    pub data: Vec<u8>,
 }
 
 struct DtStreamWorker {
@@ -42,7 +42,7 @@ struct DtStreamWorker {
 }
 
 impl DtStreamWorker {
-    const LEVEL_THRES: isize = 5;
+    const LEVEL_THRES: isize = 8;
 
     fn new(seed: &Vec<u8>,
            serial:  u16,
@@ -63,13 +63,14 @@ impl DtStreamWorker {
         while !self.abort.load(Ordering::Relaxed) {
             if self.level.load(Ordering::Relaxed) < DtStreamWorker::LEVEL_THRES {
                 let mut chunk = DtStreamChunk {
-                    data: Box::new([0; DtStream::CHUNKSIZE]),
+                    data: Vec::with_capacity(DtStream::CHUNKSIZE),
                     index: self.index,
                 };
                 self.index += 1;
-                for i in (0..DtStream::CHUNKSIZE).step_by(Hasher::OUTSIZE) {
+
+                for _ in 0..(DtStream::CHUNKSIZE / Hasher::OUTSIZE) {
                     let next_hash = self.hasher.next();
-                    chunk.data[i..i+Hasher::OUTSIZE].copy_from_slice(next_hash);
+                    chunk.data.extend(next_hash);
                 }
                 if let Ok(()) = self.tx.send(chunk) {
                     self.level.fetch_add(1, Ordering::Relaxed);
