@@ -19,10 +19,9 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
+use crate::stream::{DtStream, DtStreamChunk};
 use std::thread;
 use std::time::Duration;
-
-use crate::stream::{DtStream, DtStreamChunk};
 
 pub struct DtStreamAggChunk {
     pub data:       Vec<u8>,
@@ -105,7 +104,7 @@ impl DtStreamAgg {
                     } else {
                         panic!("Internal error: No stream chunk.");
                     }
-                    // Check the stream chunk.
+                    // Clear the stream chunk.
                     // It has been integrated into the aggregate chunk.
                     self.stream_chunks[i] = None;
                 }

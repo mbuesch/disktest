@@ -19,14 +19,13 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use std::thread;
-use std::time::Duration;
-use std::sync::mpsc::{channel, Sender, Receiver};
+use crate::hasher::Hasher;
+use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
-use std::cell::RefCell;
-
-use crate::hasher::Hasher;
+use std::sync::mpsc::{channel, Sender, Receiver};
+use std::thread;
+use std::time::Duration;
 
 pub struct DtStreamChunk {
     pub index: u64,

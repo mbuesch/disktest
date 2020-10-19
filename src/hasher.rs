@@ -19,9 +19,8 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use std::cmp::max;
-
 use crypto::{sha2::Sha512, digest::Digest};
+use std::cmp::max;
 
 pub struct Hasher {
     alg:        Sha512,
