@@ -26,7 +26,7 @@ use libc::ENOSPC;
 use signal_hook;
 use std::cmp::min;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -72,7 +72,7 @@ impl<'a> Disktest<'a> {
         return Ok(());
     }
 
-    pub fn write_mode(&mut self, max_bytes: u64) -> Result<(), Error> {
+    pub fn write_mode(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
         println!("Writing {:?} ...", self.path);
 
         let mut bytes_left = max_bytes;
@@ -80,6 +80,11 @@ impl<'a> Disktest<'a> {
         let mut log_count = 0;
 
         self.stream_agg.activate();
+        if let Err(e) = self.file.seek(SeekFrom::Start(seek)) {
+            return Err(Error::new(&format!("File seek to {} failed: {}",
+                                           seek, e.to_string())));
+        }
+
         loop {
             // Get the next data chunk.
             let chunk = self.stream_agg.wait_chunk();
@@ -115,7 +120,7 @@ impl<'a> Disktest<'a> {
                 return Err(Error::new("Aborted by signal!"));
             }
         }
-        return Ok(());
+        return Ok(bytes_written);
     }
 
     fn read_mode_finalize(&mut self, bytes_read: u64) -> Result<(), Error> {
@@ -123,7 +128,7 @@ impl<'a> Disktest<'a> {
         return Ok(());
     }
 
-    pub fn read_mode(&mut self, max_bytes: u64) -> Result<(), Error> {
+    pub fn read_mode(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
         println!("Reading {:?} ...", self.path);
 
         let mut bytes_left = max_bytes;
@@ -134,8 +139,13 @@ impl<'a> Disktest<'a> {
         let mut buffer = vec![0; readbuf_len];
         let mut read_count = 0;
 
-        let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
         self.stream_agg.activate();
+        if let Err(e) = self.file.seek(SeekFrom::Start(seek)) {
+            return Err(Error::new(&format!("File seek to {} failed: {}",
+                                           seek, e.to_string())));
+        }
+
+        let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
         loop {
             // Read the next chunk from disk.
             match self.file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
@@ -187,7 +197,62 @@ impl<'a> Disktest<'a> {
                 return Err(Error::new("Aborted by signal!"));
             }
         }
-        return Ok(());
+        return Ok(bytes_read);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::stream::DtStream;
+    use std::path::Path;
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_basic() {
+        let mut tfile = NamedTempFile::new().unwrap();
+        let pstr = String::from(tfile.path().to_str().unwrap());
+        let path = Path::new(&pstr);
+        let mut file = tfile.as_file_mut();
+        let mut loc_file = file.try_clone().unwrap();
+        let seed = vec![42, 43, 44, 45];
+        let nr_threads = 2;
+        let mut dt = Disktest::new(&seed, nr_threads, &mut file, &path).unwrap();
+
+        // Write a couple of bytes and verify them.
+        let nr_bytes = 1000;
+        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.read_mode(0, std::u64::MAX).unwrap(), nr_bytes);
+
+        // Write a couple of bytes and verify half of them.
+        let nr_bytes = 1000;
+        loc_file.set_len(0).unwrap();
+        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.read_mode(0, nr_bytes / 2).unwrap(), nr_bytes / 2);
+
+        // Write a big chunk that is aggregated and verify it.
+        loc_file.set_len(0).unwrap();
+        let nr_bytes = (DtStream::CHUNKSIZE * nr_threads * 2 + 100) as u64;
+        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.read_mode(0, std::u64::MAX).unwrap(), nr_bytes);
+
+        // Check whether write rewinds the file.
+        let nr_bytes = 1000;
+        loc_file.set_len(100).unwrap();
+        loc_file.seek(SeekFrom::Start(10)).unwrap();
+        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.read_mode(0, std::u64::MAX).unwrap(), nr_bytes);
+
+        // Modify the written data and assert failure.
+        let nr_bytes = 1000;
+        loc_file.set_len(0).unwrap();
+        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
+        loc_file.seek(SeekFrom::Start(10)).unwrap();
+        writeln!(loc_file, "x").unwrap();
+        match dt.read_mode(0, nr_bytes) {
+            Ok(_) => panic!("Verify of modified data did not fail!"),
+            Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at Byte 10!"),
+        }
     }
 }
 

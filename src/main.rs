@@ -103,11 +103,11 @@ Otherwise the verification fails. Default: 1"))
         },
     };
     if write {
-        if let Err(e) = disktest.write_mode(max_bytes) {
+        if let Err(e) = disktest.write_mode(0, max_bytes) {
             return Err(Box::new(e))
         }
     } else {
-        if let Err(e) = disktest.read_mode(max_bytes) {
+        if let Err(e) = disktest.read_mode(0, max_bytes) {
             return Err(Box::new(e))
         }
     }

@@ -11,8 +11,9 @@ edition = "2018"
 rust-crypto = "0.2.36"
 clap = "2.33.3"
 libc = "0.2.79"
-signal-hook = "0.1.16"
 num_cpus = "1.13.0"
+signal-hook = "0.1.16"
+tempfile = "3.1.0"
 
 [profile.release]
 lto = "thin"
