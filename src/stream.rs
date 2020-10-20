@@ -34,7 +34,6 @@ pub struct DtStreamChunk {
 
 struct DtStreamWorker {
     hasher:         Hasher,
-    run:            Arc<AtomicBool>,
     abort:          Arc<AtomicBool>,
     level:          Arc<AtomicIsize>,
     tx:             Sender<DtStreamChunk>,
@@ -47,13 +46,11 @@ impl DtStreamWorker {
     fn new(seed: &Vec<u8>,
            serial:  u16,
            tx:      Sender<DtStreamChunk>,
-           run:     Arc<AtomicBool>,
            abort:   Arc<AtomicBool>,
            level:   Arc<AtomicIsize>) -> DtStreamWorker {
 
         DtStreamWorker {
             hasher: Hasher::new(seed, serial),
-            run,
             abort,
             level,
             tx,
@@ -63,9 +60,7 @@ impl DtStreamWorker {
 
     fn worker(&mut self) {
         while !self.abort.load(Ordering::Relaxed) {
-            if (self.level.load(Ordering::Relaxed) < DtStreamWorker::LEVEL_THRES) &&
-               self.run.load(Ordering::Relaxed) {
-
+            if self.level.load(Ordering::Relaxed) < DtStreamWorker::LEVEL_THRES {
                 let mut chunk = DtStreamChunk {
                     data: Vec::with_capacity(DtStream::CHUNKSIZE),
                     index: self.index,
@@ -87,10 +82,11 @@ impl DtStreamWorker {
 }
 
 pub struct DtStream {
+    seed:           Vec<u8>,
+    serial:         u16,
     level:          Arc<AtomicIsize>,
-    rx:             Receiver<DtStreamChunk>,
+    rx:             Option<Receiver<DtStreamChunk>>,
     thread_join:    RefCell<Option<thread::JoinHandle<()>>>,
-    run_thread:     Arc<AtomicBool>,
     abort_thread:   Arc<AtomicBool>,
 }
 
@@ -101,43 +97,61 @@ impl DtStream {
                serial: u16) -> DtStream {
 
         let abort_thread = Arc::new(AtomicBool::new(false));
-        let run_thread = Arc::new(AtomicBool::new(false));
         let level = Arc::new(AtomicIsize::new(0));
-        let (tx, rx) = channel();
-        let mut w = DtStreamWorker::new(seed,
-                                        serial,
-                                        tx,
-                                        Arc::clone(&run_thread),
-                                        Arc::clone(&abort_thread),
-                                        Arc::clone(&level));
-        let thread_join = thread::spawn(move || w.worker());
         DtStream {
+            seed: seed.to_vec(),
+            serial,
             level,
-            rx,
-            thread_join: RefCell::new(Some(thread_join)),
-            run_thread,
+            rx: None,
+            thread_join: RefCell::new(None),
             abort_thread,
         }
     }
 
-    pub fn activate(&mut self) {
-        self.run_thread.store(true, Ordering::Release);
+    fn stop(&mut self) {
+        self.abort_thread.store(true, Ordering::Release);
+        if let Some(thread_join) = self.thread_join.replace(None) {
+            thread_join.join().unwrap();
+        }
+        self.abort_thread.store(false, Ordering::Release);
     }
 
-    #[inline]
+    fn start(&mut self) {
+        self.abort_thread.store(false, Ordering::Release);
+        self.level.store(0, Ordering::Release);
+        let (tx, rx) = channel();
+        self.rx = Some(rx);
+        let mut w = DtStreamWorker::new(&self.seed,
+                                        self.serial,
+                                        tx,
+                                        Arc::clone(&self.abort_thread),
+                                        Arc::clone(&self.level));
+        let thread_join = thread::spawn(move || w.worker());
+        self.thread_join.replace(Some(thread_join));
+    }
+
+    pub fn activate(&mut self) {
+        self.stop();
+        self.start();
+    }
+
     pub fn is_active(&self) -> bool {
-        self.run_thread.load(Ordering::Relaxed) &&
+        self.thread_join.borrow().is_some() &&
         !self.abort_thread.load(Ordering::Relaxed)
     }
 
     pub fn get_chunk(&mut self) -> Option<DtStreamChunk> {
         if self.is_active() {
-            match self.rx.try_recv() {
-                Ok(chunk) => {
-                    self.level.fetch_sub(1, Ordering::Relaxed);
-                    Some(chunk)
-                },
-                Err(_) => None,
+            if let Some(rx) = &self.rx {
+                match rx.try_recv() {
+                    Ok(chunk) => {
+                        self.level.fetch_sub(1, Ordering::Relaxed);
+                        Some(chunk)
+                    },
+                    Err(_) => None,
+                }
+            } else {
+                None
             }
         } else {
             None
@@ -152,10 +166,7 @@ impl DtStream {
 
 impl Drop for DtStream {
     fn drop(&mut self) {
-        self.abort_thread.store(true, Ordering::Release);
-        if let Some(thread_join) = self.thread_join.replace(None) {
-            thread_join.join().unwrap();
-        }
+        self.stop();
     }
 }
 
