@@ -64,7 +64,7 @@ impl<'a> Disktest<'a> {
         })
     }
 
-    fn write_mode_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
+    fn write_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
         println!("Done. Wrote {}. Syncing...", prettybyte(bytes_written));
         if let Err(e) = self.file.sync_all() {
             return Err(Error::new(&format!("Sync failed: {}", e)));
@@ -72,7 +72,7 @@ impl<'a> Disktest<'a> {
         return Ok(());
     }
 
-    pub fn write_mode(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
+    pub fn write(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
         println!("Writing {:?} ...", self.path);
 
         let mut bytes_left = max_bytes;
@@ -94,11 +94,11 @@ impl<'a> Disktest<'a> {
             if let Err(e) = self.file.write_all(&chunk.data[0..write_len]) {
                 if let Some(err_code) = e.raw_os_error() {
                     if err_code == ENOSPC {
-                        self.write_mode_finalize(bytes_written)?;
+                        self.write_finalize(bytes_written)?;
                         break; // End of device. -> Success.
                     }
                 }
-                self.write_mode_finalize(bytes_written)?;
+                self.write_finalize(bytes_written)?;
                 return Err(Error::new(&format!("Write error: {}", e)));
             }
 
@@ -106,7 +106,7 @@ impl<'a> Disktest<'a> {
             bytes_written += write_len as u64;
             bytes_left -= write_len as u64;
             if bytes_left == 0 {
-                self.write_mode_finalize(bytes_written)?;
+                self.write_finalize(bytes_written)?;
                 break;
             }
             log_count += write_len;
@@ -116,19 +116,19 @@ impl<'a> Disktest<'a> {
             }
 
             if self.abort.load(Ordering::Relaxed) {
-                self.write_mode_finalize(bytes_written)?;
+                self.write_finalize(bytes_written)?;
                 return Err(Error::new("Aborted by signal!"));
             }
         }
         return Ok(bytes_written);
     }
 
-    fn read_mode_finalize(&mut self, bytes_read: u64) -> Result<(), Error> {
+    fn verify_finalize(&mut self, bytes_read: u64) -> Result<(), Error> {
         println!("Done. Verified {}.", prettybyte(bytes_read));
         return Ok(());
     }
 
-    pub fn read_mode(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
+    pub fn verify(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
         println!("Reading {:?} ...", self.path);
 
         let mut bytes_left = max_bytes;
@@ -168,7 +168,7 @@ impl<'a> Disktest<'a> {
                         bytes_read += read_count as u64;
                         bytes_left -= read_count as u64;
                         if bytes_left == 0 {
-                            self.read_mode_finalize(bytes_read)?;
+                            self.verify_finalize(bytes_read)?;
                             break;
                         }
                         log_count += read_count;
@@ -182,7 +182,7 @@ impl<'a> Disktest<'a> {
 
                     // End of the disk?
                     if n == 0 {
-                        self.read_mode_finalize(bytes_read)?;
+                        self.verify_finalize(bytes_read)?;
                         break;
                     }
                 },
@@ -193,7 +193,7 @@ impl<'a> Disktest<'a> {
             };
 
             if self.abort.load(Ordering::Relaxed) {
-                self.read_mode_finalize(bytes_read)?;
+                self.verify_finalize(bytes_read)?;
                 return Err(Error::new("Aborted by signal!"));
             }
         }
@@ -221,35 +221,35 @@ mod tests {
 
         // Write a couple of bytes and verify them.
         let nr_bytes = 1000;
-        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.read_mode(0, std::u64::MAX).unwrap(), nr_bytes);
+        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(0, std::u64::MAX).unwrap(), nr_bytes);
 
         // Write a couple of bytes and verify half of them.
         let nr_bytes = 1000;
         loc_file.set_len(0).unwrap();
-        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.read_mode(0, nr_bytes / 2).unwrap(), nr_bytes / 2);
+        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(0, nr_bytes / 2).unwrap(), nr_bytes / 2);
 
         // Write a big chunk that is aggregated and verify it.
         loc_file.set_len(0).unwrap();
         let nr_bytes = (DtStream::CHUNKSIZE * nr_threads * 2 + 100) as u64;
-        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.read_mode(0, std::u64::MAX).unwrap(), nr_bytes);
+        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(0, std::u64::MAX).unwrap(), nr_bytes);
 
         // Check whether write rewinds the file.
         let nr_bytes = 1000;
         loc_file.set_len(100).unwrap();
         loc_file.seek(SeekFrom::Start(10)).unwrap();
-        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.read_mode(0, std::u64::MAX).unwrap(), nr_bytes);
+        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(0, std::u64::MAX).unwrap(), nr_bytes);
 
         // Modify the written data and assert failure.
         let nr_bytes = 1000;
         loc_file.set_len(0).unwrap();
-        assert_eq!(dt.write_mode(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
         loc_file.seek(SeekFrom::Start(10)).unwrap();
         writeln!(loc_file, "x").unwrap();
-        match dt.read_mode(0, nr_bytes) {
+        match dt.verify(0, nr_bytes) {
             Ok(_) => panic!("Verify of modified data did not fail!"),
             Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at Byte 10!"),
         }
