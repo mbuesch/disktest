@@ -188,10 +188,12 @@ impl<'a> Disktest<'a> {
                     if read_count == read_len || (read_count > 0 && n == 0) {
                         // Calculate and compare the read buffer to the pseudo random sequence.
                         let chunk = self.stream_agg.wait_chunk();
-                        for i in 0..read_count {
-                            if buffer[i] != chunk.data[i] {
-                                return Err(Error::new(&format!("Data MISMATCH at Byte {}!",
-                                                               bytes_read + i as u64)));
+                        if buffer[..read_count] != chunk.data[..read_count] {
+                            for i in 0..read_count {
+                                if buffer[i] != chunk.data[i] {
+                                    return Err(Error::new(&format!("Data MISMATCH at Byte {}!",
+                                                                   bytes_read + i as u64)));
+                                }
                             }
                         }
 
