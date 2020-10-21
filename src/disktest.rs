@@ -99,6 +99,22 @@ impl<'a> Disktest<'a> {
         }
     }
 
+    fn init(&mut self, prefix: &str, seek: u64) -> Result<(), Error> {
+        self.log_reset();
+
+        if self.quiet_level < 2 {
+            println!("{} {:?}...", prefix, self.path);
+        }
+
+        self.stream_agg.activate();
+
+        if let Err(e) = self.file.seek(SeekFrom::Start(seek)) {
+            return Err(Error::new(&format!("File seek to {} failed: {}",
+                                           seek, e.to_string())));
+        }
+        return Ok(());
+    }
+
     fn write_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
         self.log("Done. Wrote ", 0, bytes_written, true, ". Syncing...");
         if let Err(e) = self.file.sync_all() {
@@ -108,20 +124,10 @@ impl<'a> Disktest<'a> {
     }
 
     pub fn write(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
-        if self.quiet_level < 2 {
-            println!("Writing {:?} ...", self.path);
-        }
-
         let mut bytes_left = max_bytes;
         let mut bytes_written = 0u64;
 
-        self.stream_agg.activate();
-        if let Err(e) = self.file.seek(SeekFrom::Start(seek)) {
-            return Err(Error::new(&format!("File seek to {} failed: {}",
-                                           seek, e.to_string())));
-        }
-
-        self.log_reset();
+        self.init("Writing", seek)?;
         loop {
             // Get the next data chunk.
             let chunk = self.stream_agg.wait_chunk();
@@ -146,7 +152,7 @@ impl<'a> Disktest<'a> {
                 self.write_finalize(bytes_written)?;
                 break;
             }
-            self.log("Wrote ", write_len, bytes_written, false, ".");
+            self.log("Wrote ", write_len, bytes_written, false, "...");
 
             if self.abort.load(Ordering::Relaxed) {
                 self.write_finalize(bytes_written)?;
@@ -162,25 +168,15 @@ impl<'a> Disktest<'a> {
     }
 
     pub fn verify(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
-        if self.quiet_level < 2 {
-            println!("Reading {:?} ...", self.path);
-        }
-
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0u64;
 
         let readbuf_len = self.stream_agg.get_chunksize();
         let mut buffer = vec![0; readbuf_len];
         let mut read_count = 0;
-
-        self.stream_agg.activate();
-        if let Err(e) = self.file.seek(SeekFrom::Start(seek)) {
-            return Err(Error::new(&format!("File seek to {} failed: {}",
-                                           seek, e.to_string())));
-        }
-
-        self.log_reset();
         let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
+
+        self.init("Verifying", seek)?;
         loop {
             // Read the next chunk from disk.
             match self.file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
@@ -206,7 +202,7 @@ impl<'a> Disktest<'a> {
                             self.verify_finalize(bytes_read)?;
                             break;
                         }
-                        self.log("Verified ", read_count, bytes_read, false, ".");
+                        self.log("Verified ", read_count, bytes_read, false, "...");
                         read_count = 0;
                         read_len = min(readbuf_len as u64, bytes_left) as usize;
                     }
