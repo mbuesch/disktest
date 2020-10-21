@@ -30,21 +30,27 @@ use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
-const LOGTHRES: usize = 1024 * 1024 * 10;
+const LOG_BYTE_THRES: u64   = 1024 * 1024 * 10;
+const LOG_SEC_THRES: u64    = 10;
 
 pub struct Disktest<'a> {
+    quiet_level:    u8,
     stream_agg:     DtStreamAgg,
     file:           &'a mut File,
     path:           &'a Path,
     abort:          Arc<AtomicBool>,
+    log_count:      u64,
+    log_time:       Instant,
 }
 
 impl<'a> Disktest<'a> {
     pub fn new(seed:        &'a Vec<u8>,
                nr_threads:  usize,
                file:        &'a mut File,
-               path:        &'a Path) -> Result<Disktest<'a>, Error> {
+               path:        &'a Path,
+               quiet_level: u8) -> Result<Disktest<'a>, Error> {
 
         let abort = Arc::new(AtomicBool::new(false));
         for sig in &[signal_hook::SIGTERM,
@@ -57,15 +63,44 @@ impl<'a> Disktest<'a> {
         }
         let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
         return Ok(Disktest {
+            quiet_level,
             stream_agg: DtStreamAgg::new(seed, nr_threads),
             file,
             path,
             abort,
+            log_count: 0,
+            log_time: Instant::now(),
         })
     }
 
+    fn log_reset(&mut self) {
+        self.log_count = 0;
+        self.log_time = Instant::now();
+    }
+
+    fn log(&mut self,
+           prefix: &str,
+           inc_processed: usize,
+           abs_processed: u64,
+           no_limiting: bool,
+           suffix: &str) {
+        if self.quiet_level >= 2 {
+            return;
+        }
+        self.log_count += inc_processed as u64;
+        if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == 0) || no_limiting {
+            let now = Instant::now();
+            let expired = now.duration_since(self.log_time).as_secs() >= LOG_SEC_THRES;
+            if (expired && self.quiet_level == 0) || no_limiting {
+                println!("{}{}{}", prefix, prettybyte(abs_processed), suffix);
+                self.log_count = 0;
+                self.log_time = now;
+            }
+        }
+    }
+
     fn write_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
-        println!("Done. Wrote {}. Syncing...", prettybyte(bytes_written));
+        self.log("Done. Wrote ", 0, bytes_written, true, ". Syncing...");
         if let Err(e) = self.file.sync_all() {
             return Err(Error::new(&format!("Sync failed: {}", e)));
         }
@@ -73,11 +108,12 @@ impl<'a> Disktest<'a> {
     }
 
     pub fn write(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
-        println!("Writing {:?} ...", self.path);
+        if self.quiet_level < 2 {
+            println!("Writing {:?} ...", self.path);
+        }
 
         let mut bytes_left = max_bytes;
         let mut bytes_written = 0u64;
-        let mut log_count = 0;
 
         self.stream_agg.activate();
         if let Err(e) = self.file.seek(SeekFrom::Start(seek)) {
@@ -85,6 +121,7 @@ impl<'a> Disktest<'a> {
                                            seek, e.to_string())));
         }
 
+        self.log_reset();
         loop {
             // Get the next data chunk.
             let chunk = self.stream_agg.wait_chunk();
@@ -109,11 +146,7 @@ impl<'a> Disktest<'a> {
                 self.write_finalize(bytes_written)?;
                 break;
             }
-            log_count += write_len;
-            if log_count >= LOGTHRES {
-                println!("Wrote {}.", prettybyte(bytes_written));
-                log_count -= LOGTHRES;
-            }
+            self.log("Wrote ", write_len, bytes_written, false, ".");
 
             if self.abort.load(Ordering::Relaxed) {
                 self.write_finalize(bytes_written)?;
@@ -124,16 +157,17 @@ impl<'a> Disktest<'a> {
     }
 
     fn verify_finalize(&mut self, bytes_read: u64) -> Result<(), Error> {
-        println!("Done. Verified {}.", prettybyte(bytes_read));
+        self.log("Done. Verified ", 0, bytes_read, true, ".");
         return Ok(());
     }
 
     pub fn verify(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
-        println!("Reading {:?} ...", self.path);
+        if self.quiet_level < 2 {
+            println!("Reading {:?} ...", self.path);
+        }
 
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0u64;
-        let mut log_count = 0;
 
         let readbuf_len = self.stream_agg.get_chunksize();
         let mut buffer = vec![0; readbuf_len];
@@ -145,6 +179,7 @@ impl<'a> Disktest<'a> {
                                            seek, e.to_string())));
         }
 
+        self.log_reset();
         let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
         loop {
             // Read the next chunk from disk.
@@ -171,11 +206,7 @@ impl<'a> Disktest<'a> {
                             self.verify_finalize(bytes_read)?;
                             break;
                         }
-                        log_count += read_count;
-                        if log_count >= LOGTHRES {
-                            println!("Verified {}.", prettybyte(bytes_read));
-                            log_count -= LOGTHRES;
-                        }
+                        self.log("Verified ", read_count, bytes_read, false, ".");
                         read_count = 0;
                         read_len = min(readbuf_len as u64, bytes_left) as usize;
                     }
@@ -217,7 +248,7 @@ mod tests {
         let mut loc_file = file.try_clone().unwrap();
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
-        let mut dt = Disktest::new(&seed, nr_threads, &mut file, &path).unwrap();
+        let mut dt = Disktest::new(&seed, nr_threads, &mut file, &path, 0).unwrap();
 
         // Write a couple of bytes and verify them.
         let nr_bytes = 1000;

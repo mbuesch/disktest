@@ -77,6 +77,13 @@ The special value 0 will select the maximum number of online CPUs in the system.
 If the number of threads is equal to number of CPUs it is optimal for performance. \
 This parameter must be equal during corresponding verify and --write mode runs. \
 Otherwise the verification will fail. Default: 1"))
+        .arg(clap::Arg::with_name("quiet")
+             .long("quiet")
+             .short("q")
+             .takes_value(true)
+             .help("Quiet level: 0: Normal verboseness (default). \
+1: Reduced verboseness. \
+2: No informational output."))
         .get_matches();
 
     let device = args.value_of("device").unwrap();
@@ -95,6 +102,10 @@ Otherwise the verification will fail. Default: 1"))
         },
         Err(e) => return Err(Box::new(Error::new(&format!("Invalid --threads value: {}", e)))),
     };
+    let quiet: u8 = match args.value_of("quiet").unwrap_or("0").parse() {
+        Ok(x) => x,
+        Err(e) => return Err(Box::new(Error::new(&format!("Invalid --quiet value: {}", e)))),
+    };
 
     // Open the disk device.
     let path = Path::new(&device);
@@ -111,7 +122,7 @@ Otherwise the verification will fail. Default: 1"))
     };
 
     let seed = seed.as_bytes().to_vec();
-    let mut disktest = match Disktest::new(&seed, threads, &mut file, &path) {
+    let mut disktest = match Disktest::new(&seed, threads, &mut file, &path, quiet) {
         Ok(x) => x,
         Err(e) => {
             return Err(Box::new(e))
