@@ -28,6 +28,7 @@ mod util;
 
 use clap;
 use crate::error::Error;
+use crate::util::parsebytes;
 use disktest::Disktest;
 use std::fs::OpenOptions;
 use std::path::Path;
@@ -52,6 +53,13 @@ hash stream, which are then interleaved in a regular pattern.")
              .help("Write pseudo random data to the device. \
 If this option is not given, then disktest will operate in verify-mode instead. \
 In verify-mode the disk will be read and compared to the expected pseudo random sequence."))
+        .arg(clap::Arg::with_name("seek")
+             .long("seek")
+             .short("s")
+             .takes_value(true)
+             .help("Seek to the specified byte position on disk \
+before starting the write/verify operation. This skips the specified \
+amount of bytes."))
         .arg(clap::Arg::with_name("bytes")
              .long("bytes")
              .short("b")
@@ -60,7 +68,7 @@ In verify-mode the disk will be read and compared to the expected pseudo random 
 If not given, then the whole disk will be overwritten/verified."))
         .arg(clap::Arg::with_name("seed")
              .long("seed")
-             .short("s")
+             .short("S")
              .takes_value(true)
              .help("The seed to use for hash stream generation. \
 The generated pseudo random sequence is cryptographically reasonably strong. \
@@ -88,7 +96,11 @@ Otherwise the verification will fail. Default: 1"))
 
     let device = args.value_of("device").unwrap();
     let write = args.is_present("write");
-    let max_bytes: u64 = match args.value_of("bytes").unwrap_or("18446744073709551615").parse() {
+    let seek = match parsebytes(args.value_of("seek").unwrap_or("0")) {
+        Ok(x) => x,
+        Err(e) => return Err(Box::new(Error::new(&format!("Invalid --seek value: {}", e)))),
+    };
+    let max_bytes = match parsebytes(args.value_of("bytes").unwrap_or(&u64::MAX.to_string())) {
         Ok(x) => x,
         Err(e) => return Err(Box::new(Error::new(&format!("Invalid --bytes value: {}", e)))),
     };
@@ -112,7 +124,6 @@ Otherwise the verification will fail. Default: 1"))
     let mut file = match OpenOptions::new().read(!write)
                                            .write(write)
                                            .create(write)
-                                           .truncate(write)
                                            .open(path) {
         Err(e) => {
             eprintln!("Failed to open file {:?}: {}", path, e);
@@ -129,11 +140,11 @@ Otherwise the verification will fail. Default: 1"))
         },
     };
     if write {
-        if let Err(e) = disktest.write(0, max_bytes) {
+        if let Err(e) = disktest.write(seek, max_bytes) {
             return Err(Box::new(e))
         }
     } else {
-        if let Err(e) = disktest.verify(0, max_bytes) {
+        if let Err(e) = disktest.verify(seek, max_bytes) {
             return Err(Box::new(e))
         }
     }

@@ -103,7 +103,8 @@ impl<'a> Disktest<'a> {
         self.log_reset();
 
         if self.quiet_level < 2 {
-            println!("{} {:?}...", prefix, self.path);
+            println!("{} {:?}, starting at position {}...",
+                     prefix, self.path, prettybyte(seek));
         }
 
         self.stream_agg.activate();
@@ -191,8 +192,14 @@ impl<'a> Disktest<'a> {
                         if buffer[..read_count] != chunk.data[..read_count] {
                             for i in 0..read_count {
                                 if buffer[i] != chunk.data[i] {
-                                    return Err(Error::new(&format!("Data MISMATCH at Byte {}!",
-                                                                   bytes_read + i as u64)));
+                                    let pos = bytes_read + i as u64;
+                                    let msg = if pos >= 1024 {
+                                        format!("Data MISMATCH at byte {} = {}!",
+                                                pos, prettybyte(pos))
+                                    } else {
+                                        format!("Data MISMATCH at byte {}!", pos)
+                                    };
+                                    return Err(Error::new(&msg));
                                 }
                             }
                         }
@@ -280,7 +287,7 @@ mod tests {
         writeln!(loc_file, "x").unwrap();
         match dt.verify(0, nr_bytes) {
             Ok(_) => panic!("Verify of modified data did not fail!"),
-            Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at Byte 10!"),
+            Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at byte 10!"),
         }
     }
 }
