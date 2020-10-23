@@ -98,7 +98,7 @@ impl<'a> Disktest<'a> {
 
                     let t_elapsed = (now - self.begin_time).as_secs();
                     let rate = if t_elapsed > 0 { abs_processed / t_elapsed } else { 0 };
-                    println!("{}{} @ {}/s {}",
+                    println!("{}{} @ {}/s{}",
                              prefix,
                              prettybytes(abs_processed, true, true),
                              prettybytes(rate, true, false),
@@ -128,10 +128,13 @@ impl<'a> Disktest<'a> {
     }
 
     fn write_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
-        self.log("Done. Wrote ", 0, bytes_written, true, ". Syncing...");
+        if self.quiet_level < 2 {
+            println!("Writing stopped. Syncing...");
+        }
         if let Err(e) = self.file.sync_all() {
             return Err(Error::new(&format!("Sync failed: {}", e)));
         }
+        self.log("Done. Wrote ", 0, bytes_written, true, ".");
         return Ok(());
     }
 
@@ -164,7 +167,7 @@ impl<'a> Disktest<'a> {
                 self.write_finalize(bytes_written)?;
                 break;
             }
-            self.log("Wrote ", write_len, bytes_written, false, "...");
+            self.log("Wrote ", write_len, bytes_written, false, " ...");
 
             if self.abort.load(Ordering::Relaxed) {
                 self.write_finalize(bytes_written)?;
@@ -222,7 +225,7 @@ impl<'a> Disktest<'a> {
                             self.verify_finalize(bytes_read)?;
                             break;
                         }
-                        self.log("Verified ", read_count, bytes_read, false, "...");
+                        self.log("Verified ", read_count, bytes_read, false, " ...");
                         read_count = 0;
                         read_len = min(readbuf_len as u64, bytes_left) as usize;
                     }
