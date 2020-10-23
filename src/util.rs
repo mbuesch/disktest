@@ -33,34 +33,54 @@ const GB: u64 = 1000 * 1000 * 1000;
 const MB: u64 = 1000 * 1000;
 const KB: u64 = 1000;
 
-pub fn prettybyte(count: u64) -> String {
-    return if count >= EIB {
-        format!("{:.4} EiB ({:.4} EB)",
-                ((count / TIB) as f64) / (MIB as f64),
-                ((count / TB) as f64) / (MB as f64))
-    } else if count >= PIB {
-        format!("{:.4} PiB ({:.4} PB)",
-                ((count / GIB) as f64) / (MIB as f64),
-                ((count / GB) as f64) / (MB as f64))
-    } else if count >= TIB {
-        format!("{:.4} TiB ({:.4} TB)",
-                ((count / MIB) as f64) / (MIB as f64),
-                ((count / MB) as f64) / (MB as f64))
-    } else if count >= GIB {
-        format!("{:.2} GiB ({:.2} GB)",
-                ((count / MIB) as f64) / (KIB as f64),
-                ((count / MB) as f64) / (KB as f64))
-    } else if count >= MIB {
-        format!("{:.1} MiB ({:.1} MB)",
-                (count as f64) / (MIB as f64),
-                (count as f64) / (MB as f64))
-    } else if count >= KIB {
-        format!("{:.1} kiB ({:.1} kB)",
-                (count as f64) / (KIB as f64),
-                (count as f64) / (KB as f64))
-    } else {
-        format!("{} bytes", count)
+pub fn prettybytes(count: u64, binary: bool, decimal: bool) -> String {
+    let mut ret = String::new();
+
+    if binary || decimal {
+        if count < KIB {
+            ret.push_str(&format!("{} bytes", count))
+        } else {
+            let bin = if count >= EIB {
+                format!("{:.4} EiB", ((count / TIB) as f64) / (MIB as f64))
+            } else if count >= PIB {
+                format!("{:.4} PiB", ((count / GIB) as f64) / (MIB as f64))
+            } else if count >= TIB {
+                format!("{:.4} TiB", ((count / MIB) as f64) / (MIB as f64))
+            } else if count >= GIB {
+                format!("{:.2} GiB", ((count / MIB) as f64) / (KIB as f64))
+            } else if count >= MIB {
+                format!("{:.1} MiB", (count as f64) / (MIB as f64))
+            } else {
+                format!("{:.1} kiB", (count as f64) / (KIB as f64))
+            };
+
+            let dec = if count >= EIB {
+                format!("{:.4} EB", ((count / TB) as f64) / (MB as f64))
+            } else if count >= PIB {
+                format!("{:.4} PB", ((count / GB) as f64) / (MB as f64))
+            } else if count >= TIB {
+                format!("{:.4} TB", ((count / MB) as f64) / (MB as f64))
+            } else if count >= GIB {
+                format!("{:.2} GB", ((count / MB) as f64) / (KB as f64))
+            } else if count >= MIB {
+                format!("{:.1} MB", (count as f64) / (MB as f64))
+            } else {
+                format!("{:.1} kB", (count as f64) / (KB as f64))
+            };
+
+            if binary {
+                ret.push_str(&bin);
+            }
+            if decimal {
+                let len = ret.len();
+                if len > 0 { ret.push_str(" ("); }
+                ret.push_str(&dec);
+                if len > 0 { ret.push_str(")"); }
+            }
+        }
     }
+
+    ret
 }
 
 pub fn parsebytes(s: &str) -> Result<u64, <u64 as std::str::FromStr>::Err> {
@@ -116,20 +136,34 @@ mod tests {
 
     #[test]
     fn test_prettybyte() {
-        assert_eq!(prettybyte(42),
+        assert_eq!(prettybytes(42, true, true),
                    "42 bytes");
-        assert_eq!(prettybyte(42 * 1024),
+        assert_eq!(prettybytes(42 * 1024, true, true),
                    "42.0 kiB (43.0 kB)");
-        assert_eq!(prettybyte(42 * 1024 * 1024),
+        assert_eq!(prettybytes(42 * 1024 * 1024, true, true),
                    "42.0 MiB (44.0 MB)");
-        assert_eq!(prettybyte(42 * 1024 * 1024 * 1024),
+        assert_eq!(prettybytes(42 * 1024 * 1024 * 1024, true, true),
                    "42.00 GiB (45.10 GB)");
-        assert_eq!(prettybyte(42 * 1024 * 1024 * 1024 * 1024),
+        assert_eq!(prettybytes(42 * 1024 * 1024 * 1024 * 1024, true, true),
                    "42.0000 TiB (46.1795 TB)");
-        assert_eq!(prettybyte(42 * 1024 * 1024 * 1024 * 1024 * 1024),
+        assert_eq!(prettybytes(42 * 1024 * 1024 * 1024 * 1024 * 1024, true, true),
                    "42.0000 PiB (47.2878 PB)");
-        assert_eq!(prettybyte(2 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024),
+        assert_eq!(prettybytes(2 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024, true, true),
                    "2.0000 EiB (2.3058 EB)");
+
+        assert_eq!(prettybytes(42, true, false),
+                   "42 bytes");
+        assert_eq!(prettybytes(42, false, true),
+                   "42 bytes");
+        assert_eq!(prettybytes(42, false, false),
+                   "");
+
+        assert_eq!(prettybytes(42 * 1024, true, false),
+                   "42.0 kiB");
+        assert_eq!(prettybytes(42 * 1024, false, true),
+                   "43.0 kB");
+        assert_eq!(prettybytes(42 * 1024, false, false),
+                   "");
     }
 
     #[test]

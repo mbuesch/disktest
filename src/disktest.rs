@@ -21,7 +21,7 @@
 
 use crate::error::Error;
 use crate::stream_aggregator::DtStreamAgg;
-use crate::util::prettybyte;
+use crate::util::prettybytes;
 use libc::ENOSPC;
 use signal_hook;
 use std::cmp::min;
@@ -43,6 +43,7 @@ pub struct Disktest<'a> {
     abort:          Arc<AtomicBool>,
     log_count:      u64,
     log_time:       Instant,
+    begin_time:     Instant,
 }
 
 impl<'a> Disktest<'a> {
@@ -70,12 +71,14 @@ impl<'a> Disktest<'a> {
             abort,
             log_count: 0,
             log_time: Instant::now(),
+            begin_time: Instant::now(),
         })
     }
 
     fn log_reset(&mut self) {
         self.log_count = 0;
         self.log_time = Instant::now();
+        self.begin_time = self.log_time;
     }
 
     fn log(&mut self,
@@ -84,17 +87,25 @@ impl<'a> Disktest<'a> {
            abs_processed: u64,
            no_limiting: bool,
            suffix: &str) {
-        if self.quiet_level >= 2 {
-            return;
-        }
-        self.log_count += inc_processed as u64;
-        if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == 0) || no_limiting {
-            let now = Instant::now();
-            let expired = now.duration_since(self.log_time).as_secs() >= LOG_SEC_THRES;
-            if (expired && self.quiet_level == 0) || no_limiting {
-                println!("{}{}{}", prefix, prettybyte(abs_processed), suffix);
-                self.log_count = 0;
-                self.log_time = now;
+        if self.quiet_level < 2 {
+            self.log_count += inc_processed as u64;
+            if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == 0) || no_limiting {
+
+                let now = Instant::now();
+                let expired = now.duration_since(self.log_time).as_secs() >= LOG_SEC_THRES;
+
+                if (expired && self.quiet_level == 0) || no_limiting {
+
+                    let t_elapsed = (now - self.begin_time).as_secs();
+                    let rate = if t_elapsed > 0 { abs_processed / t_elapsed } else { 0 };
+                    println!("{}{} @ {}/s {}",
+                             prefix,
+                             prettybytes(abs_processed, true, true),
+                             prettybytes(rate, true, false),
+                             suffix);
+                    self.log_count = 0;
+                    self.log_time = now;
+                }
             }
         }
     }
@@ -104,7 +115,7 @@ impl<'a> Disktest<'a> {
 
         if self.quiet_level < 2 {
             println!("{} {:?}, starting at position {}...",
-                     prefix, self.path, prettybyte(seek));
+                     prefix, self.path, prettybytes(seek, true, true));
         }
 
         self.stream_agg.activate();
@@ -195,7 +206,7 @@ impl<'a> Disktest<'a> {
                                     let pos = bytes_read + i as u64;
                                     let msg = if pos >= 1024 {
                                         format!("Data MISMATCH at byte {} = {}!",
-                                                pos, prettybyte(pos))
+                                                pos, prettybytes(pos, true, true))
                                     } else {
                                         format!("Data MISMATCH at byte {}!", pos)
                                     };
@@ -224,7 +235,7 @@ impl<'a> Disktest<'a> {
                 },
                 Err(e) => {
                     return Err(Error::new(&format!("Read error at {}: {}",
-                                                   prettybyte(bytes_read), e)));
+                                                   prettybytes(bytes_read, true, true), e)));
                 },
             };
 
