@@ -20,7 +20,7 @@
 //
 
 use crate::error::Error;
-use crate::stream_aggregator::DtStreamAgg;
+use crate::stream_aggregator::{DtStreamAgg, DtStreamType};
 use crate::util::prettybytes;
 use libc::ENOSPC;
 use signal_hook;
@@ -65,7 +65,7 @@ impl<'a> Disktest<'a> {
         let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
         return Ok(Disktest {
             quiet_level,
-            stream_agg: DtStreamAgg::new(seed, nr_threads),
+            stream_agg: DtStreamAgg::new(DtStreamType::SHA512, seed, nr_threads),
             file,
             path,
             abort,
@@ -253,6 +253,7 @@ impl<'a> Disktest<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::hasher::HasherSHA512;
     use crate::stream::DtStream;
     use std::path::Path;
     use super::*;
@@ -282,7 +283,7 @@ mod tests {
 
         // Write a big chunk that is aggregated and verify it.
         loc_file.set_len(0).unwrap();
-        let nr_bytes = (DtStream::CHUNKSIZE * nr_threads * 2 + 100) as u64;
+        let nr_bytes = (HasherSHA512::OUTSIZE * DtStream::CHUNKFACTOR * nr_threads * 2 + 100) as u64;
         assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
         assert_eq!(dt.verify(0, std::u64::MAX).unwrap(), nr_bytes);
 

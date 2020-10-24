@@ -19,7 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crate::hasher::Hasher;
+use crate::hasher::{HasherSHA512, NextHash};
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
@@ -27,13 +27,20 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use std::time::Duration;
 
+#[derive(Copy, Clone)]
+pub enum DtStreamType {
+    SHA512,
+}
+
 pub struct DtStreamChunk {
     pub index: u64,
     pub data: Vec<u8>,
 }
 
 struct DtStreamWorker {
-    hasher:         Hasher,
+    stype:          DtStreamType,
+    seed:           Vec<u8>,
+    serial:         u16,
     abort:          Arc<AtomicBool>,
     level:          Arc<AtomicIsize>,
     tx:             Sender<DtStreamChunk>,
@@ -43,14 +50,17 @@ struct DtStreamWorker {
 impl DtStreamWorker {
     const LEVEL_THRES: isize = 8;
 
-    fn new(seed: &Vec<u8>,
+    fn new(stype:   DtStreamType,
+           seed:    &Vec<u8>,
            serial:  u16,
            tx:      Sender<DtStreamChunk>,
            abort:   Arc<AtomicBool>,
            level:   Arc<AtomicIsize>) -> DtStreamWorker {
 
         DtStreamWorker {
-            hasher: Hasher::new(seed, serial),
+            stype,
+            seed: seed.to_vec(),
+            serial,
             abort,
             level,
             tx,
@@ -59,18 +69,20 @@ impl DtStreamWorker {
     }
 
     fn worker(&mut self) {
+        let mut hasher = match self.stype {
+            DtStreamType::SHA512 => Box::new(HasherSHA512::new(&self.seed, self.serial))
+        };
+
         while !self.abort.load(Ordering::Relaxed) {
             if self.level.load(Ordering::Relaxed) < DtStreamWorker::LEVEL_THRES {
                 let mut chunk = DtStreamChunk {
-                    data: Vec::with_capacity(DtStream::CHUNKSIZE),
+                    data: Vec::with_capacity(hasher.get_size() * DtStream::CHUNKFACTOR),
                     index: self.index,
                 };
                 self.index += 1;
 
-                for _ in 0..(DtStream::CHUNKSIZE / Hasher::OUTSIZE) {
-                    let next_hash = self.hasher.next();
-                    chunk.data.extend(next_hash);
-                }
+                hasher.next_chunk(&mut chunk.data, DtStream::CHUNKFACTOR);
+
                 if let Ok(()) = self.tx.send(chunk) {
                     self.level.fetch_add(1, Ordering::Relaxed);
                 }
@@ -82,6 +94,7 @@ impl DtStreamWorker {
 }
 
 pub struct DtStream {
+    stype:          DtStreamType,
     seed:           Vec<u8>,
     serial:         u16,
     level:          Arc<AtomicIsize>,
@@ -91,20 +104,28 @@ pub struct DtStream {
 }
 
 impl DtStream {
-    pub const CHUNKSIZE: usize = Hasher::OUTSIZE * 1024 * 10;
+    pub const CHUNKFACTOR: usize = 1024 * 10;
 
-    pub fn new(seed: &Vec<u8>,
+    pub fn new(stype: DtStreamType,
+               seed: &Vec<u8>,
                serial: u16) -> DtStream {
 
         let abort_thread = Arc::new(AtomicBool::new(false));
         let level = Arc::new(AtomicIsize::new(0));
         DtStream {
+            stype,
             seed: seed.to_vec(),
             serial,
             level,
             rx: None,
             thread_join: RefCell::new(None),
             abort_thread,
+        }
+    }
+
+    pub fn get_chunksize(&self) -> usize {
+        match self.stype {
+            DtStreamType::SHA512 => HasherSHA512::OUTSIZE * DtStream::CHUNKFACTOR
         }
     }
 
@@ -121,7 +142,8 @@ impl DtStream {
         self.level.store(0, Ordering::Release);
         let (tx, rx) = channel();
         self.rx = Some(rx);
-        let mut w = DtStreamWorker::new(&self.seed,
+        let mut w = DtStreamWorker::new(self.stype,
+                                        &self.seed,
                                         self.serial,
                                         tx,
                                         Arc::clone(&self.abort_thread),
@@ -176,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_basic() {
-        let mut s = DtStream::new(&vec![1,2,3], 0);
+        let mut s = DtStream::new(DtStreamType::SHA512, &vec![1,2,3], 0);
         s.activate();
         assert_eq!(s.is_active(), true);
 

@@ -23,6 +23,8 @@ use crate::stream::{DtStream, DtStreamChunk};
 use std::thread;
 use std::time::Duration;
 
+pub use crate::stream::DtStreamType;
+
 pub struct DtStreamAggChunk {
     pub data:       Vec<u8>,
 }
@@ -34,7 +36,8 @@ pub struct DtStreamAgg {
 }
 
 impl DtStreamAgg {
-    pub fn new(seed: &Vec<u8>,
+    pub fn new(stype:       DtStreamType,
+               seed:        &Vec<u8>,
                num_threads: usize) -> DtStreamAgg {
 
         assert!(num_threads > 0);
@@ -43,7 +46,7 @@ impl DtStreamAgg {
         let mut streams = Vec::with_capacity(num_threads);
         let mut stream_chunks = Vec::with_capacity(num_threads);
         for i in 0..num_threads {
-            streams.push(DtStream::new(seed, i as u16));
+            streams.push(DtStream::new(stype, seed, i as u16));
             stream_chunks.push(None);
         }
 
@@ -56,7 +59,7 @@ impl DtStreamAgg {
 
     #[inline]
     pub fn get_chunksize(&self) -> usize {
-        DtStream::CHUNKSIZE * self.streams.len()
+        self.streams[0].get_chunksize() * self.streams.len()
     }
 
     pub fn activate(&mut self) {
@@ -130,12 +133,13 @@ impl DtStreamAgg {
 
 #[cfg(test)]
 mod tests {
+    use crate::hasher::HasherSHA512;
     use super::*;
 
     #[test]
     fn test_basic() {
         let num_threads = 2;
-        let mut agg = DtStreamAgg::new(&vec![1,2,3], num_threads);
+        let mut agg = DtStreamAgg::new(DtStreamType::SHA512, &vec![1,2,3], num_threads);
         agg.activate();
         assert_eq!(agg.is_active(), true);
 
@@ -144,7 +148,7 @@ mod tests {
         for _ in 0..4 {
             // Generate the next chunk.
             let chunk = agg.wait_chunk();
-            assert_eq!(chunk.data.len(), DtStream::CHUNKSIZE * num_threads);
+            assert_eq!(chunk.data.len(), DtStream::CHUNKFACTOR * HasherSHA512::OUTSIZE * num_threads);
             assert_eq!(agg.get_chunksize(), chunk.data.len());
 
             // Check if we have an even distribution.
@@ -161,12 +165,12 @@ mod tests {
 
             // Check if the streams are different.
             let mut equal = 0;
-            let nr_check = DtStream::CHUNKSIZE;
+            let nr_check = DtStream::CHUNKFACTOR * HasherSHA512::OUTSIZE;
             for i in 0..nr_check {
                 // first stream
                 let offs0 = i;
                 // second stream
-                let offs1 = DtStream::CHUNKSIZE + i;
+                let offs1 = DtStream::CHUNKFACTOR * HasherSHA512::OUTSIZE + i;
 
                 if chunk.data[offs0] == chunk.data[offs1] {
                     equal += 1;

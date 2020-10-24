@@ -22,22 +22,34 @@
 use crypto::{sha2::Sha512, digest::Digest};
 use std::cmp::max;
 
-pub struct Hasher {
+pub trait NextHash {
+    fn get_size(&self) -> usize;
+
+    fn next(&mut self) -> &[u8];
+
+    fn next_chunk(&mut self, chunk_buffer: &mut Vec<u8>, count: usize) {
+        for _ in 0..count {
+            chunk_buffer.extend(self.next());
+        }
+    }
+}
+
+pub struct HasherSHA512 {
     alg:        Sha512,
     seed_len:   usize,
     count:      u64,
     inbuf:      Vec<u8>,
 }
 
-impl Hasher {
+impl HasherSHA512 {
     const SIZE: usize = 512 / 8;
-    const PREVSIZE: usize = Hasher::SIZE / 2;
+    const PREVSIZE: usize = HasherSHA512::SIZE / 2;
     const SERIALSIZE: usize = 16 / 8;
     const COUNTSIZE: usize = 64 / 8;
 
-    pub const OUTSIZE: usize = Hasher::SIZE;
+    pub const OUTSIZE: usize = HasherSHA512::SIZE;
 
-    pub fn new(seed: &Vec<u8>, serial: u16) -> Hasher {
+    pub fn new(seed: &Vec<u8>, serial: u16) -> HasherSHA512 {
 
         /* Allocate input buffer with layout:
          *   [ SEED,        SERIAL,       PREVHASH,     COUNT,    PADDING ]
@@ -47,22 +59,28 @@ impl Hasher {
          * The PREVHASH+COUNT+PADDING slices are also used as output buffer.
          */
         let mut inbuf = vec![0; seed.len() +
-                                Hasher::SERIALSIZE +
-                                max(Hasher::PREVSIZE + Hasher::COUNTSIZE, Hasher::SIZE)];
+                                HasherSHA512::SERIALSIZE +
+                                max(HasherSHA512::PREVSIZE + HasherSHA512::COUNTSIZE, HasherSHA512::SIZE)];
         // Copy seed to first slice.
         inbuf[..seed.len()].copy_from_slice(seed);
         // Copy serial to second slice.
-        inbuf[seed.len()..seed.len()+Hasher::SERIALSIZE].copy_from_slice(&serial.to_le_bytes());
+        inbuf[seed.len()..seed.len()+HasherSHA512::SERIALSIZE].copy_from_slice(&serial.to_le_bytes());
 
-        return Hasher {
+        HasherSHA512 {
             alg:        Sha512::new(),
             seed_len:   seed.len(),
             count:      0,
             inbuf:      inbuf,
         }
     }
+}
 
-    pub fn next(&mut self) -> &[u8] {
+impl NextHash for HasherSHA512 {
+    fn get_size(&self) -> usize {
+        HasherSHA512::OUTSIZE
+    }
+
+    fn next(&mut self) -> &[u8] {
         let seed_len = self.seed_len;
 
         // Get the current count and increment it.
@@ -71,20 +89,20 @@ impl Hasher {
 
         // Add the count to the input buffer.
         // This overwrites part of the previous hash.
-        let count_offs = seed_len + Hasher::SERIALSIZE + Hasher::PREVSIZE;
-        self.inbuf[count_offs..count_offs+Hasher::COUNTSIZE].copy_from_slice(&count_bytes);
+        let count_offs = seed_len + HasherSHA512::SERIALSIZE + HasherSHA512::PREVSIZE;
+        self.inbuf[count_offs..count_offs+HasherSHA512::COUNTSIZE].copy_from_slice(&count_bytes);
 
         // Calculate the next hash.
-        let inp_len = seed_len + Hasher::SERIALSIZE + Hasher::PREVSIZE + Hasher::COUNTSIZE;
+        let inp_len = seed_len + HasherSHA512::SERIALSIZE + HasherSHA512::PREVSIZE + HasherSHA512::COUNTSIZE;
         self.alg.input(&self.inbuf[..inp_len]);
 
         // Get the hash and store it into the input buffer (for next iteration).
-        let prevhash_offs = seed_len + Hasher::SERIALSIZE;
-        self.alg.result(&mut self.inbuf[prevhash_offs..prevhash_offs+Hasher::SIZE]);
+        let prevhash_offs = seed_len + HasherSHA512::SERIALSIZE;
+        self.alg.result(&mut self.inbuf[prevhash_offs..prevhash_offs+HasherSHA512::SIZE]);
         self.alg.reset();
 
         // Return the generated hash (slice of input buffer).
-        return &self.inbuf[prevhash_offs..prevhash_offs+Hasher::OUTSIZE];
+        return &self.inbuf[prevhash_offs..prevhash_offs+HasherSHA512::OUTSIZE];
     }
 }
 
@@ -94,7 +112,7 @@ mod tests {
 
     #[test]
     fn test_cmp_result() {
-        let mut a = Hasher::new(&vec![1,2,3], 0);
+        let mut a = HasherSHA512::new(&vec![1,2,3], 0);
         assert_eq!(a.next(),
                    vec![84, 52, 250, 213, 185, 106, 59, 187,
                         10, 70, 136, 246, 77, 253, 73, 207,
@@ -117,8 +135,8 @@ mod tests {
 
     #[test]
     fn test_params_equal() {
-        let mut a = Hasher::new(&vec![1,2,3], 0);
-        let mut b = Hasher::new(&vec![1,2,3], 0);
+        let mut a = HasherSHA512::new(&vec![1,2,3], 0);
+        let mut b = HasherSHA512::new(&vec![1,2,3], 0);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
@@ -133,8 +151,8 @@ mod tests {
 
     #[test]
     fn test_seed_diff() {
-        let mut a = Hasher::new(&vec![1,2,3], 0);
-        let mut b = Hasher::new(&vec![1,2,4], 0);
+        let mut a = HasherSHA512::new(&vec![1,2,3], 0);
+        let mut b = HasherSHA512::new(&vec![1,2,4], 0);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
@@ -149,8 +167,8 @@ mod tests {
 
     #[test]
     fn test_serial_diff() {
-        let mut a = Hasher::new(&vec![1,2,3], 0);
-        let mut b = Hasher::new(&vec![1,2,3], 1);
+        let mut a = HasherSHA512::new(&vec![1,2,3], 0);
+        let mut b = HasherSHA512::new(&vec![1,2,3], 1);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
