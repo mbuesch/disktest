@@ -19,11 +19,12 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-mod sha512;
 mod buffer;
+mod crc;
+mod sha512;
 
 pub use crate::hasher::sha512::HasherSHA512;
-//pub use crate::hasher::crc64::HasherCRC64;
+pub use crate::hasher::crc::HasherCRC;
 
 pub trait NextHash {
     /// Get the size of the hash, in bytes.

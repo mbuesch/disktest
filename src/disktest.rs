@@ -20,7 +20,7 @@
 //
 
 use crate::error::Error;
-use crate::stream_aggregator::{DtStreamAgg, DtStreamType};
+use crate::stream_aggregator::DtStreamAgg;
 use crate::util::prettybytes;
 use libc::ENOSPC;
 use signal_hook;
@@ -31,6 +31,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
+
+pub use crate::stream_aggregator::DtStreamType;
 
 const LOG_BYTE_THRES: u64   = 1024 * 1024 * 10;
 const LOG_SEC_THRES: u64    = 10;
@@ -47,7 +49,8 @@ pub struct Disktest<'a> {
 }
 
 impl<'a> Disktest<'a> {
-    pub fn new(seed:        &'a Vec<u8>,
+    pub fn new(algorithm:   DtStreamType,
+               seed:        &'a Vec<u8>,
                nr_threads:  usize,
                file:        &'a mut File,
                path:        &'a Path,
@@ -65,7 +68,7 @@ impl<'a> Disktest<'a> {
         let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
         return Ok(Disktest {
             quiet_level,
-            stream_agg: DtStreamAgg::new(DtStreamType::SHA512, seed, nr_threads),
+            stream_agg: DtStreamAgg::new(algorithm, seed, nr_threads),
             file,
             path,
             abort,
@@ -253,14 +256,13 @@ impl<'a> Disktest<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::hasher::HasherSHA512;
+    use crate::hasher::{HasherSHA512, HasherCRC};
     use crate::stream::DtStream;
     use std::path::Path;
     use super::*;
     use tempfile::NamedTempFile;
 
-    #[test]
-    fn test_basic() {
+    fn run_test(algorithm: DtStreamType, outsize: usize) {
         let mut tfile = NamedTempFile::new().unwrap();
         let pstr = String::from(tfile.path().to_str().unwrap());
         let path = Path::new(&pstr);
@@ -268,7 +270,8 @@ mod tests {
         let mut loc_file = file.try_clone().unwrap();
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
-        let mut dt = Disktest::new(&seed, nr_threads, &mut file, &path, 0).unwrap();
+        let mut dt = Disktest::new(algorithm, &seed, nr_threads,
+                                   &mut file, &path, 0).unwrap();
 
         // Write a couple of bytes and verify them.
         let nr_bytes = 1000;
@@ -283,7 +286,7 @@ mod tests {
 
         // Write a big chunk that is aggregated and verify it.
         loc_file.set_len(0).unwrap();
-        let nr_bytes = (HasherSHA512::OUTSIZE * DtStream::CHUNKFACTOR * nr_threads * 2 + 100) as u64;
+        let nr_bytes = (outsize * DtStream::CHUNKFACTOR * nr_threads * 2 + 100) as u64;
         assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
         assert_eq!(dt.verify(0, std::u64::MAX).unwrap(), nr_bytes);
 
@@ -299,11 +302,21 @@ mod tests {
         loc_file.set_len(0).unwrap();
         assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
         loc_file.seek(SeekFrom::Start(10)).unwrap();
-        writeln!(loc_file, "x").unwrap();
+        writeln!(loc_file, "X").unwrap();
         match dt.verify(0, nr_bytes) {
             Ok(_) => panic!("Verify of modified data did not fail!"),
             Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at byte 10!"),
         }
+    }
+
+    #[test]
+    fn test_sha512() {
+        run_test(DtStreamType::SHA512, HasherSHA512::OUTSIZE);
+    }
+
+    #[test]
+    fn test_crc() {
+        run_test(DtStreamType::CRC, HasherCRC::OUTSIZE);
     }
 }
 

@@ -60,7 +60,7 @@ impl NextHash for HasherSHA512 {
         self.alg.result(self.buffer.hashalg_output());
         self.alg.reset();
 
-        // Return the generated hash (slice of input buffer).
+        // Return the generated hash.
         return &self.buffer.get_result()[..HasherSHA512::OUTSIZE];
     }
 }

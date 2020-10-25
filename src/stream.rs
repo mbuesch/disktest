@@ -19,7 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crate::hasher::{HasherSHA512, NextHash};
+use crate::hasher::{HasherSHA512, HasherCRC, NextHash};
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
@@ -27,8 +27,9 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use std::time::Duration;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum DtStreamType {
+    CRC,
     SHA512,
 }
 
@@ -69,8 +70,9 @@ impl DtStreamWorker {
     }
 
     fn worker(&mut self) {
-        let mut hasher = match self.stype {
-            DtStreamType::SHA512 => Box::new(HasherSHA512::new(&self.seed, self.serial))
+        let mut hasher: Box<dyn NextHash> = match self.stype {
+            DtStreamType::SHA512 => Box::new(HasherSHA512::new(&self.seed, self.serial)),
+            DtStreamType::CRC => Box::new(HasherCRC::new(&self.seed, self.serial)),
         };
 
         while !self.abort.load(Ordering::Relaxed) {
@@ -125,7 +127,8 @@ impl DtStream {
 
     pub fn get_chunksize(&self) -> usize {
         match self.stype {
-            DtStreamType::SHA512 => HasherSHA512::OUTSIZE * DtStream::CHUNKFACTOR
+            DtStreamType::SHA512 => HasherSHA512::OUTSIZE * DtStream::CHUNKFACTOR,
+            DtStreamType::CRC => HasherCRC::OUTSIZE * DtStream::CHUNKFACTOR,
         }
     }
 
@@ -196,9 +199,8 @@ impl Drop for DtStream {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_basic() {
-        let mut s = DtStream::new(DtStreamType::SHA512, &vec![1,2,3], 0);
+    fn run_test(algorithm: DtStreamType) {
+        let mut s = DtStream::new(algorithm, &vec![1,2,3], 0);
         s.activate();
         assert_eq!(s.is_active(), true);
 
@@ -208,12 +210,29 @@ mod tests {
                 println!("{}: index={} data[0]={} (current level = {})",
                          count, chunk.index, chunk.data[0], s.get_level());
                 assert_eq!(chunk.index, count);
-                assert_eq!(chunk.data[0], [84, 31, 194, 246, 107][chunk.index as usize]);
+                match algorithm {
+                    DtStreamType::SHA512 => {
+                        assert_eq!(chunk.data[0], [84, 31, 194, 246, 107][chunk.index as usize]);
+                    }
+                    DtStreamType::CRC => {
+                        assert_eq!(chunk.data[0], [158, 162, 81, 110, 158][chunk.index as usize]);
+                    }
+                }
                 count += 1;
             } else {
                 thread::sleep(Duration::from_millis(10));
             }
         }
+    }
+
+    #[test]
+    fn test_sha512() {
+        run_test(DtStreamType::SHA512);
+    }
+
+    #[test]
+    fn test_crc() {
+        run_test(DtStreamType::CRC);
     }
 }
 

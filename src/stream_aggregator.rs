@@ -133,13 +133,12 @@ impl DtStreamAgg {
 
 #[cfg(test)]
 mod tests {
-    use crate::hasher::HasherSHA512;
+    use crate::hasher::{HasherSHA512, HasherCRC};
     use super::*;
 
-    #[test]
-    fn test_basic() {
+    fn run_test(algorithm: DtStreamType, hash_outsize: usize) {
         let num_threads = 2;
-        let mut agg = DtStreamAgg::new(DtStreamType::SHA512, &vec![1,2,3], num_threads);
+        let mut agg = DtStreamAgg::new(algorithm, &vec![1,2,3], num_threads);
         agg.activate();
         assert_eq!(agg.is_active(), true);
 
@@ -148,7 +147,8 @@ mod tests {
         for _ in 0..4 {
             // Generate the next chunk.
             let chunk = agg.wait_chunk();
-            assert_eq!(chunk.data.len(), DtStream::CHUNKFACTOR * HasherSHA512::OUTSIZE * num_threads);
+            let onestream_chunksize = DtStream::CHUNKFACTOR * hash_outsize;
+            assert_eq!(chunk.data.len(), onestream_chunksize * num_threads);
             assert_eq!(agg.get_chunksize(), chunk.data.len());
 
             // Check if we have an even distribution.
@@ -165,12 +165,12 @@ mod tests {
 
             // Check if the streams are different.
             let mut equal = 0;
-            let nr_check = DtStream::CHUNKFACTOR * HasherSHA512::OUTSIZE;
+            let nr_check = onestream_chunksize;
             for i in 0..nr_check {
                 // first stream
                 let offs0 = i;
                 // second stream
-                let offs1 = DtStream::CHUNKFACTOR * HasherSHA512::OUTSIZE + i;
+                let offs1 = onestream_chunksize + i;
 
                 if chunk.data[offs0] == chunk.data[offs1] {
                     equal += 1;
@@ -196,6 +196,16 @@ mod tests {
 
             prev_chunk = Some(chunk);
         }
+    }
+
+    #[test]
+    fn test_sha512() {
+        run_test(DtStreamType::SHA512, HasherSHA512::OUTSIZE);
+    }
+
+    #[test]
+    fn test_crc() {
+        run_test(DtStreamType::CRC, HasherCRC::OUTSIZE);
     }
 }
 

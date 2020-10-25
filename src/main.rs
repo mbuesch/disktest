@@ -29,7 +29,7 @@ mod util;
 use clap;
 use crate::error::Error;
 use crate::util::parsebytes;
-use disktest::Disktest;
+use disktest::{Disktest, DtStreamType};
 use std::fs::OpenOptions;
 use std::path::Path;
 
@@ -66,6 +66,15 @@ amount of bytes."))
              .takes_value(true)
              .help("Number of bytes to write/verify. \
 If not given, then the whole disk will be overwritten/verified."))
+        .arg(clap::Arg::with_name("algorithm")
+             .long("algorithm")
+             .short("A")
+             .takes_value(true)
+             .help("Select the hashing algorithm. \
+The selection can be: SHA512 or CRC. Default: SHA512. \
+Please note that CRC is *not* cryptographically strong! \
+But CRC is very fast. Only choose CRC, if cryptographic strength is not required. \
+If in doubt, use SHA512."))
         .arg(clap::Arg::with_name("seed")
              .long("seed")
              .short("S")
@@ -104,6 +113,11 @@ Otherwise the verification will fail. Default: 1"))
         Ok(x) => x,
         Err(e) => return Err(Box::new(Error::new(&format!("Invalid --bytes value: {}", e)))),
     };
+    let algorithm = match args.value_of("algorithm").unwrap_or("SHA512").to_uppercase().as_str() {
+        "SHA512" => DtStreamType::SHA512,
+        "CRC" => DtStreamType::CRC,
+        x => return Err(Box::new(Error::new(&format!("Invalid --algorithm value: {}", x)))),
+    };
     let seed = args.value_of("seed").unwrap_or("42");
     let threads: usize = match args.value_of("threads").unwrap_or("1").parse() {
         Ok(x) => {
@@ -133,7 +147,7 @@ Otherwise the verification will fail. Default: 1"))
     };
 
     let seed = seed.as_bytes().to_vec();
-    let mut disktest = match Disktest::new(&seed, threads, &mut file, &path, quiet) {
+    let mut disktest = match Disktest::new(algorithm, &seed, threads, &mut file, &path, quiet) {
         Ok(x) => x,
         Err(e) => {
             return Err(Box::new(e))

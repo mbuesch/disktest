@@ -51,7 +51,7 @@ impl Buffer {
         assert!(hash_size > 0);
         assert!(hash_prevsize <= hash_size);
 
-        /* Allocate input buffer with layout:
+        /* Allocate buffer with layout:
          *   [ SEED,        SERIAL,       PREVHASH,     COUNT,    PADDING ]
          *     ^            ^             ^             ^
          *     first slice  second slice  third slice   fourth slice
