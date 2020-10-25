@@ -21,6 +21,7 @@
 
 use std::cmp::max;
 
+/// Hasher work buffer.
 pub struct Buffer {
     data:                   Vec<u8>,
     count:                  u64,
@@ -35,11 +36,21 @@ impl Buffer {
     pub const SERIALSIZE: usize = 16 / 8;
     pub const COUNTSIZE: usize = 64 / 8;
 
+    /// Create new hash buffer.
+    ///
+    /// * `seed`: The seed to use for hash generation.
+    /// * `serial`: The serial number of this hash/buffer.
+    /// * `hash_size`: The size of the hash that uses this buffer.
+    /// * `hash_prevsize`: The hash result slice length to incorporate into the next hash.
     pub fn new(seed: &Vec<u8>,
                serial: u16,
                hash_size: usize,
                hash_prevsize: usize) -> Buffer {
         let seed_len = seed.len();
+        assert!(seed_len > 0);
+        assert!(hash_size > 0);
+        assert!(hash_prevsize <= hash_size);
+
         /* Allocate input buffer with layout:
          *   [ SEED,        SERIAL,       PREVHASH,     COUNT,    PADDING ]
          *     ^            ^             ^             ^
@@ -74,6 +85,7 @@ impl Buffer {
         }
     }
 
+    /// Increment the count and update the hash input data accordingly.
     #[inline]
     pub fn next_count(&mut self) {
         // Get the current count and increment it.
@@ -85,16 +97,20 @@ impl Buffer {
         self.data[self.count_slice_begin..self.count_slice_end].copy_from_slice(&count_bytes);
     }
 
+    /// Get a reference to the hash input data.
     #[inline]
     pub fn hashalg_input(&self) -> &[u8] {
         &self.data[..self.hashinput_len]
     }
 
+    /// Get a mutable reference to the hash output buffer.
+    /// The hash shall write its output data to this slice.
     #[inline]
     pub fn hashalg_output(&mut self) -> &mut [u8] {
         &mut self.data[self.prevhash_slice_begin..self.prevhash_slice_end]
     }
 
+    /// Get the result data chunk.
     #[inline]
     pub fn get_result(&mut self) -> &[u8] {
         &self.data[self.prevhash_slice_begin..self.prevhash_slice_end]

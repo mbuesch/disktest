@@ -26,10 +26,14 @@ pub use crate::hasher::sha512::HasherSHA512;
 //pub use crate::hasher::crc64::HasherCRC64;
 
 pub trait NextHash {
+    /// Get the size of the hash, in bytes.
     fn get_size(&self) -> usize;
 
+    /// Generate the next hash and return a reference to it.
     fn next(&mut self) -> &[u8];
 
+    /// Generate the next `count` number of hashes and
+    /// append them to the provided `chunk_buffer`.
     fn next_chunk(&mut self,
                   chunk_buffer: &mut Vec<u8>,
                   count: usize) {
