@@ -20,14 +20,12 @@
 //
 
 use crate::hasher::NextHash;
-use crate::hasher::buffer::{COUNTSIZE, SERIALSIZE, alloc_buffer};
+use crate::hasher::buffer::Buffer;
 use crypto::{sha2::Sha512, digest::Digest};
 
 pub struct HasherSHA512 {
     alg:        Sha512,
-    seed_len:   usize,
-    count:      u64,
-    buffer:     Vec<u8>,
+    buffer:     Buffer,
 }
 
 impl HasherSHA512 {
@@ -38,9 +36,10 @@ impl HasherSHA512 {
     pub fn new(seed: &Vec<u8>, serial: u16) -> HasherSHA512 {
         HasherSHA512 {
             alg:        Sha512::new(),
-            seed_len:   seed.len(),
-            count:      0,
-            buffer:     alloc_buffer(seed, serial, HasherSHA512::SIZE, HasherSHA512::PREVSIZE),
+            buffer:     Buffer::new(seed,
+                                    serial,
+                                    HasherSHA512::SIZE,
+                                    HasherSHA512::PREVSIZE),
         }
     }
 }
@@ -51,28 +50,18 @@ impl NextHash for HasherSHA512 {
     }
 
     fn next(&mut self) -> &[u8] {
-        let seed_len = self.seed_len;
-
-        // Get the current count and increment it.
-        let count_bytes = self.count.to_le_bytes();
-        self.count += 1;
-
-        // Add the count to the input buffer.
-        // This overwrites part of the previous hash.
-        let count_offs = seed_len + SERIALSIZE + HasherSHA512::PREVSIZE;
-        self.buffer[count_offs..count_offs+COUNTSIZE].copy_from_slice(&count_bytes);
+        // Increment the counter.
+        self.buffer.next_count();
 
         // Calculate the next hash.
-        let inp_len = seed_len + SERIALSIZE + HasherSHA512::PREVSIZE + COUNTSIZE;
-        self.alg.input(&self.buffer[..inp_len]);
+        self.alg.input(self.buffer.hashalg_input());
 
         // Get the hash and store it into the input buffer (for next iteration).
-        let prevhash_offs = seed_len + SERIALSIZE;
-        self.alg.result(&mut self.buffer[prevhash_offs..prevhash_offs+HasherSHA512::SIZE]);
+        self.alg.result(self.buffer.hashalg_output());
         self.alg.reset();
 
         // Return the generated hash (slice of input buffer).
-        return &self.buffer[prevhash_offs..prevhash_offs+HasherSHA512::OUTSIZE];
+        return &self.buffer.get_result()[..HasherSHA512::OUTSIZE];
     }
 }
 

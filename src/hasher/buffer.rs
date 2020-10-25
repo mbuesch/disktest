@@ -21,29 +21,84 @@
 
 use std::cmp::max;
 
-pub const SERIALSIZE: usize = 16 / 8;
-pub const COUNTSIZE: usize = 64 / 8;
+pub struct Buffer {
+    data:                   Vec<u8>,
+    count:                  u64,
+    hashinput_len:          usize,
+    prevhash_slice_begin:   usize,
+    prevhash_slice_end:     usize,
+    count_slice_begin:      usize,
+    count_slice_end:        usize,
+}
 
-pub fn alloc_buffer(seed: &Vec<u8>,
-                    serial: u16,
-                    hash_size: usize,
-                    hash_prevsize: usize) -> Vec<u8> {
-    /* Allocate input buffer with layout:
-     *   [ SEED,        SERIAL,       PREVHASH,     COUNT,    PADDING ]
-     *     ^            ^             ^             ^
-     *     first slice  second slice  third slice   fourth slice
-     *
-     * The PREVHASH+COUNT+PADDING slices are also used as output buffer.
-     */
-    let mut buffer = vec![0; seed.len() +
-                             SERIALSIZE +
-                             max(hash_prevsize + COUNTSIZE, hash_size)];
-    // Copy seed to first slice.
-    buffer[..seed.len()].copy_from_slice(seed);
-    // Copy serial to second slice.
-    buffer[seed.len()..seed.len()+SERIALSIZE].copy_from_slice(&serial.to_le_bytes());
+impl Buffer {
+    pub const SERIALSIZE: usize = 16 / 8;
+    pub const COUNTSIZE: usize = 64 / 8;
 
-    buffer
+    pub fn new(seed: &Vec<u8>,
+               serial: u16,
+               hash_size: usize,
+               hash_prevsize: usize) -> Buffer {
+        let seed_len = seed.len();
+        /* Allocate input buffer with layout:
+         *   [ SEED,        SERIAL,       PREVHASH,     COUNT,    PADDING ]
+         *     ^            ^             ^             ^
+         *     first slice  second slice  third slice   fourth slice
+         *
+         * The PREVHASH+COUNT+PADDING slices are also used as output buffer.
+         */
+        let mut data = vec![0; seed_len +
+                               Buffer::SERIALSIZE +
+                               max(hash_prevsize + Buffer::COUNTSIZE, hash_size)];
+        // Copy seed to first slice.
+        data[..seed_len].copy_from_slice(seed);
+        // Copy serial to second slice.
+        data[seed_len..seed_len+Buffer::SERIALSIZE].copy_from_slice(&serial.to_le_bytes());
+
+        let prevhash_slice_begin = seed_len + Buffer::SERIALSIZE;
+        let prevhash_slice_end = seed_len + Buffer::SERIALSIZE + hash_size;
+
+        let count_slice_begin = seed_len + Buffer::SERIALSIZE + hash_prevsize;
+        let count_slice_end = count_slice_begin + Buffer::COUNTSIZE;
+
+        let hashinput_len = seed_len + Buffer::SERIALSIZE + hash_prevsize + Buffer::COUNTSIZE;
+
+        Buffer {
+            data,
+            count: 0,
+            hashinput_len,
+            prevhash_slice_begin,
+            prevhash_slice_end,
+            count_slice_begin,
+            count_slice_end,
+        }
+    }
+
+    #[inline]
+    pub fn next_count(&mut self) {
+        // Get the current count and increment it.
+        let count_bytes = self.count.to_le_bytes();
+        self.count += 1;
+
+        // Add the count to the input buffer.
+        // This overwrites part of the previous hash.
+        self.data[self.count_slice_begin..self.count_slice_end].copy_from_slice(&count_bytes);
+    }
+
+    #[inline]
+    pub fn hashalg_input(&self) -> &[u8] {
+        &self.data[..self.hashinput_len]
+    }
+
+    #[inline]
+    pub fn hashalg_output(&mut self) -> &mut [u8] {
+        &mut self.data[self.prevhash_slice_begin..self.prevhash_slice_end]
+    }
+
+    #[inline]
+    pub fn get_result(&mut self) -> &[u8] {
+        &self.data[self.prevhash_slice_begin..self.prevhash_slice_end]
+    }
 }
 
 // vim: ts=4 sw=4 expandtab
