@@ -103,6 +103,7 @@ pub struct DtStream {
     rx:             Option<Receiver<DtStreamChunk>>,
     thread_join:    RefCell<Option<thread::JoinHandle<()>>>,
     abort_thread:   Arc<AtomicBool>,
+    is_active:      bool,
 }
 
 impl DtStream {
@@ -122,6 +123,7 @@ impl DtStream {
             rx: None,
             thread_join: RefCell::new(None),
             abort_thread,
+            is_active: false,
         }
     }
 
@@ -133,6 +135,7 @@ impl DtStream {
     }
 
     fn stop(&mut self) {
+        self.is_active = false;
         self.abort_thread.store(true, Ordering::Release);
         if let Some(thread_join) = self.thread_join.replace(None) {
             thread_join.join().unwrap();
@@ -153,6 +156,7 @@ impl DtStream {
                                         Arc::clone(&self.level));
         let thread_join = thread::spawn(move || w.worker());
         self.thread_join.replace(Some(thread_join));
+        self.is_active = true;
     }
 
     pub fn activate(&mut self) {
@@ -160,11 +164,12 @@ impl DtStream {
         self.start();
     }
 
+    #[inline]
     pub fn is_active(&self) -> bool {
-        self.thread_join.borrow().is_some() &&
-        !self.abort_thread.load(Ordering::Relaxed)
+        self.is_active
     }
 
+    #[inline]
     pub fn get_chunk(&mut self) -> Option<DtStreamChunk> {
         if self.is_active() {
             if let Some(rx) = &self.rx {

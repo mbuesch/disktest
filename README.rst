@@ -78,8 +78,8 @@ Command                          Algorithm  Hardware                            
 ===============================  =========  ======================================  =================
 disktest -j4 -w /dev/null        SHA512     Intel i5-3320M 2+2 cores 2.6 GHz        256 MiB/s
 disktest -j4 -ACRC -w /dev/null  CRC        Intel i5-3320M 2+2 cores 2.6 GHz        2.6 GiB/s
-disktest -j6 -w /dev/null        SHA512     AMD Phenom II X6 1090T 6 cores 3.2 GHz  620 MiB/s
-disktest -j6 -ACRC -w /dev/null  CRC        AMD Phenom II X6 1090T 6 cores 3.2 GHz  1.8 GiB/s
+disktest -j6 -w /dev/null        SHA512     AMD Phenom II X6 1090T 6 cores 3.2 GHz  675 MiB/s
+disktest -j6 -ACRC -w /dev/null  CRC        AMD Phenom II X6 1090T 6 cores 3.2 GHz  4.9 GiB/s
 ===============================  =========  ======================================  =================
 
 The read data rates are similar, because the algorithm used is exactly the same.
