@@ -77,7 +77,7 @@ These speed tests don't write to an actual disk, but only to the `/dev/null` dev
 Command                          Algorithm  Hardware                                Data rate written
 ===============================  =========  ======================================  =================
 disktest -j4 -w /dev/null        SHA512     Intel i5-3320M 2+2 cores 2.6 GHz        256 MiB/s
-disktest -j4 -ACRC -w /dev/null  CRC        Intel i5-3320M 2+2 cores 2.6 GHz        2.6 GiB/s
+disktest -j4 -ACRC -w /dev/null  CRC        Intel i5-3320M 2+2 cores 2.6 GHz        4.2 GiB/s
 disktest -j6 -w /dev/null        SHA512     AMD Phenom II X6 1090T 6 cores 3.2 GHz  675 MiB/s
 disktest -j6 -ACRC -w /dev/null  CRC        AMD Phenom II X6 1090T 6 cores 3.2 GHz  4.9 GiB/s
 ===============================  =========  ======================================  =================
