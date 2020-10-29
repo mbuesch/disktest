@@ -73,16 +73,20 @@ The following table shows some example speed measurements of disktest in various
 
 These speed tests don't write to an actual disk, but only to the `/dev/null` device, which is a device that does nothing. So these speed test results do not include the speed limits of any actual disk hardware.
 
-===============================  =========  ======================================  =================
-Command                          Algorithm  Hardware                                Data rate written
-===============================  =========  ======================================  =================
-disktest -j4 -w /dev/null        SHA512     Intel i5-3320M 2+2 cores 2.6 GHz        256 MiB/s
-disktest -j4 -ACRC -w /dev/null  CRC        Intel i5-3320M 2+2 cores 2.6 GHz        4.2 GiB/s
-disktest -j6 -w /dev/null        SHA512     AMD Phenom II X6 1090T 6 cores 3.2 GHz  675 MiB/s
-disktest -j6 -ACRC -w /dev/null  CRC        AMD Phenom II X6 1090T 6 cores 3.2 GHz  4.9 GiB/s
-===============================  =========  ======================================  =================
+===============================  =========  =======================================  =================
+Command                          Algorithm  Hardware                                 Data rate written
+===============================  =========  =======================================  =================
+disktest -j6 -w /dev/null        SHA512     AMD Phenom II X6 1090T; 6 cores 3.2 GHz  675 MiB/s
+disktest -j6 -ACRC -w /dev/null  CRC        AMD Phenom II X6 1090T; 6 cores 3.2 GHz  4.9 GiB/s
+disktest -j4 -w /dev/null        SHA512     Intel i5-3320M; 2+2 cores 2.6 GHz        256 MiB/s
+disktest -j4 -ACRC -w /dev/null  CRC        Intel i5-3320M; 2+2 cores 2.6 GHz        4.2 GiB/s
+disktest -j4 -w /dev/null        SHA512     Raspberry Pi 4; 4 cores 1.5 GHz          75 MiB/s
+disktest -j4 -ACRC -w /dev/null  CRC        Raspberry Pi 4; 4 cores 1.5 GHz          605 MiB/s
+===============================  =========  =======================================  =================
 
 The read data rates are similar, because the algorithm used is exactly the same.
+
+Note: The default rust compiler shipped with Raspberry Pi OS is too old to compile Disktest. A newer Rust compiler must be used on Raspberry Pi.
 
 
 License
