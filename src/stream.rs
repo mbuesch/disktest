@@ -94,9 +94,8 @@ impl DtStreamWorker {
                 hasher.next_chunk(&mut chunk.data, DtStream::CHUNKFACTOR);
 
                 // Send the chunk to the main thread.
-                if let Ok(()) = self.tx.send(chunk) {
-                    self.level.fetch_add(1, Ordering::Relaxed);
-                }
+                self.tx.send(chunk).expect("Worker thread: Send failed.");
+                self.level.fetch_add(1, Ordering::Relaxed);
             } else {
                 // The chunk buffer is full. Wait... */
                 thread::sleep(Duration::from_millis(10));
