@@ -42,7 +42,7 @@ impl DtStreamAgg {
 
         let mut streams = Vec::with_capacity(num_threads);
         for i in 0..num_threads {
-            streams.push(DtStream::new(stype, seed, i as u16));
+            streams.push(DtStream::new(stype, seed, i as u32));
         }
 
         DtStreamAgg {

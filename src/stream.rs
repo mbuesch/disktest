@@ -20,6 +20,7 @@
 //
 
 use crate::hasher::{HasherSHA512, HasherCRC, NextHash};
+use crate::kdf::kdf;
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
@@ -41,7 +42,7 @@ pub struct DtStreamChunk {
 struct DtStreamWorker {
     stype:          DtStreamType,
     seed:           Vec<u8>,
-    serial:         u16,
+    thread_id:      u32,
     abort:          Arc<AtomicBool>,
     level:          Arc<AtomicIsize>,
     tx:             Sender<DtStreamChunk>,
@@ -51,17 +52,17 @@ struct DtStreamWorker {
 impl DtStreamWorker {
     const LEVEL_THRES: isize = 8;
 
-    fn new(stype:   DtStreamType,
-           seed:    &Vec<u8>,
-           serial:  u16,
-           tx:      Sender<DtStreamChunk>,
-           abort:   Arc<AtomicBool>,
-           level:   Arc<AtomicIsize>) -> DtStreamWorker {
+    fn new(stype:       DtStreamType,
+           seed:        &Vec<u8>,
+           thread_id:   u32,
+           tx:          Sender<DtStreamChunk>,
+           abort:       Arc<AtomicBool>,
+           level:       Arc<AtomicIsize>) -> DtStreamWorker {
 
         DtStreamWorker {
             stype,
             seed: seed.to_vec(),
-            serial,
+            thread_id,
             abort,
             level,
             tx,
@@ -70,25 +71,34 @@ impl DtStreamWorker {
     }
 
     fn worker(&mut self) {
+        // Calculate the per-thread-seed from the global seed.
+        let thread_seed = kdf(&self.seed, self.thread_id);
+
+        // Construct the hashing algorithm.
         let mut hasher: Box<dyn NextHash> = match self.stype {
-            DtStreamType::SHA512 => Box::new(HasherSHA512::new(&self.seed, self.serial)),
-            DtStreamType::CRC => Box::new(HasherCRC::new(&self.seed, self.serial)),
+            DtStreamType::SHA512 => Box::new(HasherSHA512::new(&thread_seed)),
+            DtStreamType::CRC    => Box::new(HasherCRC::new(&thread_seed)),
         };
 
+        // Run the hasher work loop.
         while !self.abort.load(Ordering::Relaxed) {
             if self.level.load(Ordering::Relaxed) < DtStreamWorker::LEVEL_THRES {
+
                 let mut chunk = DtStreamChunk {
                     data: Vec::with_capacity(hasher.get_size() * DtStream::CHUNKFACTOR),
                     index: self.index,
                 };
                 self.index += 1;
 
+                // Get the next chunk from the hasher.
                 hasher.next_chunk(&mut chunk.data, DtStream::CHUNKFACTOR);
 
+                // Send the chunk to the main thread.
                 if let Ok(()) = self.tx.send(chunk) {
                     self.level.fetch_add(1, Ordering::Relaxed);
                 }
             } else {
+                // The chunk buffer is full. Wait... */
                 thread::sleep(Duration::from_millis(10));
             }
         }
@@ -98,7 +108,7 @@ impl DtStreamWorker {
 pub struct DtStream {
     stype:          DtStreamType,
     seed:           Vec<u8>,
-    serial:         u16,
+    thread_id:      u32,
     level:          Arc<AtomicIsize>,
     rx:             Option<Receiver<DtStreamChunk>>,
     thread_join:    RefCell<Option<thread::JoinHandle<()>>>,
@@ -111,14 +121,14 @@ impl DtStream {
 
     pub fn new(stype: DtStreamType,
                seed: &Vec<u8>,
-               serial: u16) -> DtStream {
+               thread_id: u32) -> DtStream {
 
         let abort_thread = Arc::new(AtomicBool::new(false));
         let level = Arc::new(AtomicIsize::new(0));
         DtStream {
             stype,
             seed: seed.to_vec(),
-            serial,
+            thread_id,
             level,
             rx: None,
             thread_join: RefCell::new(None),
@@ -150,7 +160,7 @@ impl DtStream {
         self.rx = Some(rx);
         let mut w = DtStreamWorker::new(self.stype,
                                         &self.seed,
-                                        self.serial,
+                                        self.thread_id,
                                         tx,
                                         Arc::clone(&self.abort_thread),
                                         Arc::clone(&self.level));
@@ -187,11 +197,6 @@ impl DtStream {
             None
         }
     }
-
-    #[cfg(test)]
-    pub fn get_level(&self) -> isize {
-        self.level.load(Ordering::Relaxed)
-    }
 }
 
 impl Drop for DtStream {
@@ -209,23 +214,25 @@ mod tests {
         s.activate();
         assert_eq!(s.is_active(), true);
 
+        let mut results_first = vec![];
         let mut count = 0;
         while count < 5 {
             if let Some(chunk) = s.get_chunk() {
                 println!("{}: index={} data[0]={} (current level = {})",
-                         count, chunk.index, chunk.data[0], s.get_level());
+                         count, chunk.index, chunk.data[0], s.level.load(Ordering::Relaxed));
+                results_first.push(chunk.data[0]);
                 assert_eq!(chunk.index, count);
-                match algorithm {
-                    DtStreamType::SHA512 => {
-                        assert_eq!(chunk.data[0], [84, 31, 194, 246, 107][chunk.index as usize]);
-                    }
-                    DtStreamType::CRC => {
-                        assert_eq!(chunk.data[0], [158, 162, 81, 110, 158][chunk.index as usize]);
-                    }
-                }
                 count += 1;
             } else {
                 thread::sleep(Duration::from_millis(10));
+            }
+        }
+        match algorithm {
+            DtStreamType::SHA512 => {
+                assert_eq!(results_first, vec![226, 143, 221, 30, 59]);
+            }
+            DtStreamType::CRC => {
+                assert_eq!(results_first, vec![132, 133, 170, 226, 104]);
             }
         }
     }

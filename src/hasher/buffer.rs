@@ -33,17 +33,14 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    pub const SERIALSIZE: usize = 16 / 8;
     pub const COUNTSIZE: usize = 64 / 8;
 
     /// Create new hash buffer.
     ///
     /// * `seed`: The seed to use for hash generation.
-    /// * `serial`: The serial number of this hash/buffer.
     /// * `hash_size`: The size of the hash that uses this buffer.
     /// * `hash_prevsize`: The hash result slice length to incorporate into the next hash.
     pub fn new(seed: &Vec<u8>,
-               serial: u16,
                hash_size: usize,
                hash_prevsize: usize) -> Buffer {
         let seed_len = seed.len();
@@ -52,27 +49,24 @@ impl Buffer {
         assert!(hash_prevsize <= hash_size);
 
         /* Allocate buffer with layout:
-         *   [ SEED,        SERIAL,       PREVHASH,     COUNT,    PADDING ]
-         *     ^            ^             ^             ^
-         *     first slice  second slice  third slice   fourth slice
+         *   [ SEED,        PREVHASH,     COUNT,    PADDING ]
+         *     ^            ^             ^
+         *     first slice  second slice  third slice
          *
          * The PREVHASH+COUNT+PADDING slices are also used as output buffer.
          */
         let mut data = vec![0; seed_len +
-                               Buffer::SERIALSIZE +
                                max(hash_prevsize + Buffer::COUNTSIZE, hash_size)];
         // Copy seed to first slice.
         data[..seed_len].copy_from_slice(seed);
-        // Copy serial to second slice.
-        data[seed_len..seed_len+Buffer::SERIALSIZE].copy_from_slice(&serial.to_le_bytes());
 
-        let prevhash_slice_begin = seed_len + Buffer::SERIALSIZE;
-        let prevhash_slice_end = seed_len + Buffer::SERIALSIZE + hash_size;
+        let prevhash_slice_begin = seed_len;
+        let prevhash_slice_end = seed_len + hash_size;
 
-        let count_slice_begin = seed_len + Buffer::SERIALSIZE + hash_prevsize;
+        let count_slice_begin = seed_len + hash_prevsize;
         let count_slice_end = count_slice_begin + Buffer::COUNTSIZE;
 
-        let hashinput_len = seed_len + Buffer::SERIALSIZE + hash_prevsize + Buffer::COUNTSIZE;
+        let hashinput_len = seed_len + hash_prevsize + Buffer::COUNTSIZE;
 
         Buffer {
             data,

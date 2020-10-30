@@ -33,11 +33,10 @@ impl HasherSHA512 {
     const PREVSIZE: usize = HasherSHA512::SIZE / 2;
     pub const OUTSIZE: usize = HasherSHA512::SIZE;
 
-    pub fn new(seed: &Vec<u8>, serial: u16) -> HasherSHA512 {
+    pub fn new(seed: &Vec<u8>) -> HasherSHA512 {
         HasherSHA512 {
             alg:        Sha512::new(),
             buffer:     Buffer::new(seed,
-                                    serial,
                                     HasherSHA512::SIZE,
                                     HasherSHA512::PREVSIZE),
         }
@@ -71,31 +70,23 @@ mod tests {
 
     #[test]
     fn test_cmp_result() {
-        let mut a = HasherSHA512::new(&vec![1,2,3], 0);
+        let mut a = HasherSHA512::new(&vec![1,2,3]);
         assert_eq!(a.next(),
-                   vec![84, 52, 250, 213, 185, 106, 59, 187,
-                        10, 70, 136, 246, 77, 253, 73, 207,
-                        168, 148, 129, 52, 74, 15, 82, 104,
-                        102, 111, 115, 107, 93, 132, 211, 183,
-                        41, 52, 55, 186, 2, 227, 90, 173,
-                        248, 19, 32, 107, 97, 107, 250, 91,
-                        220, 127, 176, 121, 168, 137, 43, 247,
-                        254, 65, 46, 159, 150, 84, 132, 120]);
+                   vec![190, 149, 3, 95, 94, 39, 66, 152, 48, 160, 195, 187, 7, 43, 208, 248,
+                        47, 37, 122, 0, 108, 73, 97, 168, 239, 225, 234, 13, 64, 228, 129, 67,
+                        114, 41, 107, 214, 206, 87, 144, 22, 129, 242, 236, 130, 90, 86, 219, 77,
+                        197, 237, 185, 115, 19, 127, 135, 142, 247, 60, 0, 40, 143, 199, 201, 141]);
         assert_eq!(a.next(),
-                   vec![124, 226, 58, 33, 133, 106, 31, 219,
-                        199, 201, 140, 81, 106, 17, 79, 177,
-                        209, 237, 39, 218, 187, 153, 197, 217,
-                        141, 91, 117, 133, 76, 5, 246, 160,
-                        197, 245, 191, 215, 155, 5, 135, 211,
-                        166, 91, 149, 118, 190, 197, 48, 141,
-                        87, 240, 121, 126, 152, 177, 117, 179,
-                        49, 96, 153, 213, 109, 47, 237, 114]);
+                   vec![40, 40, 150, 50, 148, 27, 213, 226, 36, 132, 130, 106, 145, 251, 214, 237,
+                        221, 166, 21, 188, 210, 196, 105, 79, 207, 1, 63, 89, 29, 20, 188, 129,
+                        111, 217, 183, 160, 253, 221, 178, 81, 168, 139, 198, 103, 38, 195, 53, 79,
+                        67, 162, 85, 204, 132, 211, 166, 143, 221, 71, 234, 195, 221, 49, 30, 218]);
     }
 
     #[test]
-    fn test_params_equal() {
-        let mut a = HasherSHA512::new(&vec![1,2,3], 0);
-        let mut b = HasherSHA512::new(&vec![1,2,3], 0);
+    fn test_seed_equal() {
+        let mut a = HasherSHA512::new(&vec![1,2,3]);
+        let mut b = HasherSHA512::new(&vec![1,2,3]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
@@ -110,24 +101,8 @@ mod tests {
 
     #[test]
     fn test_seed_diff() {
-        let mut a = HasherSHA512::new(&vec![1,2,3], 0);
-        let mut b = HasherSHA512::new(&vec![1,2,4], 0);
-        let mut res_a = vec![];
-        let mut res_b = vec![];
-        for _ in 0..2 {
-            res_a.push(a.next().to_vec());
-            res_b.push(b.next().to_vec());
-        }
-        assert_ne!(res_a[0], res_b[0]);
-        assert_ne!(res_a[1], res_b[1]);
-        assert_ne!(res_a[0], res_a[1]);
-        assert_ne!(res_b[0], res_b[1]);
-    }
-
-    #[test]
-    fn test_serial_diff() {
-        let mut a = HasherSHA512::new(&vec![1,2,3], 0);
-        let mut b = HasherSHA512::new(&vec![1,2,3], 1);
+        let mut a = HasherSHA512::new(&vec![1,2,3]);
+        let mut b = HasherSHA512::new(&vec![1,2,4]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
