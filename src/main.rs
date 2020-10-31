@@ -37,6 +37,56 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+const ABOUT: &str = "\
+Hard Disk (HDD), Solid State Disk (SSD), USB Stick, Memory Card (e.g. SD-Card) tester.\n\n\
+This program can write a pseudo random stream to a disk, read it back \
+and verify it by comparing it to the expected stream.";
+
+const HELP_DEVICE: &str = "Device file of the disk.";
+
+const HELP_WRITE: &str = "\
+Write pseudo random data to the device. \
+If this option is not given, then disktest will operate in verify-mode instead. \
+In verify-mode the disk will be read and compared to the expected pseudo random sequence.";
+
+const HELP_SEEK: &str = "\
+Seek to the specified byte position on disk \
+before starting the write/verify operation. This skips the specified \
+amount of bytes.";
+
+const HELP_BYTES: &str = "\
+Number of bytes to write/verify. \
+If not given, then the whole disk will be overwritten/verified.";
+
+const HELP_ALGORITHM: &str = "\
+Select the hashing algorithm. \
+The selection can be: SHA512 or CRC. Default: SHA512. \
+Please note that CRC is *not* cryptographically strong! \
+But CRC is very fast. Only choose CRC, if cryptographic strength is not required. \
+If in doubt, use SHA512.";
+
+const HELP_SEED: &str = "\
+The seed to use for hash stream generation. \
+The generated pseudo random sequence is cryptographically reasonably strong. \
+If you want a unique pattern to be written to disk, supply a random seed to this parameter. \
+If not given, then the pseudo random sequence will be the same for everybody and \
+it will therefore not be secret.
+The seed may be any random string (e.g. a long passphrase).";
+
+const HELP_THREADS: &str = "\
+The number of CPUs to use. \
+The special value 0 will select the maximum number of online CPUs in the system. \
+If the number of threads is equal to number of CPUs it is optimal for performance. \
+This parameter must be equal during corresponding verify and --write mode runs. \
+Otherwise the verification will fail. Default: 1";
+
+const HELP_QUIET: &str = "\
+Quiet level: 0: Normal verboseness (default). \
+1: Reduced verboseness. \
+2: No informational output.";
+
+/// Install abort signal handlers and return
+/// the abort-flag that is written to true by these handlers.
 fn install_abort_handlers() -> Result<Arc<AtomicBool>, Error> {
     let abort = Arc::new(AtomicBool::new(false));
     for sig in &[signal_hook::SIGTERM,
@@ -50,69 +100,48 @@ fn install_abort_handlers() -> Result<Arc<AtomicBool>, Error> {
     Ok(abort)
 }
 
+/// Main program entry point.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = clap::App::new("disktest")
-        .about("Hard Disk (HDD), Solid State Disk (SSD), USB Stick, Memory Card (e.g. SD-Card) tester.\n\n\
-This program can write a pseudo random stream to a disk, read it back \
-and verify it by comparing it to the expected stream.")
+        .about(ABOUT)
         .arg(clap::Arg::with_name("device")
              .index(1)
              .required(true)
-             .help("Device file of the disk."))
+             .help(HELP_DEVICE))
         .arg(clap::Arg::with_name("write")
              .long("write")
              .short("w")
-             .help("Write pseudo random data to the device. \
-If this option is not given, then disktest will operate in verify-mode instead. \
-In verify-mode the disk will be read and compared to the expected pseudo random sequence."))
+             .help(HELP_WRITE))
         .arg(clap::Arg::with_name("seek")
              .long("seek")
              .short("s")
              .takes_value(true)
-             .help("Seek to the specified byte position on disk \
-before starting the write/verify operation. This skips the specified \
-amount of bytes."))
+             .help(HELP_SEEK))
         .arg(clap::Arg::with_name("bytes")
              .long("bytes")
              .short("b")
              .takes_value(true)
-             .help("Number of bytes to write/verify. \
-If not given, then the whole disk will be overwritten/verified."))
+             .help(HELP_BYTES))
         .arg(clap::Arg::with_name("algorithm")
              .long("algorithm")
              .short("A")
              .takes_value(true)
-             .help("Select the hashing algorithm. \
-The selection can be: SHA512 or CRC. Default: SHA512. \
-Please note that CRC is *not* cryptographically strong! \
-But CRC is very fast. Only choose CRC, if cryptographic strength is not required. \
-If in doubt, use SHA512."))
+             .help(HELP_ALGORITHM))
         .arg(clap::Arg::with_name("seed")
              .long("seed")
              .short("S")
              .takes_value(true)
-             .help("The seed to use for hash stream generation. \
-The generated pseudo random sequence is cryptographically reasonably strong. \
-If you want a unique pattern to be written to disk, supply a random seed to this parameter. \
-If not given, then the pseudo random sequence will be the same for everybody and \
-it will therefore not be secret.
-The seed may be any random string (e.g. a long passphrase)."))
+             .help(HELP_SEED))
         .arg(clap::Arg::with_name("threads")
              .long("threads")
              .short("j")
              .takes_value(true)
-             .help("The number of CPUs to use. \
-The special value 0 will select the maximum number of online CPUs in the system. \
-If the number of threads is equal to number of CPUs it is optimal for performance. \
-This parameter must be equal during corresponding verify and --write mode runs. \
-Otherwise the verification will fail. Default: 1"))
+             .help(HELP_THREADS))
         .arg(clap::Arg::with_name("quiet")
              .long("quiet")
              .short("q")
              .takes_value(true)
-             .help("Quiet level: 0: Normal verboseness (default). \
-1: Reduced verboseness. \
-2: No informational output."))
+             .help(HELP_QUIET))
         .get_matches();
 
     let device = args.value_of("device").unwrap();
