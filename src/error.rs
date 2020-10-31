@@ -29,6 +29,9 @@ impl Error {
             msg: msg.to_string(),
         }
     }
+    pub fn newbox(msg: &str) -> Box<Error> {
+        Box::new(Error::new(msg))
+    }
 }
 
 impl std::error::Error for Error {

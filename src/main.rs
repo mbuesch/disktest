@@ -119,30 +119,30 @@ Otherwise the verification will fail. Default: 1"))
     let write = args.is_present("write");
     let seek = match parsebytes(args.value_of("seek").unwrap_or("0")) {
         Ok(x) => x,
-        Err(e) => return Err(Box::new(Error::new(&format!("Invalid --seek value: {}", e)))),
+        Err(e) => return Err(Error::newbox(&format!("Invalid --seek value: {}", e))),
     };
     let max_bytes = match parsebytes(args.value_of("bytes").unwrap_or(&u64::MAX.to_string())) {
         Ok(x) => x,
-        Err(e) => return Err(Box::new(Error::new(&format!("Invalid --bytes value: {}", e)))),
+        Err(e) => return Err(Error::newbox(&format!("Invalid --bytes value: {}", e))),
     };
     let algorithm = match args.value_of("algorithm").unwrap_or("SHA512").to_uppercase().as_str() {
         "SHA512" => DtStreamType::SHA512,
         "CRC" => DtStreamType::CRC,
-        x => return Err(Box::new(Error::new(&format!("Invalid --algorithm value: {}", x)))),
+        x => return Err(Error::newbox(&format!("Invalid --algorithm value: {}", x))),
     };
     let seed = args.value_of("seed").unwrap_or("42");
     let threads: usize = match args.value_of("threads").unwrap_or("1").parse() {
         Ok(x) => {
             if x >= std::u16::MAX as usize + 1 {
-                return Err(Box::new(Error::new(&format!("Invalid --threads value: Out of range"))))
+                return Err(Error::newbox(&format!("Invalid --threads value: Out of range")))
             }
             x
         },
-        Err(e) => return Err(Box::new(Error::new(&format!("Invalid --threads value: {}", e)))),
+        Err(e) => return Err(Error::newbox(&format!("Invalid --threads value: {}", e))),
     };
     let quiet: u8 = match args.value_of("quiet").unwrap_or("0").parse() {
         Ok(x) => x,
-        Err(e) => return Err(Box::new(Error::new(&format!("Invalid --quiet value: {}", e)))),
+        Err(e) => return Err(Error::newbox(&format!("Invalid --quiet value: {}", e))),
     };
 
     // Open the disk device.
@@ -160,26 +160,17 @@ Otherwise the verification will fail. Default: 1"))
 
     let abort = install_abort_handlers()?;
     let seed = seed.as_bytes().to_vec();
-    let mut disktest = match Disktest::new(algorithm,
-                                           &seed,
-                                           threads,
-                                           &mut file,
-                                           &path,
-                                           quiet,
-                                           Some(abort)) {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(Box::new(e))
-        },
-    };
+    let mut disktest = Disktest::new(algorithm,
+                                     &seed,
+                                     threads,
+                                     &mut file,
+                                     &path,
+                                     quiet,
+                                     Some(abort))?;
     if write {
-        if let Err(e) = disktest.write(seek, max_bytes) {
-            return Err(Box::new(e))
-        }
+        disktest.write(seek, max_bytes)?;
     } else {
-        if let Err(e) = disktest.verify(seek, max_bytes) {
-            return Err(Box::new(e))
-        }
+        disktest.verify(seek, max_bytes)?;
     }
     return Ok(());
 }
