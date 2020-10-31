@@ -31,8 +31,24 @@ use clap;
 use crate::error::Error;
 use crate::util::parsebytes;
 use disktest::{Disktest, DtStreamType};
+use signal_hook;
 use std::fs::OpenOptions;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+
+fn install_abort_handlers() -> Result<Arc<AtomicBool>, Error> {
+    let abort = Arc::new(AtomicBool::new(false));
+    for sig in &[signal_hook::SIGTERM,
+                 signal_hook::SIGINT] {
+        if let Err(e) = signal_hook::flag::register(*sig, Arc::clone(&abort)) {
+            return Err(Error::new(&format!("Failed to register signal {}: {}",
+                                           sig, e)));
+        }
+
+    }
+    Ok(abort)
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = clap::App::new("disktest")
@@ -142,8 +158,15 @@ Otherwise the verification will fail. Default: 1"))
         Ok(file) => file,
     };
 
+    let abort = install_abort_handlers()?;
     let seed = seed.as_bytes().to_vec();
-    let mut disktest = match Disktest::new(algorithm, &seed, threads, &mut file, &path, quiet) {
+    let mut disktest = match Disktest::new(algorithm,
+                                           &seed,
+                                           threads,
+                                           &mut file,
+                                           &path,
+                                           quiet,
+                                           Some(abort)) {
         Ok(x) => x,
         Err(e) => {
             return Err(Box::new(e))

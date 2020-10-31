@@ -23,7 +23,6 @@ use crate::error::Error;
 use crate::stream_aggregator::DtStreamAgg;
 use crate::util::prettybytes;
 use libc::ENOSPC;
-use signal_hook;
 use std::cmp::min;
 use std::fs::File;
 use std::io::{Read, Write, Seek, SeekFrom};
@@ -42,7 +41,7 @@ pub struct Disktest<'a> {
     stream_agg:     DtStreamAgg,
     file:           &'a mut File,
     path:           &'a Path,
-    abort:          Arc<AtomicBool>,
+    abort:          Option<Arc<AtomicBool>>,
     log_count:      u64,
     log_time:       Instant,
     begin_time:     Instant,
@@ -54,17 +53,9 @@ impl<'a> Disktest<'a> {
                nr_threads:  usize,
                file:        &'a mut File,
                path:        &'a Path,
-               quiet_level: u8) -> Result<Disktest<'a>, Error> {
+               quiet_level: u8,
+               abort:       Option<Arc<AtomicBool>>) -> Result<Disktest<'a>, Error> {
 
-        let abort = Arc::new(AtomicBool::new(false));
-        for sig in &[signal_hook::SIGTERM,
-                     signal_hook::SIGINT] {
-            if let Err(e) = signal_hook::flag::register(*sig, Arc::clone(&abort)) {
-                return Err(Error::new(&format!("Failed to register signal {}: {}",
-                                               sig, e)));
-            }
-
-        }
         let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
         return Ok(Disktest {
             quiet_level,
@@ -172,9 +163,11 @@ impl<'a> Disktest<'a> {
             }
             self.log("Wrote ", write_len, bytes_written, false, " ...");
 
-            if self.abort.load(Ordering::Relaxed) {
-                self.write_finalize(bytes_written)?;
-                return Err(Error::new("Aborted by signal!"));
+            if let Some(abort) = &self.abort {
+                if abort.load(Ordering::Relaxed) {
+                    self.write_finalize(bytes_written)?;
+                    return Err(Error::new("Aborted by signal!"));
+                }
             }
         }
         return Ok(bytes_written);
@@ -245,9 +238,11 @@ impl<'a> Disktest<'a> {
                 },
             };
 
-            if self.abort.load(Ordering::Relaxed) {
-                self.verify_finalize(bytes_read)?;
-                return Err(Error::new("Aborted by signal!"));
+            if let Some(abort) = &self.abort {
+                if abort.load(Ordering::Relaxed) {
+                    self.verify_finalize(bytes_read)?;
+                    return Err(Error::new("Aborted by signal!"));
+                }
             }
         }
         return Ok(bytes_read);
@@ -271,7 +266,7 @@ mod tests {
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
         let mut dt = Disktest::new(algorithm, &seed, nr_threads,
-                                   &mut file, &path, 0).unwrap();
+                                   &mut file, &path, 0, None).unwrap();
 
         // Write a couple of bytes and verify them.
         let nr_bytes = 1000;
