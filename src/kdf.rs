@@ -27,28 +27,31 @@ use crypto::sha2::Sha512;
 const ITERATIONS: u32   = 50000;
 const DK_SIZE: usize    = 256 / 8;
 
+/// Generate a bad salt substitution from the key.
+fn derive_salt(key: &[u8]) -> [u8; 512/8] {
+    // Generate the salt from the key.
+    // That's not a great salt, but good enough for our purposes.
+    let mut salt = [0; 512/8];
+    let mut salt_hash = Sha512::new();
+    salt_hash.input_str(&"disktest salt");
+    salt_hash.input(&key);
+    salt_hash.result(&mut salt);
+
+    salt
+}
+
 /// Key derivation function for the user supplied seed.
 pub fn kdf(seed: &Vec<u8>, thread_id: u32) -> Vec<u8> {
     // The key is: SEED | THREAD_ID
     let mut key = seed.to_vec();
     key.extend_from_slice(&thread_id.to_le_bytes());
 
-    // Generate the salt from the key.
-    // That's not a great salt, but good enough for our purposes.
-    let mut salt = [0; 512/8];
-    {
-        let mut salt_hash = Sha512::new();
-        salt_hash.input_str(&"disktest salt");
-        salt_hash.input(&key);
-        salt_hash.result(&mut salt);
-    }
-
     // Use HMAC-SHA512 as PRF.
     let mut mac = Hmac::new(Sha512::new(), &key);
 
     // Calculated the DK (derived key).
     let mut dk = [0; DK_SIZE];
-    pbkdf2(&mut mac, &salt, ITERATIONS, &mut dk);
+    pbkdf2(&mut mac, &derive_salt(&key), ITERATIONS, &mut dk);
 
     dk.to_vec()
 }
@@ -56,6 +59,15 @@ pub fn kdf(seed: &Vec<u8>, thread_id: u32) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_salt() {
+        assert_eq!(derive_salt(&vec![1,2,3]).to_vec(),
+                   derive_salt(&vec![1,2,3]).to_vec());
+
+        assert_ne!(derive_salt(&vec![1,2,3]).to_vec(),
+                   derive_salt(&vec![1,2,4]).to_vec());
+    }
 
     #[test]
     fn test_kdf() {
