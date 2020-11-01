@@ -44,4 +44,31 @@ pub trait NextHash {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_next_chunk() {
+        struct X { i: usize }
+        impl NextHash for X {
+            fn get_size(&self) -> usize { 4 }
+            fn next(&mut self) -> &[u8] {
+                let i = self.i;
+                self.i += 1;
+                match i {
+                    0 => &[1, 2, 3, 4],
+                    1 => &[5, 6, 7, 8],
+                    _ => panic!("Unknown index"),
+                }
+            }
+        }
+
+        let mut x = X { i: 0 };
+        let mut buf = vec![];
+        x.next_chunk(&mut buf, 2);
+        assert_eq!(buf, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+}
+
 // vim: ts=4 sw=4 expandtab
