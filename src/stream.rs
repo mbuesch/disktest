@@ -27,155 +27,164 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
 use std::time::Duration;
 
+/// Stream algorithm type.
 #[derive(Copy, Clone, Debug)]
 pub enum DtStreamType {
     CRC,
     SHA512,
 }
 
+/// Data chunk that contains the computed PRNG data.
 pub struct DtStreamChunk {
     pub index: u64,
     pub data: Vec<u8>,
 }
 
-struct DtStreamWorker {
-    stype:          DtStreamType,
-    seed:           Vec<u8>,
-    thread_id:      u32,
-    abort:          Arc<AtomicBool>,
-    level:          Arc<AtomicIsize>,
-    tx:             Sender<DtStreamChunk>,
-    index:          u64,
-}
+/// Thread worker function, that computes the chunks.
+fn thread_worker(stype:     DtStreamType,
+                 seed:      Vec<u8>,
+                 thread_id: u32,
+                 abort:     Arc<AtomicBool>,
+                 level:     Arc<AtomicIsize>,
+                 tx:        Sender<DtStreamChunk>) {
+    // Calculate the per-thread-seed from the global seed.
+    let thread_seed = kdf(&seed, thread_id);
+    drop(seed);
 
-impl DtStreamWorker {
-    const LEVEL_THRES: isize = 8;
+    // Construct the hashing algorithm.
+    let mut hasher: Box<dyn NextHash> = match stype {
+        DtStreamType::SHA512 => Box::new(HasherSHA512::new(&thread_seed)),
+        DtStreamType::CRC    => Box::new(HasherCRC::new(&thread_seed)),
+    };
 
-    fn new(stype:       DtStreamType,
-           seed:        &Vec<u8>,
-           thread_id:   u32,
-           tx:          Sender<DtStreamChunk>,
-           abort:       Arc<AtomicBool>,
-           level:       Arc<AtomicIsize>) -> DtStreamWorker {
+    // Run the hasher work loop.
+    let mut index = 0;
+    while !abort.load(Ordering::Relaxed) {
+        if level.load(Ordering::Relaxed) < DtStream::LEVEL_THRES {
 
-        DtStreamWorker {
-            stype,
-            seed: seed.to_vec(),
-            thread_id,
-            abort,
-            level,
-            tx,
-            index: 0,
-        }
-    }
+            let mut chunk = DtStreamChunk {
+                data: Vec::with_capacity(hasher.get_size() * DtStream::CHUNKFACTOR),
+                index,
+            };
+            index += 1;
 
-    fn worker(&mut self) {
-        // Calculate the per-thread-seed from the global seed.
-        let thread_seed = kdf(&self.seed, self.thread_id);
+            // Get the next chunk from the hasher.
+            hasher.next_chunk(&mut chunk.data, DtStream::CHUNKFACTOR);
 
-        // Construct the hashing algorithm.
-        let mut hasher: Box<dyn NextHash> = match self.stype {
-            DtStreamType::SHA512 => Box::new(HasherSHA512::new(&thread_seed)),
-            DtStreamType::CRC    => Box::new(HasherCRC::new(&thread_seed)),
-        };
-
-        // Run the hasher work loop.
-        while !self.abort.load(Ordering::Relaxed) {
-            if self.level.load(Ordering::Relaxed) < DtStreamWorker::LEVEL_THRES {
-
-                let mut chunk = DtStreamChunk {
-                    data: Vec::with_capacity(hasher.get_size() * DtStream::CHUNKFACTOR),
-                    index: self.index,
-                };
-                self.index += 1;
-
-                // Get the next chunk from the hasher.
-                hasher.next_chunk(&mut chunk.data, DtStream::CHUNKFACTOR);
-
-                // Send the chunk to the main thread.
-                self.tx.send(chunk).expect("Worker thread: Send failed.");
-                self.level.fetch_add(1, Ordering::Relaxed);
-            } else {
-                // The chunk buffer is full. Wait... */
-                thread::sleep(Duration::from_millis(10));
-            }
+            // Send the chunk to the main thread.
+            tx.send(chunk).expect("Worker thread: Send failed.");
+            level.fetch_add(1, Ordering::Relaxed);
+        } else {
+            // The chunk buffer is full. Wait...
+            thread::sleep(Duration::from_millis(10));
         }
     }
 }
 
+/// PRNG stream.
 pub struct DtStream {
     stype:          DtStreamType,
     seed:           Vec<u8>,
     thread_id:      u32,
-    level:          Arc<AtomicIsize>,
     rx:             Option<Receiver<DtStreamChunk>>,
-    thread_join:    Option<thread::JoinHandle<()>>,
-    abort_thread:   Arc<AtomicBool>,
     is_active:      bool,
+    thread_join:    Option<thread::JoinHandle<()>>,
+    abort:          Arc<AtomicBool>,
+    level:          Arc<AtomicIsize>,
 }
 
 impl DtStream {
-    pub const CHUNKFACTOR: usize = 1024 * 10;
+    /// Maximum number of chunks that the thread will compute in advance.
+    const LEVEL_THRES: isize        = 8;
+    /// Chunk size: Multiple of the hash size.
+    pub const CHUNKFACTOR: usize    = 1024 * 10;
 
     pub fn new(stype: DtStreamType,
                seed: &Vec<u8>,
                thread_id: u32) -> DtStream {
 
-        let abort_thread = Arc::new(AtomicBool::new(false));
+        let abort = Arc::new(AtomicBool::new(false));
         let level = Arc::new(AtomicIsize::new(0));
+
         DtStream {
             stype,
             seed: seed.to_vec(),
             thread_id,
-            level,
             rx: None,
-            thread_join: None,
-            abort_thread,
             is_active: false,
+            thread_join: None,
+            abort,
+            level,
         }
     }
 
-    pub fn get_chunksize(&self) -> usize {
-        match self.stype {
-            DtStreamType::SHA512 => HasherSHA512::OUTSIZE * DtStream::CHUNKFACTOR,
-            DtStreamType::CRC => HasherCRC::OUTSIZE * DtStream::CHUNKFACTOR,
-        }
-    }
-
+    /// Stop the worker thread.
+    /// Does nothing, if the thread is not running.
     fn stop(&mut self) {
         self.is_active = false;
-        self.abort_thread.store(true, Ordering::Release);
+        self.abort.store(true, Ordering::Release);
         if let Some(thread_join) = self.thread_join.take() {
             thread_join.join().unwrap();
         }
-        self.abort_thread.store(false, Ordering::Release);
+        self.abort.store(false, Ordering::Release);
     }
 
+    /// Spawn the worker thread.
+    /// Panics, if the thread is already running.
     fn start(&mut self) {
-        self.abort_thread.store(false, Ordering::Release);
+        assert!(!self.is_active);
+        assert!(self.thread_join.is_none());
+
+        // Initialize thread communication
+        self.abort.store(false, Ordering::Release);
         self.level.store(0, Ordering::Release);
         let (tx, rx) = channel();
         self.rx = Some(rx);
-        let mut w = DtStreamWorker::new(self.stype,
-                                        &self.seed,
-                                        self.thread_id,
-                                        tx,
-                                        Arc::clone(&self.abort_thread),
-                                        Arc::clone(&self.level));
-        self.thread_join = Some(thread::spawn(move || w.worker()));
+
+        // Spawn the worker thread.
+        let thread_stype = self.stype;
+        let thread_seed = self.seed.to_vec();
+        let thread_id = self.thread_id;
+        let thread_abort = Arc::clone(&self.abort);
+        let thread_level = Arc::clone(&self.level);
+        self.thread_join = Some(thread::spawn(move || {
+            thread_worker(thread_stype,
+                          thread_seed,
+                          thread_id,
+                          thread_abort,
+                          thread_level,
+                          tx);
+        }));
         self.is_active = true;
     }
 
+    /// Activate the worker thread.
     pub fn activate(&mut self) {
         self.stop();
         self.start();
     }
 
+    /// Check if the worker thread is currently running.
     #[inline]
     pub fn is_active(&self) -> bool {
         self.is_active
     }
 
+    /// Get the size of the selected hash, in bytes.
+    fn get_hash_size(&self) -> usize {
+        match self.stype {
+            DtStreamType::SHA512 => HasherSHA512::OUTSIZE,
+            DtStreamType::CRC    => HasherCRC::OUTSIZE,
+        }
+    }
+
+    /// Get the size of the chunk returned by get_chunk(), in bytes.
+    pub fn get_chunk_size(&self) -> usize {
+        self.get_hash_size() * DtStream::CHUNKFACTOR
+    }
+
+    /// Get the next chunk from the thread.
+    /// Returns None, if no chunk is available, yet.
     #[inline]
     pub fn get_chunk(&mut self) -> Option<DtStreamChunk> {
         if self.is_active() {
@@ -210,6 +219,12 @@ mod tests {
         let mut s = DtStream::new(algorithm, &vec![1,2,3], 0);
         s.activate();
         assert_eq!(s.is_active(), true);
+
+        assert_eq!(s.get_chunk_size(),
+            match algorithm {
+                DtStreamType::SHA512 => HasherSHA512::OUTSIZE * DtStream::CHUNKFACTOR,
+                DtStreamType::CRC    => HasherCRC::OUTSIZE * DtStream::CHUNKFACTOR,
+        });
 
         let mut results_first = vec![];
         let mut count = 0;

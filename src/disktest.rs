@@ -135,12 +135,13 @@ impl<'a> Disktest<'a> {
     pub fn write(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
         let mut bytes_left = max_bytes;
         let mut bytes_written = 0u64;
+        let chunk_size = self.stream_agg.get_chunk_size() as u64;
 
         self.init("Writing", seek)?;
         loop {
             // Get the next data chunk.
             let chunk = self.stream_agg.wait_chunk();
-            let write_len = min(self.stream_agg.get_chunksize() as u64, bytes_left) as usize;
+            let write_len = min(chunk_size, bytes_left) as usize;
 
             // Write the chunk to disk.
             if let Err(e) = self.file.write_all(&chunk.data[0..write_len]) {
@@ -182,7 +183,7 @@ impl<'a> Disktest<'a> {
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0u64;
 
-        let readbuf_len = self.stream_agg.get_chunksize();
+        let readbuf_len = self.stream_agg.get_chunk_size();
         let mut buffer = vec![0; readbuf_len];
         let mut read_count = 0;
         let mut read_len = min(readbuf_len as u64, bytes_left) as usize;

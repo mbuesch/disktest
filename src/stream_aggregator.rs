@@ -52,11 +52,6 @@ impl DtStreamAgg {
         }
     }
 
-    #[inline]
-    pub fn get_chunksize(&self) -> usize {
-        self.streams[0].get_chunksize()
-    }
-
     pub fn activate(&mut self) {
         for stream in &mut self.streams {
             stream.activate();
@@ -68,6 +63,10 @@ impl DtStreamAgg {
     #[inline]
     pub fn is_active(&self) -> bool {
         self.is_active
+    }
+
+    pub fn get_chunk_size(&self) -> usize {
+        self.streams[0].get_chunk_size()
     }
 
     #[inline]
@@ -107,7 +106,7 @@ mod tests {
         assert_eq!(agg.is_active(), true);
 
         let onestream_chunksize = DtStream::CHUNKFACTOR * hash_outsize;
-        assert_eq!(agg.get_chunksize(), onestream_chunksize);
+        assert_eq!(agg.get_chunk_size(), onestream_chunksize);
 
         let mut prev_chunks: Option<Vec<DtStreamChunk>> = None;
 
