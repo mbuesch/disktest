@@ -21,7 +21,6 @@
 
 use crate::hasher::{HasherSHA512, HasherCRC, NextHash};
 use crate::kdf::kdf;
-use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -110,7 +109,7 @@ pub struct DtStream {
     thread_id:      u32,
     level:          Arc<AtomicIsize>,
     rx:             Option<Receiver<DtStreamChunk>>,
-    thread_join:    RefCell<Option<thread::JoinHandle<()>>>,
+    thread_join:    Option<thread::JoinHandle<()>>,
     abort_thread:   Arc<AtomicBool>,
     is_active:      bool,
 }
@@ -130,7 +129,7 @@ impl DtStream {
             thread_id,
             level,
             rx: None,
-            thread_join: RefCell::new(None),
+            thread_join: None,
             abort_thread,
             is_active: false,
         }
@@ -146,7 +145,7 @@ impl DtStream {
     fn stop(&mut self) {
         self.is_active = false;
         self.abort_thread.store(true, Ordering::Release);
-        if let Some(thread_join) = self.thread_join.replace(None) {
+        if let Some(thread_join) = self.thread_join.take() {
             thread_join.join().unwrap();
         }
         self.abort_thread.store(false, Ordering::Release);
@@ -163,8 +162,7 @@ impl DtStream {
                                         tx,
                                         Arc::clone(&self.abort_thread),
                                         Arc::clone(&self.level));
-        let thread_join = thread::spawn(move || w.worker());
-        self.thread_join.replace(Some(thread_join));
+        self.thread_join = Some(thread::spawn(move || w.worker()));
         self.is_active = true;
     }
 
