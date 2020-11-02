@@ -1,10 +1,18 @@
 [package]
 name            = "disktest"
+description     = "Hard Disk and Solid State Disk tester"
 version         = "1.0.0"
-authors         = ["Michael Buesch <m@bues.ch>"]
 edition         = "2018"
+homepage        = "https://bues.ch/h/disktest"
+license         = "GPL-2.0-or-later"
+readme          = "README.rst"
+repository      = "https://git.bues.ch/git/disktest.git"
+authors         = ["Michael Buesch <m@bues.ch>"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+categories      = ["command-line-utilities", "filesystem", "hardware-support"]
+keywords        = ["disk", "HDD", "SSD", "flash", "SD-card"]
+
+exclude         = ["/maintenance/", "/testfile*"]
 
 [dependencies]
 clap            = "2.33.3"
