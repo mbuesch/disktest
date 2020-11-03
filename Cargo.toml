@@ -2,7 +2,6 @@
 name            = "disktest"
 description     = "Hard Disk and Solid State Disk tester"
 version         = "1.0.0"
-edition         = "2018"
 homepage        = "https://bues.ch/h/disktest"
 license         = "GPL-2.0-or-later"
 readme          = "README.rst"
@@ -14,18 +13,28 @@ keywords        = ["disk", "HDD", "SSD", "flash", "SD-card"]
 
 exclude         = ["/maintenance/", "/testfile*"]
 
+edition         = "2018"
+
 [dependencies]
 clap            = "2.33.3"
 crc             = "1.8.1"
-libc            = "0.2.79"
+libc            = "0.2.80"
 num_cpus        = "1.13.0"
 rust-crypto     = "0.2.36"
 signal-hook     = "0.1.16"
 tempfile        = "3.1.0"
 
+[profile.dev]
+lto             = "thin"
+opt-level       = 2
+
 [profile.release]
 lto             = "thin"
 panic           = "abort"
+
+[profile.test]
+lto             = "thin"
+opt-level       = 2
 
 [profile.bench]
 lto             = "thin"
