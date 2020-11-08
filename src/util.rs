@@ -139,7 +139,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_prettybyte() {
+    fn test_prettybytes() {
         assert_eq!(prettybytes(42, true, true),
                    "42 bytes");
         assert_eq!(prettybytes(42 * 1024, true, true),
