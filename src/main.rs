@@ -196,7 +196,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                      &mut file,
                                      &path,
                                      quiet,
-                                     Some(abort))?;
+                                     Some(abort));
     if write {
         disktest.write(seek, max_bytes)?;
     } else {

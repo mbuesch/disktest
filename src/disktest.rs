@@ -54,11 +54,11 @@ impl<'a> Disktest<'a> {
                file:        &'a mut File,
                path:        &'a Path,
                quiet_level: u8,
-               abort:       Option<Arc<AtomicBool>>) -> Result<Disktest<'a>, Error> {
+               abort:       Option<Arc<AtomicBool>>) -> Disktest<'a> {
 
         let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
 
-        Ok(Disktest {
+        Disktest {
             quiet_level,
             stream_agg: DtStreamAgg::new(algorithm, seed, nr_threads),
             file,
@@ -67,7 +67,7 @@ impl<'a> Disktest<'a> {
             log_count: 0,
             log_time: Instant::now(),
             begin_time: Instant::now(),
-        })
+        }
     }
 
     fn log_reset(&mut self) {
@@ -273,7 +273,7 @@ mod tests {
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
         let mut dt = Disktest::new(algorithm, &seed, nr_threads,
-                                   &mut file, &path, 0, None).unwrap();
+                                   &mut file, &path, 0, None);
 
         // Write a couple of bytes and verify them.
         let nr_bytes = 1000;
