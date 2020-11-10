@@ -33,26 +33,38 @@ Dependencies
 * Crate dependencies will automatically be downloaded by cargo.
 
 
-Running without installing
-==========================
+Installing from crates.io
+=========================
 
-Build and run disktest in place without installing it:
+Download the latest version of disktest from `crates.io <https://crates.io/>`_ and install it to `$HOME/.cargo/bin`:
 
 .. code:: sh
 
-	cargo run --release --  DISKTEST_OPTIONS_HERE
-
-See below for a description of the available `disktest` options.
+	cargo install disktest
 
 
-Installing
-==========
+Installing from source package
+==============================
 
 Build disktest and install it to `$HOME/.cargo/bin`:
 
 .. code:: sh
 
+	cd path/to/source/package
 	cargo install --path .
+
+
+Running from source package without installing
+==============================================
+
+Build and run disktest in place without installing it:
+
+.. code:: sh
+
+	cd path/to/source/package
+	cargo run --release --  DISKTEST_OPTIONS_HERE
+
+See below for a description of the available `disktest` options.
 
 
 Disktest command line options
