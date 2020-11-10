@@ -97,6 +97,7 @@ fn install_abort_handlers() -> Result<Arc<AtomicBool>, Error> {
         }
 
     }
+
     Ok(abort)
 }
 
@@ -201,7 +202,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         disktest.verify(seek, max_bytes)?;
     }
-    return Ok(());
+
+    Ok(())
 }
 
 // vim: ts=4 sw=4 expandtab

@@ -57,7 +57,8 @@ impl<'a> Disktest<'a> {
                abort:       Option<Arc<AtomicBool>>) -> Result<Disktest<'a>, Error> {
 
         let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
-        return Ok(Disktest {
+
+        Ok(Disktest {
             quiet_level,
             stream_agg: DtStreamAgg::new(algorithm, seed, nr_threads),
             file,
@@ -118,7 +119,8 @@ impl<'a> Disktest<'a> {
             return Err(Error::new(&format!("File seek to {} failed: {}",
                                            seek, e.to_string())));
         }
-        return Ok(());
+
+        Ok(())
     }
 
     fn write_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
@@ -129,7 +131,8 @@ impl<'a> Disktest<'a> {
             return Err(Error::new(&format!("Sync failed: {}", e)));
         }
         self.log("Done. Wrote ", 0, bytes_written, true, ".");
-        return Ok(());
+
+        Ok(())
     }
 
     pub fn write(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
@@ -171,12 +174,14 @@ impl<'a> Disktest<'a> {
                 }
             }
         }
-        return Ok(bytes_written);
+
+        Ok(bytes_written)
     }
 
     fn verify_finalize(&mut self, bytes_read: u64) -> Result<(), Error> {
         self.log("Done. Verified ", 0, bytes_read, true, ".");
-        return Ok(());
+
+        Ok(())
     }
 
     pub fn verify(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
@@ -246,7 +251,8 @@ impl<'a> Disktest<'a> {
                 }
             }
         }
-        return Ok(bytes_read);
+
+        Ok(bytes_read)
     }
 }
 

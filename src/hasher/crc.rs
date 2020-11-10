@@ -73,7 +73,7 @@ impl NextHash for HasherCRC {
         }
 
         // Return the generated hash.
-        return &self.buffer.get_result()[..HasherCRC::OUTSIZE];
+        &self.buffer.get_result()[..HasherCRC::OUTSIZE]
     }
 }
 

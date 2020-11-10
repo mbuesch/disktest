@@ -74,10 +74,13 @@ impl DtStreamAgg {
         if self.is_active() {
             if let Some(chunk) = self.streams[self.current_index].get_chunk() {
                 self.current_index = (self.current_index + 1) % self.streams.len();
-                return Some(chunk);
+                Some(chunk)
+            } else {
+                None
             }
+        } else {
+            None
         }
-        return None;
     }
 
     pub fn wait_chunk(&mut self) -> DtStreamChunk {
@@ -113,6 +116,7 @@ mod tests {
         for _ in 0..4 {
             // Generate the next chunk.
             let mut chunks = vec![];
+            
             for _ in 0..num_threads {
                 let chunk = agg.wait_chunk();
                 assert_eq!(chunk.data.len(), onestream_chunksize);
