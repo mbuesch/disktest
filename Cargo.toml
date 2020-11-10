@@ -5,7 +5,7 @@ version         = "1.0.0"
 homepage        = "https://bues.ch/h/disktest"
 license         = "GPL-2.0-or-later"
 readme          = "README.rst"
-repository      = "https://git.bues.ch/git/disktest.git"
+repository      = "https://bues.ch/cgit/disktest.git"
 authors         = ["Michael Buesch <m@bues.ch>"]
 
 categories      = ["command-line-utilities", "filesystem", "hardware-support"]
