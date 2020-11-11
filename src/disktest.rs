@@ -33,7 +33,7 @@ use std::time::Instant;
 
 pub use crate::stream_aggregator::DtStreamType;
 
-const LOG_BYTE_THRES: u64   = 1024 * 1024 * 10;
+const LOG_BYTE_THRES: u64   = 1024 * 1024 * 1;
 const LOG_SEC_THRES: u64    = 10;
 
 pub struct Disktest<'a> {
@@ -48,6 +48,7 @@ pub struct Disktest<'a> {
 }
 
 impl<'a> Disktest<'a> {
+    /// Create a new Disktest instance.
     pub fn new(algorithm:   DtStreamType,
                seed:        &'a Vec<u8>,
                nr_threads:  usize,
@@ -70,22 +71,31 @@ impl<'a> Disktest<'a> {
         }
     }
 
+    /// Reset logging.
     fn log_reset(&mut self) {
         self.log_count = 0;
         self.log_time = Instant::now();
         self.begin_time = self.log_time;
     }
 
+    /// Log progress.
     fn log(&mut self,
            prefix: &str,
            inc_processed: usize,
            abs_processed: u64,
            no_limiting: bool,
            suffix: &str) {
+
+        // Logging is enabled?
         if self.quiet_level < 2 {
+
+            // Increment byte count.
+            // Only if byte count is bigger than threshold, then check time.
+            // This reduces the number of calls to Instant::now.
             self.log_count += inc_processed as u64;
             if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == 0) || no_limiting {
 
+                // Check if it's time to write the next log entry.
                 let now = Instant::now();
                 let expired = now.duration_since(self.log_time).as_secs() >= LOG_SEC_THRES;
 
@@ -98,13 +108,14 @@ impl<'a> Disktest<'a> {
                              prettybytes(abs_processed, true, true),
                              prettybytes(rate, true, false),
                              suffix);
-                    self.log_count = 0;
                     self.log_time = now;
                 }
+                self.log_count = 0;
             }
         }
     }
 
+    /// Initialize disktest.
     fn init(&mut self, prefix: &str, seek: u64) -> Result<(), Error> {
         self.log_reset();
 
@@ -123,6 +134,7 @@ impl<'a> Disktest<'a> {
         Ok(())
     }
 
+    /// Finalize and flush writing.
     fn write_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
         if self.quiet_level < 2 {
             println!("Writing stopped. Syncing...");
@@ -135,6 +147,7 @@ impl<'a> Disktest<'a> {
         Ok(())
     }
 
+    /// Run disktest in write mode.
     pub fn write(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
         let mut bytes_left = max_bytes;
         let mut bytes_written = 0u64;
@@ -178,12 +191,14 @@ impl<'a> Disktest<'a> {
         Ok(bytes_written)
     }
 
+    /// Finalize verification.
     fn verify_finalize(&mut self, bytes_read: u64) -> Result<(), Error> {
         self.log("Done. Verified ", 0, bytes_read, true, ".");
 
         Ok(())
     }
 
+    /// Run disktest in verify mode.
     pub fn verify(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0u64;
