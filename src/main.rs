@@ -42,7 +42,11 @@ Hard Disk (HDD), Solid State Disk (SSD), USB Stick, Memory Card (e.g. SD-Card) t
 This program can write a pseudo random stream to a disk, read it back \
 and verify it by comparing it to the expected stream.";
 
-const HELP_DEVICE: &str = "Device file of the disk.";
+const HELP_DEVICE: &str = "\
+Device node of the disk or file path to access.\n\
+On Linux compatible systems this may be the /dev/sdX or /dev/mmcblkX or similar
+device node of the disk. It may also be an arbitrary path to a location in a filesystem.\n\
+On Windows this may be a path to the location on the disk to be tested (e.g. D:\\testfile).";
 
 const HELP_WRITE: &str = "\
 Write pseudo random data to the device. \
