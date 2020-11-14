@@ -20,6 +20,7 @@
 //
 
 use crate::error::Error;
+use crate::stream::DtStreamChunk;
 use crate::stream_aggregator::DtStreamAgg;
 use crate::util::prettybytes;
 use hhmmss::Hhmmss;
@@ -202,6 +203,27 @@ impl<'a> Disktest<'a> {
         Ok(())
     }
 
+    /// Handle verification failure.
+    fn verify_failed(&self,
+                     read_count: usize,
+                     bytes_read: u64,
+                     buffer: &Vec<u8>,
+                     chunk: &DtStreamChunk) -> Error {
+        for i in 0..read_count {
+            if buffer[i] != chunk.data[i] {
+                let pos = bytes_read + i as u64;
+                let msg = if pos >= 1024 {
+                    format!("Data MISMATCH at byte {} = {}!",
+                            pos, prettybytes(pos, true, true))
+                } else {
+                    format!("Data MISMATCH at byte {}!", pos)
+                };
+                return Error::new(&msg);
+            }
+        }
+        panic!("Internal error: verify_failed() no mismatch.");
+    }
+
     /// Run disktest in verify mode.
     pub fn verify(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
         let mut bytes_left = max_bytes;
@@ -225,18 +247,7 @@ impl<'a> Disktest<'a> {
                         // Calculate and compare the read buffer to the pseudo random sequence.
                         let chunk = self.stream_agg.wait_chunk();
                         if buffer[..read_count] != chunk.data[..read_count] {
-                            for i in 0..read_count {
-                                if buffer[i] != chunk.data[i] {
-                                    let pos = bytes_read + i as u64;
-                                    let msg = if pos >= 1024 {
-                                        format!("Data MISMATCH at byte {} = {}!",
-                                                pos, prettybytes(pos, true, true))
-                                    } else {
-                                        format!("Data MISMATCH at byte {}!", pos)
-                                    };
-                                    return Err(Error::new(&msg));
-                                }
-                            }
+                            return Err(self.verify_failed(read_count, bytes_read, &buffer, &chunk));
                         }
 
                         // Account for the read bytes.
