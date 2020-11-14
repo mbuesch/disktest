@@ -32,6 +32,7 @@ use crate::error::Error;
 use crate::util::parsebytes;
 use disktest::{Disktest, DtStreamType};
 use signal_hook;
+use std::fmt::Display;
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::sync::Arc;
@@ -105,6 +106,12 @@ fn install_abort_handlers() -> Result<Arc<AtomicBool>, Error> {
     Ok(abort)
 }
 
+/// Handle a parameter error.
+fn param_err(param: impl Display,
+             error: impl Display) -> Result<(), Box<dyn std::error::Error>> {
+    Err(Error::newbox(&format!("Invalid {} value: {}", param, error)))
+}
+
 /// Main program entry point.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = clap::App::new("disktest")
@@ -153,30 +160,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let write = args.is_present("write");
     let seek = match parsebytes(args.value_of("seek").unwrap_or("0")) {
         Ok(x) => x,
-        Err(e) => return Err(Error::newbox(&format!("Invalid --seek value: {}", e))),
+        Err(e) => return param_err("--seek", e),
     };
     let max_bytes = match parsebytes(args.value_of("bytes").unwrap_or(&u64::MAX.to_string())) {
         Ok(x) => x,
-        Err(e) => return Err(Error::newbox(&format!("Invalid --bytes value: {}", e))),
+        Err(e) => return param_err("--bytes", e),
     };
     let algorithm = match args.value_of("algorithm").unwrap_or("SHA512").to_uppercase().as_str() {
         "SHA512" => DtStreamType::SHA512,
         "CRC" => DtStreamType::CRC,
-        x => return Err(Error::newbox(&format!("Invalid --algorithm value: {}", x))),
+        x => return param_err("--algorithm", x),
     };
     let seed = args.value_of("seed").unwrap_or("42");
     let threads: usize = match args.value_of("threads").unwrap_or("1").parse() {
         Ok(x) => {
             if x >= std::u16::MAX as usize + 1 {
-                return Err(Error::newbox(&format!("Invalid --threads value: Out of range")))
+                return param_err("--threads", x)
             }
             x
         },
-        Err(e) => return Err(Error::newbox(&format!("Invalid --threads value: {}", e))),
+        Err(e) => return param_err("--threads", e),
     };
     let quiet: u8 = match args.value_of("quiet").unwrap_or("0").parse() {
         Ok(x) => x,
-        Err(e) => return Err(Error::newbox(&format!("Invalid --quiet value: {}", e))),
+        Err(e) => return param_err("--quiet", e),
     };
 
     // Open the disk device.
