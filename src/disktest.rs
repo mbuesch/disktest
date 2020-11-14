@@ -22,6 +22,7 @@
 use crate::error::Error;
 use crate::stream_aggregator::DtStreamAgg;
 use crate::util::prettybytes;
+use hhmmss::Hhmmss;
 use libc::ENOSPC;
 use std::cmp::min;
 use std::fs::File;
@@ -101,12 +102,15 @@ impl<'a> Disktest<'a> {
 
                 if (expired && self.quiet_level == 0) || no_limiting {
 
-                    let t_elapsed = (now - self.begin_time).as_secs();
-                    let rate = if t_elapsed > 0 { abs_processed / t_elapsed } else { 0 };
-                    println!("{}{} @ {}/s{}",
+                    let dur_elapsed = now - self.begin_time;
+                    let sec_elapsed = dur_elapsed.as_secs();
+                    let rate = if sec_elapsed > 0 { abs_processed / sec_elapsed } else { 0 };
+
+                    println!("{}{} @ {}/s ({}){}",
                              prefix,
                              prettybytes(abs_processed, true, true),
                              prettybytes(rate, true, false),
+                             dur_elapsed.hhmmss(),
                              suffix);
                     self.log_time = now;
                 }
