@@ -21,7 +21,7 @@
 
 mod disktest;
 mod error;
-mod hasher;
+mod generator;
 mod kdf;
 mod stream;
 mod stream_aggregator;

@@ -19,39 +19,39 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crate::hasher::NextHash;
-use crate::hasher::buffer::Buffer;
+use crate::generator::NextRandom;
+use crate::generator::buffer::Buffer;
 use crc::{crc64, Hasher64};
 
-pub struct HasherCRC {
+pub struct GeneratorCRC {
     alg:        crc64::Digest,
     buffer:     Buffer,
 }
 
-impl HasherCRC {
+impl GeneratorCRC {
     /// Size of the base CRC algorithm, in bytes.
     const SIZE: usize = 64 / 8;
     /// Chunk size of previous hash to incorporate into the next hash.
-    const PREVSIZE: usize = HasherCRC::SIZE / 2;
+    const PREVSIZE: usize = GeneratorCRC::SIZE / 2;
     /// How many CRC values to chain? Higher value -> better performance.
     /// Must be a value between 1 and 255.
     const CHAINCOUNT: u8 = 64;
     /// Size of the output data.
-    pub const OUTSIZE: usize = HasherCRC::SIZE * HasherCRC::CHAINCOUNT as usize;
+    pub const OUTSIZE: usize = GeneratorCRC::SIZE * GeneratorCRC::CHAINCOUNT as usize;
 
-    pub fn new(seed: &Vec<u8>) -> HasherCRC {
-        HasherCRC {
+    pub fn new(seed: &Vec<u8>) -> GeneratorCRC {
+        GeneratorCRC {
             alg:        crc64::Digest::new(crc64::ECMA),
             buffer:     Buffer::new(seed,
-                                    HasherCRC::OUTSIZE,
-                                    HasherCRC::PREVSIZE),
+                                    GeneratorCRC::OUTSIZE,
+                                    GeneratorCRC::PREVSIZE),
         }
     }
 }
 
-impl NextHash for HasherCRC {
+impl NextRandom for GeneratorCRC {
     fn get_size(&self) -> usize {
-        HasherCRC::OUTSIZE
+        GeneratorCRC::OUTSIZE
     }
 
     fn next(&mut self) -> &[u8] {
@@ -64,16 +64,16 @@ impl NextHash for HasherCRC {
 
         // Chain multiple CRC sums into the output buffer.
         let outbuf = self.buffer.hashalg_output();
-        for i in 0u8..HasherCRC::CHAINCOUNT {
+        for i in 0u8..GeneratorCRC::CHAINCOUNT {
             self.alg.write(&i.to_le_bytes());
             let crc = self.alg.sum64().to_le_bytes();
-            let begin = i as usize * HasherCRC::SIZE;
-            let end = (i as usize + 1) * HasherCRC::SIZE;
+            let begin = i as usize * GeneratorCRC::SIZE;
+            let end = (i as usize + 1) * GeneratorCRC::SIZE;
             outbuf[begin..end].copy_from_slice(&crc);
         }
 
         // Return the generated hash.
-        &self.buffer.get_result()[..HasherCRC::OUTSIZE]
+        &self.buffer.get_result()[..GeneratorCRC::OUTSIZE]
     }
 }
 
@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_cmp_result() {
-        let mut a = HasherCRC::new(&vec![1,2,3]);
+        let mut a = GeneratorCRC::new(&vec![1,2,3]);
         assert_eq!(a.next(),
                    vec![87, 122, 14, 58, 155, 81, 165, 109, 163, 46, 98, 18, 3, 123, 185, 137,
                         200, 193, 51, 17, 83, 65, 81, 158, 41, 199, 203, 95, 141, 113, 226, 2,
@@ -154,8 +154,8 @@ mod tests {
 
     #[test]
     fn test_seed_equal() {
-        let mut a = HasherCRC::new(&vec![1,2,3]);
-        let mut b = HasherCRC::new(&vec![1,2,3]);
+        let mut a = GeneratorCRC::new(&vec![1,2,3]);
+        let mut b = GeneratorCRC::new(&vec![1,2,3]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
@@ -170,8 +170,8 @@ mod tests {
 
     #[test]
     fn test_seed_diff() {
-        let mut a = HasherCRC::new(&vec![1,2,3]);
-        let mut b = HasherCRC::new(&vec![1,2,4]);
+        let mut a = GeneratorCRC::new(&vec![1,2,3]);
+        let mut b = GeneratorCRC::new(&vec![1,2,4]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {

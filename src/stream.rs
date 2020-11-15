@@ -19,7 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crate::hasher::{HasherSHA512, HasherCRC, NextHash};
+use crate::generator::{GeneratorSHA512, GeneratorCRC, NextRandom};
 use crate::kdf::kdf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
@@ -52,24 +52,24 @@ fn thread_worker(stype:     DtStreamType,
     drop(seed);
 
     // Construct the hashing algorithm.
-    let mut hasher: Box<dyn NextHash> = match stype {
-        DtStreamType::SHA512 => Box::new(HasherSHA512::new(&thread_seed)),
-        DtStreamType::CRC    => Box::new(HasherCRC::new(&thread_seed)),
+    let mut generator: Box<dyn NextRandom> = match stype {
+        DtStreamType::SHA512 => Box::new(GeneratorSHA512::new(&thread_seed)),
+        DtStreamType::CRC    => Box::new(GeneratorCRC::new(&thread_seed)),
     };
 
-    // Run the hasher work loop.
+    // Run the generator work loop.
     let mut index = 0;
     while !abort.load(Ordering::Relaxed) {
         if level.load(Ordering::Relaxed) < DtStream::LEVEL_THRES {
 
             let mut chunk = DtStreamChunk {
-                data: Vec::with_capacity(hasher.get_size() * DtStream::CHUNKFACTOR),
+                data: Vec::with_capacity(generator.get_size() * DtStream::CHUNKFACTOR),
                 index,
             };
             index += 1;
 
-            // Get the next chunk from the hasher.
-            hasher.next_chunk(&mut chunk.data, DtStream::CHUNKFACTOR);
+            // Get the next chunk from the generator.
+            generator.next_chunk(&mut chunk.data, DtStream::CHUNKFACTOR);
 
             // Send the chunk to the main thread.
             tx.send(chunk).expect("Worker thread: Send failed.");
@@ -173,8 +173,8 @@ impl DtStream {
     /// Get the size of the selected hash, in bytes.
     fn get_hash_size(&self) -> usize {
         match self.stype {
-            DtStreamType::SHA512 => HasherSHA512::OUTSIZE,
-            DtStreamType::CRC    => HasherCRC::OUTSIZE,
+            DtStreamType::SHA512 => GeneratorSHA512::OUTSIZE,
+            DtStreamType::CRC    => GeneratorCRC::OUTSIZE,
         }
     }
 
@@ -222,8 +222,8 @@ mod tests {
 
         assert_eq!(s.get_chunk_size(),
             match algorithm {
-                DtStreamType::SHA512 => HasherSHA512::OUTSIZE * DtStream::CHUNKFACTOR,
-                DtStreamType::CRC    => HasherCRC::OUTSIZE * DtStream::CHUNKFACTOR,
+                DtStreamType::SHA512 => GeneratorSHA512::OUTSIZE * DtStream::CHUNKFACTOR,
+                DtStreamType::CRC    => GeneratorCRC::OUTSIZE * DtStream::CHUNKFACTOR,
         });
 
         let mut results_first = vec![];

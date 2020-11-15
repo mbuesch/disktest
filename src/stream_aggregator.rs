@@ -99,7 +99,7 @@ impl DtStreamAgg {
 
 #[cfg(test)]
 mod tests {
-    use crate::hasher::{HasherSHA512, HasherCRC};
+    use crate::generator::{GeneratorSHA512, GeneratorCRC};
     use super::*;
 
     fn run_test(algorithm: DtStreamType, hash_outsize: usize) {
@@ -169,12 +169,12 @@ mod tests {
 
     #[test]
     fn test_sha512() {
-        run_test(DtStreamType::SHA512, HasherSHA512::OUTSIZE);
+        run_test(DtStreamType::SHA512, GeneratorSHA512::OUTSIZE);
     }
 
     #[test]
     fn test_crc() {
-        run_test(DtStreamType::CRC, HasherCRC::OUTSIZE);
+        run_test(DtStreamType::CRC, GeneratorCRC::OUTSIZE);
     }
 }
 

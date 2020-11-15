@@ -23,10 +23,10 @@ mod buffer;
 mod crc;
 mod sha512;
 
-pub use crate::hasher::sha512::HasherSHA512;
-pub use crate::hasher::crc::HasherCRC;
+pub use crate::generator::sha512::GeneratorSHA512;
+pub use crate::generator::crc::GeneratorCRC;
 
-pub trait NextHash {
+pub trait NextRandom {
     /// Get the size of the hash, in bytes.
     fn get_size(&self) -> usize;
 
@@ -51,7 +51,7 @@ mod tests {
     #[test]
     fn test_next_chunk() {
         struct X { i: usize }
-        impl NextHash for X {
+        impl NextRandom for X {
             fn get_size(&self) -> usize { 4 }
             fn next(&mut self) -> &[u8] {
                 let i = self.i;

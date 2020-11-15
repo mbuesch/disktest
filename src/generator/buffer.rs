@@ -21,7 +21,7 @@
 
 use std::cmp::max;
 
-/// Hasher work buffer.
+/// Generator work buffer.
 pub struct Buffer {
     data:                   Vec<u8>,
     count:                  u64,

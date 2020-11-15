@@ -288,7 +288,7 @@ impl<'a> Disktest<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::hasher::{HasherSHA512, HasherCRC};
+    use crate::generator::{GeneratorSHA512, GeneratorCRC};
     use crate::stream::DtStream;
     use std::path::Path;
     use super::*;
@@ -343,12 +343,12 @@ mod tests {
 
     #[test]
     fn test_sha512() {
-        run_test(DtStreamType::SHA512, HasherSHA512::OUTSIZE);
+        run_test(DtStreamType::SHA512, GeneratorSHA512::OUTSIZE);
     }
 
     #[test]
     fn test_crc() {
-        run_test(DtStreamType::CRC, HasherCRC::OUTSIZE);
+        run_test(DtStreamType::CRC, GeneratorCRC::OUTSIZE);
     }
 }
 

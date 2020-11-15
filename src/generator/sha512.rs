@@ -19,33 +19,33 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crate::hasher::NextHash;
-use crate::hasher::buffer::Buffer;
+use crate::generator::NextRandom;
+use crate::generator::buffer::Buffer;
 use crypto::{sha2::Sha512, digest::Digest};
 
-pub struct HasherSHA512 {
+pub struct GeneratorSHA512 {
     alg:        Sha512,
     buffer:     Buffer,
 }
 
-impl HasherSHA512 {
+impl GeneratorSHA512 {
     const SIZE: usize = 512 / 8;
-    const PREVSIZE: usize = HasherSHA512::SIZE / 2;
-    pub const OUTSIZE: usize = HasherSHA512::SIZE;
+    const PREVSIZE: usize = GeneratorSHA512::SIZE / 2;
+    pub const OUTSIZE: usize = GeneratorSHA512::SIZE;
 
-    pub fn new(seed: &Vec<u8>) -> HasherSHA512 {
-        HasherSHA512 {
+    pub fn new(seed: &Vec<u8>) -> GeneratorSHA512 {
+        GeneratorSHA512 {
             alg:        Sha512::new(),
             buffer:     Buffer::new(seed,
-                                    HasherSHA512::SIZE,
-                                    HasherSHA512::PREVSIZE),
+                                    GeneratorSHA512::SIZE,
+                                    GeneratorSHA512::PREVSIZE),
         }
     }
 }
 
-impl NextHash for HasherSHA512 {
+impl NextRandom for GeneratorSHA512 {
     fn get_size(&self) -> usize {
-        HasherSHA512::OUTSIZE
+        GeneratorSHA512::OUTSIZE
     }
 
     fn next(&mut self) -> &[u8] {
@@ -60,7 +60,7 @@ impl NextHash for HasherSHA512 {
         self.alg.reset();
 
         // Return the generated hash.
-        &self.buffer.get_result()[..HasherSHA512::OUTSIZE]
+        &self.buffer.get_result()[..GeneratorSHA512::OUTSIZE]
     }
 }
 
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_cmp_result() {
-        let mut a = HasherSHA512::new(&vec![1,2,3]);
+        let mut a = GeneratorSHA512::new(&vec![1,2,3]);
         assert_eq!(a.next(),
                    vec![190, 149, 3, 95, 94, 39, 66, 152, 48, 160, 195, 187, 7, 43, 208, 248,
                         47, 37, 122, 0, 108, 73, 97, 168, 239, 225, 234, 13, 64, 228, 129, 67,
@@ -85,8 +85,8 @@ mod tests {
 
     #[test]
     fn test_seed_equal() {
-        let mut a = HasherSHA512::new(&vec![1,2,3]);
-        let mut b = HasherSHA512::new(&vec![1,2,3]);
+        let mut a = GeneratorSHA512::new(&vec![1,2,3]);
+        let mut b = GeneratorSHA512::new(&vec![1,2,3]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
@@ -101,8 +101,8 @@ mod tests {
 
     #[test]
     fn test_seed_diff() {
-        let mut a = HasherSHA512::new(&vec![1,2,3]);
-        let mut b = HasherSHA512::new(&vec![1,2,4]);
+        let mut a = GeneratorSHA512::new(&vec![1,2,3]);
+        let mut b = GeneratorSHA512::new(&vec![1,2,4]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
