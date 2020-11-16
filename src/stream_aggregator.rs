@@ -99,16 +99,16 @@ impl DtStreamAgg {
 
 #[cfg(test)]
 mod tests {
-    use crate::generator::{GeneratorSHA512, GeneratorCRC};
+    use crate::generator::{GeneratorChaCha20, GeneratorSHA512, GeneratorCRC};
     use super::*;
 
-    fn run_test(algorithm: DtStreamType, hash_outsize: usize) {
+    fn run_test(algorithm: DtStreamType, gen_outsize: usize, chunk_factor: usize) {
         let num_threads = 2;
         let mut agg = DtStreamAgg::new(algorithm, &vec![1,2,3], num_threads);
         agg.activate();
         assert_eq!(agg.is_active(), true);
 
-        let onestream_chunksize = DtStream::CHUNKFACTOR * hash_outsize;
+        let onestream_chunksize = chunk_factor * gen_outsize;
         assert_eq!(agg.get_chunk_size(), onestream_chunksize);
 
         let mut prev_chunks: Option<Vec<DtStreamChunk>> = None;
@@ -130,6 +130,7 @@ mod tests {
                 let expected_avg = onestream_chunksize / 256;
                 let thres = (expected_avg as f32 * 0.93) as usize;
                 for acount in &avg {
+                    println!("{} {}", acount, thres);
                     assert!(*acount >= thres);
                 }
 
@@ -168,13 +169,24 @@ mod tests {
     }
 
     #[test]
+    fn test_chacha20() {
+        run_test(DtStreamType::CHACHA20,
+                 GeneratorChaCha20::OUTSIZE,
+                 GeneratorChaCha20::CHUNKFACTOR);
+    }
+
+    #[test]
     fn test_sha512() {
-        run_test(DtStreamType::SHA512, GeneratorSHA512::OUTSIZE);
+        run_test(DtStreamType::SHA512,
+                 GeneratorSHA512::OUTSIZE,
+                 GeneratorSHA512::CHUNKFACTOR);
     }
 
     #[test]
     fn test_crc() {
-        run_test(DtStreamType::CRC, GeneratorCRC::OUTSIZE);
+        run_test(DtStreamType::CRC,
+                 GeneratorCRC::OUTSIZE,
+                 GeneratorCRC::CHUNKFACTOR);
     }
 }
 

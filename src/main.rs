@@ -166,8 +166,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(x) => x,
         Err(e) => return param_err("--bytes", e),
     };
-    let algorithm = match args.value_of("algorithm").unwrap_or("SHA512").to_uppercase().as_str() {
-        "SHA512" => DtStreamType::SHA512,
+    let algorithm = match args.value_of("algorithm").unwrap_or("CHACHA").to_uppercase().as_str() {
+        "CHACHA20" | "CHACHA" => DtStreamType::CHACHA20,
+        "SHA512" | "SHA2" | "SHA" => DtStreamType::SHA512,
         "CRC" => DtStreamType::CRC,
         x => return param_err("--algorithm", x),
     };

@@ -19,7 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crate::generator::{GeneratorSHA512, GeneratorCRC, NextRandom};
+use crate::generator::{GeneratorChaCha20, GeneratorSHA512, GeneratorCRC, NextRandom};
 use crate::kdf::kdf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
@@ -30,8 +30,9 @@ use std::time::Duration;
 /// Stream algorithm type.
 #[derive(Copy, Clone, Debug)]
 pub enum DtStreamType {
-    CRC,
+    CHACHA20,
     SHA512,
+    CRC,
 }
 
 /// Data chunk that contains the computed PRNG data.
@@ -41,20 +42,22 @@ pub struct DtStreamChunk {
 }
 
 /// Thread worker function, that computes the chunks.
-fn thread_worker(stype:     DtStreamType,
-                 seed:      Vec<u8>,
-                 thread_id: u32,
-                 abort:     Arc<AtomicBool>,
-                 level:     Arc<AtomicIsize>,
-                 tx:        Sender<DtStreamChunk>) {
+fn thread_worker(stype:         DtStreamType,
+                 chunk_factor:  usize,
+                 seed:          Vec<u8>,
+                 thread_id:     u32,
+                 abort:         Arc<AtomicBool>,
+                 level:         Arc<AtomicIsize>,
+                 tx:            Sender<DtStreamChunk>) {
     // Calculate the per-thread-seed from the global seed.
     let thread_seed = kdf(&seed, thread_id);
     drop(seed);
 
-    // Construct the hashing algorithm.
+    // Construct the generator algorithm.
     let mut generator: Box<dyn NextRandom> = match stype {
-        DtStreamType::SHA512 => Box::new(GeneratorSHA512::new(&thread_seed)),
-        DtStreamType::CRC    => Box::new(GeneratorCRC::new(&thread_seed)),
+        DtStreamType::CHACHA20 => Box::new(GeneratorChaCha20::new(&thread_seed)),
+        DtStreamType::SHA512   => Box::new(GeneratorSHA512::new(&thread_seed)),
+        DtStreamType::CRC      => Box::new(GeneratorCRC::new(&thread_seed)),
     };
 
     // Run the generator work loop.
@@ -63,13 +66,13 @@ fn thread_worker(stype:     DtStreamType,
         if level.load(Ordering::Relaxed) < DtStream::LEVEL_THRES {
 
             let mut chunk = DtStreamChunk {
-                data: Vec::with_capacity(generator.get_size() * DtStream::CHUNKFACTOR),
+                data: Vec::with_capacity(generator.get_size() * chunk_factor),
                 index,
             };
             index += 1;
 
             // Get the next chunk from the generator.
-            generator.next_chunk(&mut chunk.data, DtStream::CHUNKFACTOR);
+            generator.next_chunk(&mut chunk.data, chunk_factor);
 
             // Send the chunk to the main thread.
             tx.send(chunk).expect("Worker thread: Send failed.");
@@ -96,8 +99,6 @@ pub struct DtStream {
 impl DtStream {
     /// Maximum number of chunks that the thread will compute in advance.
     const LEVEL_THRES: isize        = 8;
-    /// Chunk size: Multiple of the hash size.
-    pub const CHUNKFACTOR: usize    = 1024 * 10;
 
     pub fn new(stype: DtStreamType,
                seed: &Vec<u8>,
@@ -143,12 +144,14 @@ impl DtStream {
 
         // Spawn the worker thread.
         let thread_stype = self.stype;
+        let thread_chunk_factor = self.get_chunk_factor();
         let thread_seed = self.seed.to_vec();
         let thread_id = self.thread_id;
         let thread_abort = Arc::clone(&self.abort);
         let thread_level = Arc::clone(&self.level);
         self.thread_join = Some(thread::spawn(move || {
             thread_worker(thread_stype,
+                          thread_chunk_factor,
                           thread_seed,
                           thread_id,
                           thread_abort,
@@ -170,17 +173,26 @@ impl DtStream {
         self.is_active
     }
 
-    /// Get the size of the selected hash, in bytes.
-    fn get_hash_size(&self) -> usize {
+    /// Get the size of the selected generator output, in bytes.
+    fn get_generator_outsize(&self) -> usize {
         match self.stype {
-            DtStreamType::SHA512 => GeneratorSHA512::OUTSIZE,
-            DtStreamType::CRC    => GeneratorCRC::OUTSIZE,
+            DtStreamType::CHACHA20 => GeneratorChaCha20::OUTSIZE,
+            DtStreamType::SHA512   => GeneratorSHA512::OUTSIZE,
+            DtStreamType::CRC      => GeneratorCRC::OUTSIZE,
+        }
+    }
+
+    fn get_chunk_factor(&self) -> usize {
+        match self.stype {
+            DtStreamType::CHACHA20 => GeneratorChaCha20::CHUNKFACTOR,
+            DtStreamType::SHA512   => GeneratorSHA512::CHUNKFACTOR,
+            DtStreamType::CRC      => GeneratorCRC::CHUNKFACTOR,
         }
     }
 
     /// Get the size of the chunk returned by get_chunk(), in bytes.
     pub fn get_chunk_size(&self) -> usize {
-        self.get_hash_size() * DtStream::CHUNKFACTOR
+        self.get_generator_outsize() * self.get_chunk_factor()
     }
 
     /// Get the next chunk from the thread.
@@ -220,11 +232,10 @@ mod tests {
         s.activate();
         assert_eq!(s.is_active(), true);
 
-        assert_eq!(s.get_chunk_size(),
-            match algorithm {
-                DtStreamType::SHA512 => GeneratorSHA512::OUTSIZE * DtStream::CHUNKFACTOR,
-                DtStreamType::CRC    => GeneratorCRC::OUTSIZE * DtStream::CHUNKFACTOR,
-        });
+        assert_eq!(s.get_chunk_size(), s.get_generator_outsize() * s.get_chunk_factor());
+        assert!(s.get_chunk_size() > 0);
+        assert!(s.get_generator_outsize() > 0);
+        assert!(s.get_chunk_factor() > 0);
 
         let mut results_first = vec![];
         let mut count = 0;
@@ -240,6 +251,9 @@ mod tests {
             }
         }
         match algorithm {
+            DtStreamType::CHACHA20 => {
+                assert_eq!(results_first, vec![206, 122, 60, 217, 224]);
+            }
             DtStreamType::SHA512 => {
                 assert_eq!(results_first, vec![226, 143, 221, 30, 59]);
             }
@@ -247,6 +261,11 @@ mod tests {
                 assert_eq!(results_first, vec![132, 133, 170, 226, 104]);
             }
         }
+    }
+
+    #[test]
+    fn test_chacha20() {
+        run_test(DtStreamType::CHACHA20);
     }
 
     #[test]

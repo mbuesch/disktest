@@ -20,11 +20,13 @@
 //
 
 mod buffer;
+mod chacha20;
 mod crc;
 mod sha512;
 
-pub use crate::generator::sha512::GeneratorSHA512;
+pub use crate::generator::chacha20::GeneratorChaCha20;
 pub use crate::generator::crc::GeneratorCRC;
+pub use crate::generator::sha512::GeneratorSHA512;
 
 pub trait NextRandom {
     /// Get the size of the hash, in bytes.

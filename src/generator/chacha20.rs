@@ -20,52 +20,46 @@
 //
 
 use crate::generator::NextRandom;
-use crate::generator::buffer::Buffer;
-use crypto::{sha2::Sha512, digest::Digest};
+use rand::prelude::*;
+use rand_chacha::ChaCha20Rng;
+use std::cmp::min;
 
-pub struct GeneratorSHA512 {
-    alg:        Sha512,
-    buffer:     Buffer,
+pub struct GeneratorChaCha20 {
+    rng:    ChaCha20Rng,
+    buf:    [u8; GeneratorChaCha20::OUTSIZE],
 }
 
-impl GeneratorSHA512 {
-    /// Size of the base SHA512 algorithm, in bytes.
-    const SIZE: usize = 512 / 8;
-    /// Chunk size of previous hash to incorporate into the next hash.
-    const PREVSIZE: usize = GeneratorSHA512::SIZE / 2;
+impl GeneratorChaCha20 {
     /// Size of the output data.
-    pub const OUTSIZE: usize = GeneratorSHA512::SIZE;
+    pub const OUTSIZE: usize = 102400;
     /// Chunk size. Multiple of the generator output size.
-    pub const CHUNKFACTOR: usize = 1024 * 10;
+    pub const CHUNKFACTOR: usize = 64;
 
-    pub fn new(seed: &Vec<u8>) -> GeneratorSHA512 {
-        GeneratorSHA512 {
-            alg:        Sha512::new(),
-            buffer:     Buffer::new(seed,
-                                    GeneratorSHA512::SIZE,
-                                    GeneratorSHA512::PREVSIZE),
+    pub fn new(seed: &Vec<u8>) -> GeneratorChaCha20 {
+        assert!(seed.len() > 0);
+        let mut trunc_seed = [0u8; 32];
+        let len = min(trunc_seed.len(), seed.len());
+        trunc_seed[0..len].copy_from_slice(&seed[0..len]);
+
+        let rng = ChaCha20Rng::from_seed(trunc_seed);
+        let buf = [0; GeneratorChaCha20::OUTSIZE];
+
+        GeneratorChaCha20 {
+            rng,
+            buf,
         }
     }
 }
 
-impl NextRandom for GeneratorSHA512 {
+impl NextRandom for GeneratorChaCha20 {
     fn get_size(&self) -> usize {
-        GeneratorSHA512::OUTSIZE
+        GeneratorChaCha20::OUTSIZE
     }
 
     fn next(&mut self) -> &[u8] {
-        // Increment the counter.
-        self.buffer.next_count();
+        self.rng.fill_bytes(&mut self.buf);
 
-        // Calculate the next hash.
-        self.alg.input(self.buffer.hashalg_input());
-
-        // Get the hash and store it into the input buffer (for next iteration).
-        self.alg.result(self.buffer.hashalg_output());
-        self.alg.reset();
-
-        // Return the generated hash.
-        &self.buffer.get_result()[..GeneratorSHA512::OUTSIZE]
+        &self.buf
     }
 }
 
@@ -75,20 +69,20 @@ mod tests {
 
     #[test]
     fn test_cmp_result() {
-        let mut a = GeneratorSHA512::new(&vec![1,2,3]);
+        let mut a = GeneratorChaCha20::new(&vec![1,2,3]);
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
             acc.rotate_left(i as u32) ^ (*x as u32)
         }
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 2314945247);
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 1602996934);
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 3995525905);
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 2890628318);
+        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 704022184);
+        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 1786387739);
+        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 3733544090);
+        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 3339470250);
     }
 
     #[test]
     fn test_seed_equal() {
-        let mut a = GeneratorSHA512::new(&vec![1,2,3]);
-        let mut b = GeneratorSHA512::new(&vec![1,2,3]);
+        let mut a = GeneratorChaCha20::new(&vec![1,2,3]);
+        let mut b = GeneratorChaCha20::new(&vec![1,2,3]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
@@ -103,8 +97,8 @@ mod tests {
 
     #[test]
     fn test_seed_diff() {
-        let mut a = GeneratorSHA512::new(&vec![1,2,3]);
-        let mut b = GeneratorSHA512::new(&vec![1,2,4]);
+        let mut a = GeneratorChaCha20::new(&vec![1,2,3]);
+        let mut b = GeneratorChaCha20::new(&vec![1,2,4]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
