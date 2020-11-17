@@ -30,9 +30,9 @@ pub struct GeneratorChaCha20 {
 
 impl GeneratorChaCha20 {
     /// Size of the output data.
-    pub const OUTSIZE: usize = 102400;
+    pub const OUTSIZE: usize = 1024 * 1024 * 3;
     /// Chunk size. Multiple of the generator output size.
-    pub const CHUNKFACTOR: usize = 64;
+    pub const CHUNKFACTOR: usize = 1;
 
     pub fn new(seed: &Vec<u8>) -> GeneratorChaCha20 {
         assert!(seed.len() > 0);
@@ -76,10 +76,10 @@ mod tests {
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
             acc.rotate_left(i as u32) ^ (*x as u32)
         }
-        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 704022184);
-        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 1786387739);
-        assert_eq!(a.next(2).iter().enumerate().fold(0, reduce), 428153136);
-        assert_eq!(a.next(3).iter().enumerate().fold(0, reduce), 3729124005);
+        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 331195744);
+        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 1401252284);
+        assert_eq!(a.next(2).iter().enumerate().fold(0, reduce), 1567136089);
+        assert_eq!(a.next(3).iter().enumerate().fold(0, reduce), 3153433807);
     }
 
     #[test]

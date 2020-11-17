@@ -253,7 +253,7 @@ mod tests {
         }
         match algorithm {
             DtStreamType::CHACHA20 => {
-                assert_eq!(results_first, vec![206, 122, 60, 217, 224]);
+                assert_eq!(results_first, vec![206, 236, 87, 55, 170]);
             }
             DtStreamType::SHA512 => {
                 assert_eq!(results_first, vec![226, 143, 221, 30, 59]);
