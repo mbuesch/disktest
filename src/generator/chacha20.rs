@@ -55,8 +55,11 @@ impl NextRandom for GeneratorChaCha20 {
 
     fn next(&mut self, count: usize) -> Vec<u8> {
         let mut buf = Vec::with_capacity(GeneratorChaCha20::OUTSIZE * count);
-        buf.resize(GeneratorChaCha20::OUTSIZE * count, 0);
 
+        // All bytes will be overwritten by fill_bytes().
+        // Don't initialize. Just resize.
+        unsafe { buf.set_len(buf.capacity()); }
+        // Write pseudo random data to all bytes.
         self.rng.fill_bytes(&mut buf);
 
         buf
