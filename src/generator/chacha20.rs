@@ -26,7 +26,6 @@ use std::cmp::min;
 
 pub struct GeneratorChaCha20 {
     rng:    ChaCha20Rng,
-    buf:    [u8; GeneratorChaCha20::OUTSIZE],
 }
 
 impl GeneratorChaCha20 {
@@ -42,11 +41,9 @@ impl GeneratorChaCha20 {
         trunc_seed[0..len].copy_from_slice(&seed[0..len]);
 
         let rng = ChaCha20Rng::from_seed(trunc_seed);
-        let buf = [0; GeneratorChaCha20::OUTSIZE];
 
         GeneratorChaCha20 {
             rng,
-            buf,
         }
     }
 }
@@ -56,10 +53,13 @@ impl NextRandom for GeneratorChaCha20 {
         GeneratorChaCha20::OUTSIZE
     }
 
-    fn next(&mut self) -> &[u8] {
-        self.rng.fill_bytes(&mut self.buf);
+    fn next(&mut self, count: usize) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(GeneratorChaCha20::OUTSIZE * count);
+        buf.resize(GeneratorChaCha20::OUTSIZE * count, 0);
 
-        &self.buf
+        self.rng.fill_bytes(&mut buf);
+
+        buf
     }
 }
 
@@ -73,10 +73,10 @@ mod tests {
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
             acc.rotate_left(i as u32) ^ (*x as u32)
         }
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 704022184);
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 1786387739);
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 3733544090);
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 3339470250);
+        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 704022184);
+        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 1786387739);
+        assert_eq!(a.next(2).iter().enumerate().fold(0, reduce), 428153136);
+        assert_eq!(a.next(3).iter().enumerate().fold(0, reduce), 3729124005);
     }
 
     #[test]
@@ -86,8 +86,8 @@ mod tests {
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
-            res_a.push(a.next().to_vec());
-            res_b.push(b.next().to_vec());
+            res_a.push(a.next(1));
+            res_b.push(b.next(1));
         }
         assert_eq!(res_a[0], res_b[0]);
         assert_eq!(res_a[1], res_b[1]);
@@ -102,13 +102,23 @@ mod tests {
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
-            res_a.push(a.next().to_vec());
-            res_b.push(b.next().to_vec());
+            res_a.push(a.next(1));
+            res_b.push(b.next(1));
         }
         assert_ne!(res_a[0], res_b[0]);
         assert_ne!(res_a[1], res_b[1]);
         assert_ne!(res_a[0], res_a[1]);
         assert_ne!(res_b[0], res_b[1]);
+    }
+
+    #[test]
+    fn test_concat_equal() {
+        let mut a = GeneratorChaCha20::new(&vec![1,2,3]);
+        let mut b = GeneratorChaCha20::new(&vec![1,2,3]);
+        let mut buf_a = a.next(1);
+        buf_a.append(&mut a.next(1));
+        let buf_b = b.next(2);
+        assert_eq!(buf_a, buf_b);
     }
 }
 

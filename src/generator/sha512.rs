@@ -53,19 +53,25 @@ impl NextRandom for GeneratorSHA512 {
         GeneratorSHA512::OUTSIZE
     }
 
-    fn next(&mut self) -> &[u8] {
-        // Increment the counter.
-        self.buffer.next_count();
+    fn next(&mut self, count: usize) -> Vec<u8> {
+        let mut ret = Vec::with_capacity(GeneratorSHA512::OUTSIZE * count);
 
-        // Calculate the next hash.
-        self.alg.input(self.buffer.hashalg_input());
+        for _ in 0..count {
+            // Increment the counter.
+            self.buffer.next_count();
 
-        // Get the hash and store it into the input buffer (for next iteration).
-        self.alg.result(self.buffer.hashalg_output());
-        self.alg.reset();
+            // Calculate the next hash.
+            self.alg.input(self.buffer.hashalg_input());
 
-        // Return the generated hash.
-        &self.buffer.get_result()[..GeneratorSHA512::OUTSIZE]
+            // Get the hash and store it into the input buffer (for next iteration).
+            self.alg.result(self.buffer.hashalg_output());
+            self.alg.reset();
+
+            // Return the generated hash.
+            ret.extend(&self.buffer.get_result()[..GeneratorSHA512::OUTSIZE])
+        }
+
+        ret
     }
 }
 
@@ -79,10 +85,10 @@ mod tests {
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
             acc.rotate_left(i as u32) ^ (*x as u32)
         }
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 2314945247);
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 1602996934);
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 3995525905);
-        assert_eq!(a.next().iter().enumerate().fold(0, reduce), 2890628318);
+        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 2314945247);
+        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 1602996934);
+        assert_eq!(a.next(2).iter().enumerate().fold(0, reduce), 1114480591);
+        assert_eq!(a.next(3).iter().enumerate().fold(0, reduce), 2953500355);
     }
 
     #[test]
@@ -92,8 +98,8 @@ mod tests {
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
-            res_a.push(a.next().to_vec());
-            res_b.push(b.next().to_vec());
+            res_a.push(a.next(1));
+            res_b.push(b.next(1));
         }
         assert_eq!(res_a[0], res_b[0]);
         assert_eq!(res_a[1], res_b[1]);
@@ -108,13 +114,23 @@ mod tests {
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
-            res_a.push(a.next().to_vec());
-            res_b.push(b.next().to_vec());
+            res_a.push(a.next(1));
+            res_b.push(b.next(1));
         }
         assert_ne!(res_a[0], res_b[0]);
         assert_ne!(res_a[1], res_b[1]);
         assert_ne!(res_a[0], res_a[1]);
         assert_ne!(res_b[0], res_b[1]);
+    }
+
+    #[test]
+    fn test_concat_equal() {
+        let mut a = GeneratorSHA512::new(&vec![1,2,3]);
+        let mut b = GeneratorSHA512::new(&vec![1,2,3]);
+        let mut buf_a = a.next(1);
+        buf_a.append(&mut a.next(1));
+        let buf_b = b.next(2);
+        assert_eq!(buf_a, buf_b);
     }
 }
 

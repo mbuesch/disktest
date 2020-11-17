@@ -65,14 +65,15 @@ fn thread_worker(stype:         DtStreamType,
     while !abort.load(Ordering::Relaxed) {
         if level.load(Ordering::Relaxed) < DtStream::LEVEL_THRES {
 
-            let mut chunk = DtStreamChunk {
-                data: Vec::with_capacity(generator.get_size() * chunk_factor),
+            // Get the next chunk from the generator.
+            let data = generator.next(chunk_factor);
+            debug_assert_eq!(data.len(), generator.get_size() * chunk_factor);
+
+            let chunk = DtStreamChunk {
                 index,
+                data,
             };
             index += 1;
-
-            // Get the next chunk from the generator.
-            generator.next_chunk(&mut chunk.data, chunk_factor);
 
             // Send the chunk to the main thread.
             tx.send(chunk).expect("Worker thread: Send failed.");

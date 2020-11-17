@@ -29,48 +29,13 @@ pub use crate::generator::crc::GeneratorCRC;
 pub use crate::generator::sha512::GeneratorSHA512;
 
 pub trait NextRandom {
-    /// Get the size of the hash, in bytes.
+    /// Get the size of the next() output with count = 1, in bytes.
     fn get_size(&self) -> usize;
 
-    /// Generate the next hash and return a reference to it.
-    fn next(&mut self) -> &[u8];
-
-    /// Generate the next `count` number of hashes and
-    /// append them to the provided `chunk_buffer`.
-    fn next_chunk(&mut self,
-                  chunk_buffer: &mut Vec<u8>,
-                  count: usize) {
-        for _ in 0..count {
-            chunk_buffer.extend(self.next());
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_next_chunk() {
-        struct X { i: usize }
-        impl NextRandom for X {
-            fn get_size(&self) -> usize { 4 }
-            fn next(&mut self) -> &[u8] {
-                let i = self.i;
-                self.i += 1;
-                match i {
-                    0 => &[1, 2, 3, 4],
-                    1 => &[5, 6, 7, 8],
-                    _ => panic!("Unknown index"),
-                }
-            }
-        }
-
-        let mut x = X { i: 0 };
-        let mut buf = vec![];
-        x.next_chunk(&mut buf, 2);
-        assert_eq!(buf, vec![1, 2, 3, 4, 5, 6, 7, 8]);
-    }
+    /// Generate the next chunks.
+    /// count: The number of chunks to return.
+    /// Returns all chunks concatenated in a Vec.
+    fn next(&mut self, count: usize) -> Vec<u8>;
 }
 
 // vim: ts=4 sw=4 expandtab
