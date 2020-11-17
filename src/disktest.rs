@@ -293,7 +293,7 @@ mod tests {
     use super::*;
     use tempfile::NamedTempFile;
 
-    fn run_test(algorithm: DtStreamType, outsize: usize, chunk_factor: usize) {
+    fn run_test(algorithm: DtStreamType, base_size: usize, chunk_factor: usize) {
         let mut tfile = NamedTempFile::new().unwrap();
         let pstr = String::from(tfile.path().to_str().unwrap());
         let path = Path::new(&pstr);
@@ -317,7 +317,7 @@ mod tests {
 
         // Write a big chunk that is aggregated and verify it.
         loc_file.set_len(0).unwrap();
-        let nr_bytes = (outsize * chunk_factor * nr_threads * 2 + 100) as u64;
+        let nr_bytes = (base_size * chunk_factor * nr_threads * 2 + 100) as u64;
         assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
         assert_eq!(dt.verify(0, std::u64::MAX).unwrap(), nr_bytes);
 
@@ -343,22 +343,22 @@ mod tests {
     #[test]
     fn test_chacha20() {
         run_test(DtStreamType::CHACHA20,
-                 GeneratorChaCha20::OUTSIZE,
-                 GeneratorChaCha20::CHUNKFACTOR);
+                 GeneratorChaCha20::BASE_SIZE,
+                 GeneratorChaCha20::CHUNK_FACTOR);
     }
 
     #[test]
     fn test_sha512() {
         run_test(DtStreamType::SHA512,
-                 GeneratorSHA512::OUTSIZE,
-                 GeneratorSHA512::CHUNKFACTOR);
+                 GeneratorSHA512::BASE_SIZE,
+                 GeneratorSHA512::CHUNK_FACTOR);
     }
 
     #[test]
     fn test_crc() {
         run_test(DtStreamType::CRC,
-                 GeneratorCRC::OUTSIZE,
-                 GeneratorCRC::CHUNKFACTOR);
+                 GeneratorCRC::BASE_SIZE,
+                 GeneratorCRC::CHUNK_FACTOR);
     }
 }
 

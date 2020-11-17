@@ -30,7 +30,7 @@ pub use crate::generator::sha512::GeneratorSHA512;
 
 pub trait NextRandom {
     /// Get the size of the next() output with count = 1, in bytes.
-    fn get_size(&self) -> usize;
+    fn get_base_size(&self) -> usize;
 
     /// Generate the next chunks.
     /// count: The number of chunks to return.

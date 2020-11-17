@@ -33,10 +33,10 @@ impl GeneratorSHA512 {
     const SIZE: usize = 512 / 8;
     /// Chunk size of previous hash to incorporate into the next hash.
     const PREVSIZE: usize = GeneratorSHA512::SIZE / 2;
-    /// Size of the output data.
-    pub const OUTSIZE: usize = GeneratorSHA512::SIZE;
-    /// Chunk size. Multiple of the generator output size.
-    pub const CHUNKFACTOR: usize = 1024 * 10;
+    /// Size of the algorithm base output data.
+    pub const BASE_SIZE: usize = GeneratorSHA512::SIZE;
+    /// Chunk size. Multiple of the generator base size.
+    pub const CHUNK_FACTOR: usize = 1024 * 10;
 
     pub fn new(seed: &Vec<u8>) -> GeneratorSHA512 {
         GeneratorSHA512 {
@@ -49,12 +49,12 @@ impl GeneratorSHA512 {
 }
 
 impl NextRandom for GeneratorSHA512 {
-    fn get_size(&self) -> usize {
-        GeneratorSHA512::OUTSIZE
+    fn get_base_size(&self) -> usize {
+        GeneratorSHA512::BASE_SIZE
     }
 
     fn next(&mut self, count: usize) -> Vec<u8> {
-        let mut ret = Vec::with_capacity(GeneratorSHA512::OUTSIZE * count);
+        let mut ret = Vec::with_capacity(GeneratorSHA512::BASE_SIZE * count);
 
         for _ in 0..count {
             // Increment the counter.
@@ -68,7 +68,7 @@ impl NextRandom for GeneratorSHA512 {
             self.alg.reset();
 
             // Return the generated hash.
-            ret.extend(&self.buffer.get_result()[..GeneratorSHA512::OUTSIZE])
+            ret.extend(self.buffer.get_result())
         }
 
         ret

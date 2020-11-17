@@ -67,7 +67,7 @@ fn thread_worker(stype:         DtStreamType,
 
             // Get the next chunk from the generator.
             let data = generator.next(chunk_factor);
-            debug_assert_eq!(data.len(), generator.get_size() * chunk_factor);
+            debug_assert_eq!(data.len(), generator.get_base_size() * chunk_factor);
 
             let chunk = DtStreamChunk {
                 index,
@@ -177,17 +177,17 @@ impl DtStream {
     /// Get the size of the selected generator output, in bytes.
     fn get_generator_outsize(&self) -> usize {
         match self.stype {
-            DtStreamType::CHACHA20 => GeneratorChaCha20::OUTSIZE,
-            DtStreamType::SHA512   => GeneratorSHA512::OUTSIZE,
-            DtStreamType::CRC      => GeneratorCRC::OUTSIZE,
+            DtStreamType::CHACHA20 => GeneratorChaCha20::BASE_SIZE,
+            DtStreamType::SHA512   => GeneratorSHA512::BASE_SIZE,
+            DtStreamType::CRC      => GeneratorCRC::BASE_SIZE,
         }
     }
 
     fn get_chunk_factor(&self) -> usize {
         match self.stype {
-            DtStreamType::CHACHA20 => GeneratorChaCha20::CHUNKFACTOR,
-            DtStreamType::SHA512   => GeneratorSHA512::CHUNKFACTOR,
-            DtStreamType::CRC      => GeneratorCRC::CHUNKFACTOR,
+            DtStreamType::CHACHA20 => GeneratorChaCha20::CHUNK_FACTOR,
+            DtStreamType::SHA512   => GeneratorSHA512::CHUNK_FACTOR,
+            DtStreamType::CRC      => GeneratorCRC::CHUNK_FACTOR,
         }
     }
 

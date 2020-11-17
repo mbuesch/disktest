@@ -36,28 +36,28 @@ impl GeneratorCRC {
     /// How many CRC values to chain? Higher value -> better performance.
     /// Must be a value between 1 and 255.
     const CHAINCOUNT: u8 = 64;
-    /// Size of the output data.
-    pub const OUTSIZE: usize = GeneratorCRC::SIZE * GeneratorCRC::CHAINCOUNT as usize;
-    /// Chunk size. Multiple of the generator output size.
-    pub const CHUNKFACTOR: usize = 1024 * 10;
+    /// Size of the algorithm base output data.
+    pub const BASE_SIZE: usize = GeneratorCRC::SIZE * GeneratorCRC::CHAINCOUNT as usize;
+    /// Chunk size. Multiple of the generator base size.
+    pub const CHUNK_FACTOR: usize = 1024 * 10;
 
     pub fn new(seed: &Vec<u8>) -> GeneratorCRC {
         GeneratorCRC {
             alg:        crc64::Digest::new(crc64::ECMA),
             buffer:     Buffer::new(seed,
-                                    GeneratorCRC::OUTSIZE,
+                                    GeneratorCRC::BASE_SIZE,
                                     GeneratorCRC::PREVSIZE),
         }
     }
 }
 
 impl NextRandom for GeneratorCRC {
-    fn get_size(&self) -> usize {
-        GeneratorCRC::OUTSIZE
+    fn get_base_size(&self) -> usize {
+        GeneratorCRC::BASE_SIZE
     }
 
     fn next(&mut self, count: usize) -> Vec<u8> {
-        let mut ret = Vec::with_capacity(GeneratorCRC::OUTSIZE * count);
+        let mut ret = Vec::with_capacity(GeneratorCRC::BASE_SIZE * count);
 
         for _ in 0..count {
             // Increment the counter.
@@ -78,7 +78,7 @@ impl NextRandom for GeneratorCRC {
             }
 
             // Return the generated hash.
-            ret.extend(&self.buffer.get_result()[..GeneratorCRC::OUTSIZE])
+            ret.extend(self.buffer.get_result())
         }
 
         ret

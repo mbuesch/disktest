@@ -29,10 +29,10 @@ pub struct GeneratorChaCha20 {
 }
 
 impl GeneratorChaCha20 {
-    /// Size of the output data.
-    pub const OUTSIZE: usize = 1024 * 1024 * 3;
-    /// Chunk size. Multiple of the generator output size.
-    pub const CHUNKFACTOR: usize = 1;
+    /// Size of the algorithm base output data.
+    pub const BASE_SIZE: usize = 1024 * 1024 * 3;
+    /// Chunk size. Multiple of the generator base size.
+    pub const CHUNK_FACTOR: usize = 1;
 
     pub fn new(seed: &Vec<u8>) -> GeneratorChaCha20 {
         assert!(seed.len() > 0);
@@ -49,12 +49,12 @@ impl GeneratorChaCha20 {
 }
 
 impl NextRandom for GeneratorChaCha20 {
-    fn get_size(&self) -> usize {
-        GeneratorChaCha20::OUTSIZE
+    fn get_base_size(&self) -> usize {
+        GeneratorChaCha20::BASE_SIZE
     }
 
     fn next(&mut self, count: usize) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(GeneratorChaCha20::OUTSIZE * count);
+        let mut buf = Vec::with_capacity(GeneratorChaCha20::BASE_SIZE * count);
 
         // All bytes will be overwritten by fill_bytes().
         // Don't initialize. Just resize.
