@@ -288,7 +288,7 @@ impl<'a> Disktest<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::generator::{GeneratorChaCha20, GeneratorSHA512, GeneratorCRC};
+    use crate::generator::{GeneratorChaCha20, GeneratorCRC};
     use std::path::Path;
     use super::*;
     use tempfile::NamedTempFile;
@@ -345,13 +345,6 @@ mod tests {
         run_test(DtStreamType::CHACHA20,
                  GeneratorChaCha20::BASE_SIZE,
                  GeneratorChaCha20::CHUNK_FACTOR);
-    }
-
-    #[test]
-    fn test_sha512() {
-        run_test(DtStreamType::SHA512,
-                 GeneratorSHA512::BASE_SIZE,
-                 GeneratorSHA512::CHUNK_FACTOR);
     }
 
     #[test]
