@@ -99,7 +99,7 @@ impl DtStreamAgg {
 
 #[cfg(test)]
 mod tests {
-    use crate::generator::{GeneratorChaCha20, GeneratorCRC};
+    use crate::generator::GeneratorChaCha20;
     use super::*;
 
     fn run_test(algorithm: DtStreamType, gen_base_size: usize, chunk_factor: usize) {
@@ -173,13 +173,6 @@ mod tests {
         run_test(DtStreamType::CHACHA20,
                  GeneratorChaCha20::BASE_SIZE,
                  GeneratorChaCha20::CHUNK_FACTOR);
-    }
-
-    #[test]
-    fn test_crc() {
-        run_test(DtStreamType::CRC,
-                 GeneratorCRC::BASE_SIZE,
-                 GeneratorCRC::CHUNK_FACTOR);
     }
 }
 

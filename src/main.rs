@@ -65,10 +65,7 @@ If not given, then the whole disk will be overwritten/verified.";
 
 const HELP_ALGORITHM: &str = "\
 Select the hashing algorithm. \
-The selection can be: CHACHA20 or CRC. Default: CHACHA20. \
-Please note that CRC is *not* cryptographically secure! \
-But CRC is fast. Only choose CRC, if cryptographic strength is not required. \
-If in doubt, use CHACHA20.";
+The selection can be: CHACHA20. Default: CHACHA20.";
 
 const HELP_SEED: &str = "\
 The seed to use for hash stream generation. \
@@ -167,8 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => return param_err("--bytes", e),
     };
     let algorithm = match args.value_of("algorithm").unwrap_or("CHACHA").to_uppercase().as_str() {
-        "CHACHA20" | "CHACHA" => DtStreamType::CHACHA20,
-        "CRC" => DtStreamType::CRC,
+        "CHACHA20" => DtStreamType::CHACHA20,
         x => return param_err("--algorithm", x),
     };
     let seed = args.value_of("seed").unwrap_or("42");

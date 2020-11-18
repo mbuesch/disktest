@@ -19,7 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crate::generator::{GeneratorChaCha20, GeneratorCRC, NextRandom};
+use crate::generator::{GeneratorChaCha20, NextRandom};
 use crate::kdf::kdf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
@@ -31,7 +31,6 @@ use std::time::Duration;
 #[derive(Copy, Clone, Debug)]
 pub enum DtStreamType {
     CHACHA20,
-    CRC,
 }
 
 /// Data chunk that contains the computed PRNG data.
@@ -55,7 +54,6 @@ fn thread_worker(stype:         DtStreamType,
     // Construct the generator algorithm.
     let mut generator: Box<dyn NextRandom> = match stype {
         DtStreamType::CHACHA20 => Box::new(GeneratorChaCha20::new(&thread_seed)),
-        DtStreamType::CRC      => Box::new(GeneratorCRC::new(&thread_seed)),
     };
 
     // Run the generator work loop.
@@ -176,14 +174,12 @@ impl DtStream {
     fn get_generator_outsize(&self) -> usize {
         match self.stype {
             DtStreamType::CHACHA20 => GeneratorChaCha20::BASE_SIZE,
-            DtStreamType::CRC      => GeneratorCRC::BASE_SIZE,
         }
     }
 
     fn get_chunk_factor(&self) -> usize {
         match self.stype {
             DtStreamType::CHACHA20 => GeneratorChaCha20::CHUNK_FACTOR,
-            DtStreamType::CRC      => GeneratorCRC::CHUNK_FACTOR,
         }
     }
 
@@ -251,20 +247,12 @@ mod tests {
             DtStreamType::CHACHA20 => {
                 assert_eq!(results_first, vec![206, 236, 87, 55, 170]);
             }
-            DtStreamType::CRC => {
-                assert_eq!(results_first, vec![132, 133, 170, 226, 104]);
-            }
         }
     }
 
     #[test]
     fn test_chacha20() {
         run_test(DtStreamType::CHACHA20);
-    }
-
-    #[test]
-    fn test_crc() {
-        run_test(DtStreamType::CRC);
     }
 }
 
