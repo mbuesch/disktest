@@ -288,7 +288,7 @@ impl<'a> Disktest<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::generator::GeneratorChaCha20;
+    use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20};
     use std::path::Path;
     use super::*;
     use tempfile::NamedTempFile;
@@ -338,6 +338,20 @@ mod tests {
             Ok(_) => panic!("Verify of modified data did not fail!"),
             Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at byte 10!"),
         }
+    }
+
+    #[test]
+    fn test_chacha8() {
+        run_test(DtStreamType::CHACHA8,
+                 GeneratorChaCha8::BASE_SIZE,
+                 GeneratorChaCha8::CHUNK_FACTOR);
+    }
+
+    #[test]
+    fn test_chacha12() {
+        run_test(DtStreamType::CHACHA12,
+                 GeneratorChaCha12::BASE_SIZE,
+                 GeneratorChaCha12::CHUNK_FACTOR);
     }
 
     #[test]

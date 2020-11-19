@@ -19,9 +19,11 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-mod chacha20;
+mod chacha;
 
-pub use crate::generator::chacha20::GeneratorChaCha20;
+pub use crate::generator::chacha::GeneratorChaCha8;
+pub use crate::generator::chacha::GeneratorChaCha12;
+pub use crate::generator::chacha::GeneratorChaCha20;
 
 pub trait NextRandom {
     /// Get the size of the next() output with count = 1, in bytes.

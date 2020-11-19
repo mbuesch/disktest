@@ -84,10 +84,13 @@ The following table shows some example speed measurements of disktest in various
 
 These speed tests don't write to an actual disk, but only to the `/dev/null` device, which is a device that does nothing. So these speed test results do not include the speed limits of any actual disk hardware.
 
-===============================  =========  =======================================  =================
-Command                          Algorithm  Hardware                                 Data rate written
-===============================  =========  =======================================  =================
-===============================  =========  =======================================  =================
+====================================  =========  =======================================  =================
+Command                               Algorithm  Hardware                                 Data rate written
+====================================  =========  =======================================  =================
+disktest -j4 -ACHACHA20 -w /dev/null  ChaCha20   Intel i5-3320M; 2+2 cores 2.6 GHz        2.0 GiB/s
+disktest -j4 -ACHACHA12 -w /dev/null  ChaCha12   Intel i5-3320M; 2+2 cores 2.6 GHz        3.1 GiB/s
+disktest -j4 -ACHACHA8 -w /dev/null   ChaCha8    Intel i5-3320M; 2+2 cores 2.6 GHz        4.2 GiB/s
+====================================  =========  =======================================  =================
 
 The read data rates are similar, because the algorithm used is exactly the same.
 

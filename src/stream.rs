@@ -19,7 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crate::generator::{GeneratorChaCha20, NextRandom};
+use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, NextRandom};
 use crate::kdf::kdf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
@@ -30,6 +30,8 @@ use std::time::Duration;
 /// Stream algorithm type.
 #[derive(Copy, Clone, Debug)]
 pub enum DtStreamType {
+    CHACHA8,
+    CHACHA12,
     CHACHA20,
 }
 
@@ -53,6 +55,8 @@ fn thread_worker(stype:         DtStreamType,
 
     // Construct the generator algorithm.
     let mut generator: Box<dyn NextRandom> = match stype {
+        DtStreamType::CHACHA8 => Box::new(GeneratorChaCha8::new(&thread_seed)),
+        DtStreamType::CHACHA12 => Box::new(GeneratorChaCha12::new(&thread_seed)),
         DtStreamType::CHACHA20 => Box::new(GeneratorChaCha20::new(&thread_seed)),
     };
 
@@ -173,12 +177,16 @@ impl DtStream {
     /// Get the size of the selected generator output, in bytes.
     fn get_generator_outsize(&self) -> usize {
         match self.stype {
+            DtStreamType::CHACHA8 => GeneratorChaCha8::BASE_SIZE,
+            DtStreamType::CHACHA12 => GeneratorChaCha12::BASE_SIZE,
             DtStreamType::CHACHA20 => GeneratorChaCha20::BASE_SIZE,
         }
     }
 
     fn get_chunk_factor(&self) -> usize {
         match self.stype {
+            DtStreamType::CHACHA8 => GeneratorChaCha8::CHUNK_FACTOR,
+            DtStreamType::CHACHA12 => GeneratorChaCha12::CHUNK_FACTOR,
             DtStreamType::CHACHA20 => GeneratorChaCha20::CHUNK_FACTOR,
         }
     }
@@ -244,10 +252,26 @@ mod tests {
             }
         }
         match algorithm {
+            DtStreamType::CHACHA8 => {
+                assert_eq!(results_first, vec![66, 209, 254, 224, 203]);
+            }
+            DtStreamType::CHACHA12 => {
+                assert_eq!(results_first, vec![200, 202, 12, 60, 234]);
+            }
             DtStreamType::CHACHA20 => {
                 assert_eq!(results_first, vec![206, 236, 87, 55, 170]);
             }
         }
+    }
+
+    #[test]
+    fn test_chacha8() {
+        run_test(DtStreamType::CHACHA8);
+    }
+
+    #[test]
+    fn test_chacha12() {
+        run_test(DtStreamType::CHACHA12);
     }
 
     #[test]

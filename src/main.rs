@@ -163,7 +163,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(x) => x,
         Err(e) => return param_err("--bytes", e),
     };
-    let algorithm = match args.value_of("algorithm").unwrap_or("CHACHA").to_uppercase().as_str() {
+    let algorithm = match args.value_of("algorithm").unwrap_or("CHACHA20").to_uppercase().as_str() {
+        "CHACHA8" => DtStreamType::CHACHA8,
+        "CHACHA12" => DtStreamType::CHACHA12,
         "CHACHA20" => DtStreamType::CHACHA20,
         x => return param_err("--algorithm", x),
     };
