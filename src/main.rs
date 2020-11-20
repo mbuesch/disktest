@@ -64,13 +64,13 @@ Number of bytes to write/verify. \
 If not given, then the whole disk will be overwritten/verified.";
 
 const HELP_ALGORITHM: &str = "\
-Select the hashing algorithm. \
+Select the random number generator algorithm. \
 The selection can be: CHACHA20, CHACHA12 or CHACHA8.\n\
 Default: CHACHA20.\n\
 ChaCha12 and ChaCha8 are less cryptographically secure than ChaCha20, but faster.";
 
 const HELP_SEED: &str = "\
-The seed to use for hash stream generation. \
+The seed to use for random number stream generation. \
 The generated pseudo random sequence is cryptographically reasonably strong. \
 If you want a unique pattern to be written to disk, supply a random seed to this parameter. \
 If not given, then the pseudo random sequence will be the same for everybody and \
