@@ -65,7 +65,9 @@ If not given, then the whole disk will be overwritten/verified.";
 
 const HELP_ALGORITHM: &str = "\
 Select the hashing algorithm. \
-The selection can be: CHACHA20. Default: CHACHA20.";
+The selection can be: CHACHA20, CHACHA12 or CHACHA8.\n\
+Default: CHACHA20.\n\
+ChaCha12 and ChaCha8 are less cryptographically secure than ChaCha20, but faster.";
 
 const HELP_SEED: &str = "\
 The seed to use for hash stream generation. \
