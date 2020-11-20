@@ -129,7 +129,10 @@ impl<'a> Disktest<'a> {
                      prefix, self.path, prettybytes(seek, true, true));
         }
 
-        self.stream_agg.activate();
+        let seek = match self.stream_agg.activate(seek) {
+            Ok(s) => s,
+            Err(e) => return Err(e),
+        };
 
         if let Err(e) = self.file.seek(SeekFrom::Start(seek)) {
             return Err(ah::format_err!("File seek to {} failed: {}",
@@ -161,7 +164,7 @@ impl<'a> Disktest<'a> {
         self.init("Writing", seek)?;
         loop {
             // Get the next data chunk.
-            let chunk = self.stream_agg.wait_chunk();
+            let chunk = self.stream_agg.wait_chunk()?;
             let write_len = min(chunk_size, bytes_left) as usize;
 
             // Write the chunk to disk.
@@ -244,7 +247,7 @@ impl<'a> Disktest<'a> {
                     assert!(read_count <= read_len);
                     if read_count == read_len || (read_count > 0 && n == 0) {
                         // Calculate and compare the read buffer to the pseudo random sequence.
-                        let chunk = self.stream_agg.wait_chunk();
+                        let chunk = self.stream_agg.wait_chunk()?;
                         if buffer[..read_count] != chunk.data[..read_count] {
                             return Err(self.verify_failed(read_count, bytes_read, &buffer, &chunk));
                         }
@@ -306,7 +309,7 @@ mod tests {
         // Write a couple of bytes and verify them.
         let nr_bytes = 1000;
         assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(0, std::u64::MAX).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(0, u64::MAX).unwrap(), nr_bytes);
 
         // Write a couple of bytes and verify half of them.
         let nr_bytes = 1000;
@@ -318,14 +321,14 @@ mod tests {
         loc_file.set_len(0).unwrap();
         let nr_bytes = (base_size * chunk_factor * nr_threads * 2 + 100) as u64;
         assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(0, std::u64::MAX).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(0, u64::MAX).unwrap(), nr_bytes);
 
         // Check whether write rewinds the file.
         let nr_bytes = 1000;
         loc_file.set_len(100).unwrap();
         loc_file.seek(SeekFrom::Start(10)).unwrap();
         assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(0, std::u64::MAX).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(0, u64::MAX).unwrap(), nr_bytes);
 
         // Modify the written data and assert failure.
         let nr_bytes = 1000;
@@ -337,6 +340,23 @@ mod tests {
             Ok(_) => panic!("Verify of modified data did not fail!"),
             Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at byte 10!"),
         }
+
+        // Check verify with seek.
+        loc_file.set_len(0).unwrap();
+        let nr_bytes = (base_size * chunk_factor * nr_threads * 10) as u64;
+        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
+        for offset in (0..nr_bytes).step_by(base_size * chunk_factor / 2) {
+            let bytes_verified = dt.verify(offset, u64::MAX).unwrap();
+            assert!(bytes_verified > 0 && bytes_verified <= nr_bytes);
+        }
+
+        // Check write with seek.
+        loc_file.set_len(0).unwrap();
+        let nr_bytes = (base_size * chunk_factor * nr_threads * 10) as u64;
+        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
+        let offset = (base_size * chunk_factor * nr_threads * 2) as u64;
+        assert_eq!(dt.write(offset, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(0, u64::MAX).unwrap(), nr_bytes + offset);
     }
 
     #[test]

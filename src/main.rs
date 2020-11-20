@@ -56,7 +56,7 @@ In verify-mode the disk will be read and compared to the expected pseudo random 
 const HELP_SEEK: &str = "\
 Seek to the specified byte position on disk \
 before starting the write/verify operation. This skips the specified \
-amount of bytes.";
+amount of bytes on the disk and also fast forwards the random number generator.";
 
 const HELP_BYTES: &str = "\
 Number of bytes to write/verify. \

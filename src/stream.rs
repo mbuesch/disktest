@@ -19,6 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
+use anyhow as ah;
 use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, NextRandom};
 use crate::kdf::kdf;
 use std::sync::Arc;
@@ -46,7 +47,9 @@ fn thread_worker(stype:         DtStreamType,
                  chunk_factor:  usize,
                  seed:          Vec<u8>,
                  thread_id:     u32,
+                 byte_offset:   u64,
                  abort:         Arc<AtomicBool>,
+                 error:         Arc<AtomicBool>,
                  level:         Arc<AtomicIsize>,
                  tx:            Sender<DtStreamChunk>) {
     // Calculate the per-thread-seed from the global seed.
@@ -59,6 +62,13 @@ fn thread_worker(stype:         DtStreamType,
         DtStreamType::CHACHA12 => Box::new(GeneratorChaCha12::new(&thread_seed)),
         DtStreamType::CHACHA20 => Box::new(GeneratorChaCha20::new(&thread_seed)),
     };
+
+    // Seek the generator to the specified byte offset.
+    if let Err(e) = generator.seek(byte_offset) {
+        eprintln!("ERROR in generator thread {}: {}", thread_id, e);
+        error.store(true, Ordering::Release);
+        return;
+    }
 
     // Run the generator work loop.
     let mut index = 0;
@@ -94,6 +104,7 @@ pub struct DtStream {
     is_active:      bool,
     thread_join:    Option<thread::JoinHandle<()>>,
     abort:          Arc<AtomicBool>,
+    error:          Arc<AtomicBool>,
     level:          Arc<AtomicIsize>,
 }
 
@@ -106,6 +117,7 @@ impl DtStream {
                thread_id: u32) -> DtStream {
 
         let abort = Arc::new(AtomicBool::new(false));
+        let error = Arc::new(AtomicBool::new(false));
         let level = Arc::new(AtomicIsize::new(0));
 
         DtStream {
@@ -116,6 +128,7 @@ impl DtStream {
             is_active: false,
             thread_join: None,
             abort,
+            error,
             level,
         }
     }
@@ -133,12 +146,13 @@ impl DtStream {
 
     /// Spawn the worker thread.
     /// Panics, if the thread is already running.
-    fn start(&mut self) {
+    fn start(&mut self, byte_offset: u64) {
         assert!(!self.is_active);
         assert!(self.thread_join.is_none());
 
         // Initialize thread communication
         self.abort.store(false, Ordering::Release);
+        self.error.store(false, Ordering::Release);
         self.level.store(0, Ordering::Release);
         let (tx, rx) = channel();
         self.rx = Some(rx);
@@ -148,24 +162,36 @@ impl DtStream {
         let thread_chunk_factor = self.get_chunk_factor();
         let thread_seed = self.seed.to_vec();
         let thread_id = self.thread_id;
+        let thread_byte_offset = byte_offset;
         let thread_abort = Arc::clone(&self.abort);
+        let thread_error = Arc::clone(&self.error);
         let thread_level = Arc::clone(&self.level);
         self.thread_join = Some(thread::spawn(move || {
             thread_worker(thread_stype,
                           thread_chunk_factor,
                           thread_seed,
                           thread_id,
+                          thread_byte_offset,
                           thread_abort,
+                          thread_error,
                           thread_level,
                           tx);
         }));
         self.is_active = true;
     }
 
+    /// Check if the thread exited due to an error.
+    #[inline]
+    fn is_thread_error(&self) -> bool {
+        self.error.load(Ordering::Relaxed)
+    }
+
     /// Activate the worker thread.
-    pub fn activate(&mut self) {
+    pub fn activate(&mut self, byte_offset: u64) -> ah::Result<()> {
         self.stop();
-        self.start();
+        self.start(byte_offset);
+
+        Ok(())
     }
 
     /// Check if the worker thread is currently running.
@@ -183,6 +209,7 @@ impl DtStream {
         }
     }
 
+    /// Get the chunk factor of the selected generator.
     fn get_chunk_factor(&self) -> usize {
         match self.stype {
             DtStreamType::CHACHA8 => GeneratorChaCha8::CHUNK_FACTOR,
@@ -199,21 +226,25 @@ impl DtStream {
     /// Get the next chunk from the thread.
     /// Returns None, if no chunk is available, yet.
     #[inline]
-    pub fn get_chunk(&mut self) -> Option<DtStreamChunk> {
+    pub fn get_chunk(&mut self) -> ah::Result<Option<DtStreamChunk>> {
         if self.is_active() {
-            if let Some(rx) = &self.rx {
-                match rx.try_recv() {
-                    Ok(chunk) => {
-                        self.level.fetch_sub(1, Ordering::Relaxed);
-                        Some(chunk)
-                    },
-                    Err(_) => None,
-                }
+            if self.is_thread_error() {
+                Err(ah::format_err!("Generator stream thread aborted with an error."))
             } else {
-                None
+                if let Some(rx) = &self.rx {
+                    match rx.try_recv() {
+                        Ok(chunk) => {
+                            self.level.fetch_sub(1, Ordering::Relaxed);
+                            Ok(Some(chunk))
+                        },
+                        Err(_) => Ok(None),
+                    }
+                } else {
+                    Ok(None)
+                }
             }
         } else {
-            None
+            Ok(None)
         }
     }
 }
@@ -228,9 +259,21 @@ impl Drop for DtStream {
 mod tests {
     use super::*;
 
-    fn run_test(algorithm: DtStreamType) {
+    impl DtStream {
+        pub fn wait_chunk(&mut self) -> DtStreamChunk {
+            loop {
+                if let Some(chunk) = self.get_chunk().unwrap() {
+                    break chunk;
+                }
+                thread::sleep(Duration::from_millis(1));
+            }
+        }
+    }
+
+    fn run_base_test(algorithm: DtStreamType) {
+        println!("stream base test");
         let mut s = DtStream::new(algorithm, &vec![1,2,3], 0);
-        s.activate();
+        s.activate(0).unwrap();
         assert_eq!(s.is_active(), true);
 
         assert_eq!(s.get_chunk_size(), s.get_generator_outsize() * s.get_chunk_factor());
@@ -239,17 +282,12 @@ mod tests {
         assert!(s.get_chunk_factor() > 0);
 
         let mut results_first = vec![];
-        let mut count = 0;
-        while count < 5 {
-            if let Some(chunk) = s.get_chunk() {
-                println!("{}: index={} data[0]={} (current level = {})",
-                         count, chunk.index, chunk.data[0], s.level.load(Ordering::Relaxed));
-                results_first.push(chunk.data[0]);
-                assert_eq!(chunk.index, count);
-                count += 1;
-            } else {
-                thread::sleep(Duration::from_millis(10));
-            }
+        for count in 0..5 {
+            let chunk = s.wait_chunk();
+            println!("{}: index={} data[0]={} (current level = {})",
+                     count, chunk.index, chunk.data[0], s.level.load(Ordering::Relaxed));
+            results_first.push(chunk.data[0]);
+            assert_eq!(chunk.index, count);
         }
         match algorithm {
             DtStreamType::CHACHA8 => {
@@ -264,19 +302,42 @@ mod tests {
         }
     }
 
+    fn run_offset_test(algorithm: DtStreamType) {
+        println!("stream offset test");
+        // a: start at chunk offset 0
+        let mut a = DtStream::new(algorithm, &vec![1,2,3], 0);
+        a.activate(0).unwrap();
+
+        // b: start at chunk offset 1
+        let mut b = DtStream::new(algorithm, &vec![1,2,3], 0);
+        b.activate(a.get_chunk_size() as u64).unwrap();
+
+        let achunk = a.wait_chunk();
+        let bchunk = b.wait_chunk();
+        assert!(achunk.data != bchunk.data);
+        let achunk = a.wait_chunk();
+        assert!(achunk.data == bchunk.data);
+    }
+
     #[test]
     fn test_chacha8() {
-        run_test(DtStreamType::CHACHA8);
+        let alg = DtStreamType::CHACHA8;
+        run_base_test(alg);
+        run_offset_test(alg);
     }
 
     #[test]
     fn test_chacha12() {
-        run_test(DtStreamType::CHACHA12);
+        let alg = DtStreamType::CHACHA12;
+        run_base_test(alg);
+        run_offset_test(alg);
     }
 
     #[test]
     fn test_chacha20() {
-        run_test(DtStreamType::CHACHA20);
+        let alg = DtStreamType::CHACHA20;
+        run_base_test(alg);
+        run_offset_test(alg);
     }
 }
 

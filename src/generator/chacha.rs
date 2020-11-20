@@ -19,6 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
+use anyhow as ah;
 use crate::generator::NextRandom;
 use rand::prelude::*;
 use std::cmp::min;
@@ -74,6 +75,23 @@ macro_rules! GeneratorChaCha {
                 self.rng.fill(buf.as_mut_slice());
 
                 buf
+            }
+
+            fn seek(&mut self, byte_offset: u64) -> ah::Result<()> {
+                if byte_offset % $Generator::BASE_SIZE as u64 != 0 {
+                    return Err(ah::format_err!("ChaCha seek: Byte offset is not a \
+                                               multiple of the base size ({} bytes).",
+                                               $Generator::BASE_SIZE));
+                }
+                if byte_offset % 4 != 0 {
+                    return Err(ah::format_err!("ChaCha seek: Byte offset is not a \
+                                               multiple of the word size (4 bytes)."));
+                }
+
+                let word_offset = byte_offset / 4;
+                self.rng.set_word_pos(word_offset as u128);
+
+                Ok(())
             }
         }
 
@@ -133,6 +151,18 @@ macro_rules! GeneratorChaCha {
                 buf_a.append(&mut a.next(1));
                 let buf_b = b.next(2);
                 assert_eq!(buf_a, buf_b);
+            }
+
+            #[test]
+            fn test_seek() {
+                let mut a = $Generator::new(&vec![1,2,3]);
+                let mut b = $Generator::new(&vec![1,2,3]);
+                b.seek($Generator::BASE_SIZE as u64 * 2).unwrap();
+                let bdata = b.next(1);
+                assert_ne!(a.next(1), bdata);
+                assert_ne!(a.next(1), bdata);
+                assert_eq!(a.next(1), bdata);
+                assert_ne!(a.next(1), bdata);
             }
         }
     };

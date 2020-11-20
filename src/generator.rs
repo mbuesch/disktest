@@ -21,6 +21,9 @@
 
 mod chacha;
 
+use anyhow as ah;
+use crate::util::prettybytes;
+
 pub use crate::generator::chacha::GeneratorChaCha8;
 pub use crate::generator::chacha::GeneratorChaCha12;
 pub use crate::generator::chacha::GeneratorChaCha20;
@@ -33,6 +36,17 @@ pub trait NextRandom {
     /// count: The number of chunks to return.
     /// Returns all chunks concatenated in a Vec.
     fn next(&mut self, count: usize) -> Vec<u8>;
+
+    /// Seek the algorithm to the specified offset.
+    fn seek(&mut self, byte_offset: u64) -> ah::Result<()> {
+        if byte_offset == 0 {
+            Ok(())
+        } else {
+            Err(ah::format_err!("The selected random number generator \
+                                does not support seeking to byte offset {}.",
+                                prettybytes(byte_offset, true, true)))
+        }
+    }
 }
 
 // vim: ts=4 sw=4 expandtab
