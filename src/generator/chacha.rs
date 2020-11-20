@@ -71,7 +71,7 @@ macro_rules! GeneratorChaCha {
                 // Don't initialize. Just resize.
                 unsafe { buf.set_len(buf.capacity()); }
                 // Write pseudo random data to all bytes.
-                self.rng.fill_bytes(&mut buf);
+                self.rng.fill(buf.as_mut_slice());
 
                 buf
             }
