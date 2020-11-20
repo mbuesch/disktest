@@ -16,6 +16,7 @@ exclude         = ["/maintenance/", "/testfile*"]
 edition         = "2018"
 
 [dependencies]
+anyhow          = "1.0.34"
 clap            = "2.33.3"
 hhmmss          = "0.1.0"
 libc            = "0.2.80"

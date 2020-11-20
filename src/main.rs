@@ -20,15 +20,14 @@
 //
 
 mod disktest;
-mod error;
 mod generator;
 mod kdf;
 mod stream;
 mod stream_aggregator;
 mod util;
 
+use anyhow as ah;
 use clap;
-use crate::error::Error;
 use crate::util::parsebytes;
 use disktest::{Disktest, DtStreamType};
 use signal_hook;
@@ -91,13 +90,12 @@ Quiet level: 0: Normal verboseness (default). \
 
 /// Install abort signal handlers and return
 /// the abort-flag that is written to true by these handlers.
-fn install_abort_handlers() -> Result<Arc<AtomicBool>, Error> {
+fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
     let abort = Arc::new(AtomicBool::new(false));
     for sig in &[signal_hook::SIGTERM,
                  signal_hook::SIGINT] {
         if let Err(e) = signal_hook::flag::register(*sig, Arc::clone(&abort)) {
-            return Err(Error::new(&format!("Failed to register signal {}: {}",
-                                           sig, e)));
+            return Err(ah::format_err!("Failed to register signal {}: {}", sig, e));
         }
 
     }
@@ -107,12 +105,12 @@ fn install_abort_handlers() -> Result<Arc<AtomicBool>, Error> {
 
 /// Handle a parameter error.
 fn param_err(param: impl Display,
-             error: impl Display) -> Result<(), Box<dyn std::error::Error>> {
-    Err(Error::newbox(&format!("Invalid {} value: {}", param, error)))
+             error: impl Display) -> ah::Result<()> {
+    Err(ah::format_err!("Invalid {} value: {}", param, error))
 }
 
 /// Main program entry point.
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> ah::Result<()> {
     let args = clap::App::new("disktest")
         .about(ABOUT)
         .arg(clap::Arg::with_name("device")
@@ -193,8 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                            .create(write)
                                            .open(path) {
         Err(e) => {
-            eprintln!("Failed to open file {:?}: {}", path, e);
-            return Err(Box::new(e));
+            return Err(ah::format_err!("Failed to open file {:?}: {}", path, e));
         },
         Ok(file) => file,
     };

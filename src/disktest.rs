@@ -19,7 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crate::error::Error;
+use anyhow as ah;
 use crate::stream::DtStreamChunk;
 use crate::stream_aggregator::DtStreamAgg;
 use crate::util::prettybytes;
@@ -121,7 +121,7 @@ impl<'a> Disktest<'a> {
     }
 
     /// Initialize disktest.
-    fn init(&mut self, prefix: &str, seek: u64) -> Result<(), Error> {
+    fn init(&mut self, prefix: &str, seek: u64) -> ah::Result<()> {
         self.log_reset();
 
         if self.quiet_level < 2 {
@@ -132,20 +132,20 @@ impl<'a> Disktest<'a> {
         self.stream_agg.activate();
 
         if let Err(e) = self.file.seek(SeekFrom::Start(seek)) {
-            return Err(Error::new(&format!("File seek to {} failed: {}",
-                                           seek, e.to_string())));
+            return Err(ah::format_err!("File seek to {} failed: {}",
+                                       seek, e.to_string()));
         }
 
         Ok(())
     }
 
     /// Finalize and flush writing.
-    fn write_finalize(&mut self, bytes_written: u64) -> Result<(), Error> {
+    fn write_finalize(&mut self, bytes_written: u64) -> ah::Result<()> {
         if self.quiet_level < 2 {
             println!("Writing stopped. Syncing...");
         }
         if let Err(e) = self.file.sync_all() {
-            return Err(Error::new(&format!("Sync failed: {}", e)));
+            return Err(ah::format_err!("Sync failed: {}", e));
         }
         self.log("Done. Wrote ", 0, bytes_written, true, ".");
 
@@ -153,7 +153,7 @@ impl<'a> Disktest<'a> {
     }
 
     /// Run disktest in write mode.
-    pub fn write(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
+    pub fn write(&mut self, seek: u64, max_bytes: u64) -> ah::Result<u64> {
         let mut bytes_left = max_bytes;
         let mut bytes_written = 0u64;
         let chunk_size = self.stream_agg.get_chunk_size() as u64;
@@ -173,7 +173,7 @@ impl<'a> Disktest<'a> {
                     }
                 }
                 self.write_finalize(bytes_written)?;
-                return Err(Error::new(&format!("Write error: {}", e)));
+                return Err(ah::format_err!("Write error: {}", e));
             }
 
             // Account for the written bytes.
@@ -188,7 +188,7 @@ impl<'a> Disktest<'a> {
             if let Some(abort) = &self.abort {
                 if abort.load(Ordering::Relaxed) {
                     self.write_finalize(bytes_written)?;
-                    return Err(Error::new("Aborted by signal!"));
+                    return Err(ah::format_err!("Aborted by signal!"));
                 }
             }
         }
@@ -197,7 +197,7 @@ impl<'a> Disktest<'a> {
     }
 
     /// Finalize verification.
-    fn verify_finalize(&mut self, bytes_read: u64) -> Result<(), Error> {
+    fn verify_finalize(&mut self, bytes_read: u64) -> ah::Result<()> {
         self.log("Done. Verified ", 0, bytes_read, true, ".");
 
         Ok(())
@@ -208,24 +208,23 @@ impl<'a> Disktest<'a> {
                      read_count: usize,
                      bytes_read: u64,
                      buffer: &Vec<u8>,
-                     chunk: &DtStreamChunk) -> Error {
+                     chunk: &DtStreamChunk) -> ah::Error {
         for i in 0..read_count {
             if buffer[i] != chunk.data[i] {
                 let pos = bytes_read + i as u64;
-                let msg = if pos >= 1024 {
-                    format!("Data MISMATCH at byte {} = {}!",
-                            pos, prettybytes(pos, true, true))
+                if pos >= 1024 {
+                    return ah::format_err!("Data MISMATCH at byte {} = {}!",
+                                           pos, prettybytes(pos, true, true))
                 } else {
-                    format!("Data MISMATCH at byte {}!", pos)
-                };
-                return Error::new(&msg);
+                    return ah::format_err!("Data MISMATCH at byte {}!", pos)
+                }
             }
         }
         panic!("Internal error: verify_failed() no mismatch.");
     }
 
     /// Run disktest in verify mode.
-    pub fn verify(&mut self, seek: u64, max_bytes: u64) -> Result<u64, Error> {
+    pub fn verify(&mut self, seek: u64, max_bytes: u64) -> ah::Result<u64> {
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0u64;
 
@@ -269,15 +268,15 @@ impl<'a> Disktest<'a> {
                     }
                 },
                 Err(e) => {
-                    return Err(Error::new(&format!("Read error at {}: {}",
-                                                   prettybytes(bytes_read, true, true), e)));
+                    return Err(ah::format_err!("Read error at {}: {}",
+                                               prettybytes(bytes_read, true, true), e));
                 },
             };
 
             if let Some(abort) = &self.abort {
                 if abort.load(Ordering::Relaxed) {
                     self.verify_finalize(bytes_read)?;
-                    return Err(Error::new("Aborted by signal!"));
+                    return Err(ah::format_err!("Aborted by signal!"));
                 }
             }
         }
