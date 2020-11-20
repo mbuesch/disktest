@@ -67,7 +67,7 @@ macro_rules! GeneratorChaCha {
             fn next(&mut self, count: usize) -> Vec<u8> {
                 let mut buf = Vec::with_capacity($Generator::BASE_SIZE * count);
 
-                // All bytes will be overwritten by fill_bytes().
+                // All bytes will be overwritten by fill().
                 // Don't initialize. Just resize.
                 unsafe { buf.set_len(buf.capacity()); }
                 // Write pseudo random data to all bytes.
