@@ -134,6 +134,21 @@ pub fn parsebytes(s: &str) -> Result<u64, <u64 as std::str::FromStr>::Err> {
     }
 }
 
+/// Fold a byte vector into a smaller byte vector using XOR operation.
+/// If output_size is bigger than input.len(), the trailing bytes
+/// will be filled with zeros.
+pub fn fold(input: &Vec<u8>, output_size: usize) -> Vec<u8> {
+    let mut output = vec![0; output_size];
+
+    if output_size > 0 {
+        for (i, data) in input.iter().enumerate() {
+            output[i % output_size] ^= data;
+        }
+    }
+
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,6 +228,26 @@ mod tests {
                    42 * 1000 * 1000 * 1000 * 1000 * 1000);
         assert_eq!(parsebytes("2 EB ").unwrap(),
                    2 * 1000 * 1000 * 1000 * 1000 * 1000 * 1000);
+    }
+
+    #[test]
+    fn test_fold() {
+        assert_eq!(fold(&vec![0x55, 0x55, 0xAA, 0xAA], 2),
+                   vec![0xFF, 0xFF]);
+        assert_eq!(fold(&vec![0x55, 0x55, 0x55, 0x55], 2),
+                   vec![0x00, 0x00]);
+        assert_eq!(fold(&vec![0x55, 0x55, 0xAA, 0x55], 2),
+                   vec![0xFF, 0x00]);
+        assert_eq!(fold(&vec![0x55, 0x55, 0x55, 0xAA], 2),
+                   vec![0x00, 0xFF]);
+        assert_eq!(fold(&vec![0x98, 0xB1, 0x5B, 0x47, 0x8F, 0xF7, 0x9C, 0x6F], 3),
+                   vec![0x43, 0x51, 0xAC]);
+        assert_eq!(fold(&vec![0x12, 0x34, 0x56, 0x78], 4),
+                   vec![0x12, 0x34, 0x56, 0x78]);
+        assert_eq!(fold(&vec![0x12, 0x34, 0x56, 0x78], 6),
+                   vec![0x12, 0x34, 0x56, 0x78, 0x00, 0x00]);
+        assert_eq!(fold(&vec![0x12, 0x34, 0x56, 0x78], 0),
+                   vec![]);
     }
 }
 
