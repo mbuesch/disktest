@@ -64,9 +64,10 @@ If not given, then the whole disk will be overwritten/verified.";
 
 const HELP_ALGORITHM: &str = "\
 Select the random number generator algorithm. \
-The selection can be: CHACHA20, CHACHA12 or CHACHA8.\n\
+The selection can be: CHACHA20, CHACHA12, CHACHA8 or CRC.\n\
 Default: CHACHA20.\n\
-ChaCha12 and ChaCha8 are less cryptographically secure than ChaCha20, but faster.";
+ChaCha12 and ChaCha8 are less cryptographically secure than ChaCha20, but faster.\n\
+CRC is even faster, but not cryptographically secure at all.";
 
 const HELP_SEED: &str = "\
 The seed to use for random number stream generation. \
@@ -167,6 +168,7 @@ fn main() -> ah::Result<()> {
         "CHACHA8" => DtStreamType::CHACHA8,
         "CHACHA12" => DtStreamType::CHACHA12,
         "CHACHA20" => DtStreamType::CHACHA20,
+        "CRC" => DtStreamType::CRC,
         x => return param_err("--algorithm", x),
     };
     let seed = args.value_of("seed").unwrap_or("42");

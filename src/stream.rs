@@ -20,7 +20,7 @@
 //
 
 use anyhow as ah;
-use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, NextRandom};
+use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCRC, NextRandom};
 use crate::kdf::kdf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
@@ -34,6 +34,7 @@ pub enum DtStreamType {
     CHACHA8,
     CHACHA12,
     CHACHA20,
+    CRC,
 }
 
 /// Data chunk that contains the computed PRNG data.
@@ -61,6 +62,7 @@ fn thread_worker(stype:         DtStreamType,
         DtStreamType::CHACHA8 => Box::new(GeneratorChaCha8::new(&thread_seed)),
         DtStreamType::CHACHA12 => Box::new(GeneratorChaCha12::new(&thread_seed)),
         DtStreamType::CHACHA20 => Box::new(GeneratorChaCha20::new(&thread_seed)),
+        DtStreamType::CRC => Box::new(GeneratorCRC::new(&thread_seed)),
     };
 
     // Seek the generator to the specified byte offset.
@@ -206,6 +208,7 @@ impl DtStream {
             DtStreamType::CHACHA8 => GeneratorChaCha8::BASE_SIZE,
             DtStreamType::CHACHA12 => GeneratorChaCha12::BASE_SIZE,
             DtStreamType::CHACHA20 => GeneratorChaCha20::BASE_SIZE,
+            DtStreamType::CRC => GeneratorCRC::BASE_SIZE,
         }
     }
 
@@ -215,6 +218,7 @@ impl DtStream {
             DtStreamType::CHACHA8 => GeneratorChaCha8::CHUNK_FACTOR,
             DtStreamType::CHACHA12 => GeneratorChaCha12::CHUNK_FACTOR,
             DtStreamType::CHACHA20 => GeneratorChaCha20::CHUNK_FACTOR,
+            DtStreamType::CRC => GeneratorCRC::CHUNK_FACTOR,
         }
     }
 
@@ -299,6 +303,9 @@ mod tests {
             DtStreamType::CHACHA20 => {
                 assert_eq!(results_first, vec![206, 236, 87, 55, 170]);
             }
+            DtStreamType::CRC => {
+                assert_eq!(results_first, vec![108, 99, 114, 196, 213]);
+            }
         }
     }
 
@@ -336,6 +343,13 @@ mod tests {
     #[test]
     fn test_chacha20() {
         let alg = DtStreamType::CHACHA20;
+        run_base_test(alg);
+        run_offset_test(alg);
+    }
+
+    #[test]
+    fn test_crc() {
+        let alg = DtStreamType::CRC;
         run_base_test(alg);
         run_offset_test(alg);
     }

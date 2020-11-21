@@ -290,7 +290,7 @@ impl<'a> Disktest<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20};
+    use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCRC};
     use std::path::Path;
     use super::*;
     use tempfile::NamedTempFile;
@@ -378,6 +378,13 @@ mod tests {
         run_test(DtStreamType::CHACHA20,
                  GeneratorChaCha20::BASE_SIZE,
                  GeneratorChaCha20::CHUNK_FACTOR);
+    }
+
+    #[test]
+    fn test_crc() {
+        run_test(DtStreamType::CRC,
+                 GeneratorCRC::BASE_SIZE,
+                 GeneratorCRC::CHUNK_FACTOR);
     }
 }
 

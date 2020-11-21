@@ -20,6 +20,7 @@
 //
 
 mod chacha;
+mod crc;
 
 use anyhow as ah;
 use crate::util::prettybytes;
@@ -27,6 +28,7 @@ use crate::util::prettybytes;
 pub use crate::generator::chacha::GeneratorChaCha8;
 pub use crate::generator::chacha::GeneratorChaCha12;
 pub use crate::generator::chacha::GeneratorChaCha20;
+pub use crate::generator::crc::GeneratorCRC;
 
 pub trait NextRandom {
     /// Get the size of the next() output with count = 1, in bytes.

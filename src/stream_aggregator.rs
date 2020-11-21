@@ -133,7 +133,7 @@ impl DtStreamAgg {
 
 #[cfg(test)]
 mod tests {
-    use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20};
+    use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCRC};
     use super::*;
 
     fn run_base_test(algorithm: DtStreamType, gen_base_size: usize, chunk_factor: usize) {
@@ -250,6 +250,15 @@ mod tests {
         run_base_test(alg,
                       GeneratorChaCha20::BASE_SIZE,
                       GeneratorChaCha20::CHUNK_FACTOR);
+        run_offset_test(alg);
+    }
+
+    #[test]
+    fn test_crc() {
+        let alg = DtStreamType::CRC;
+        run_base_test(alg,
+                      GeneratorCRC::BASE_SIZE,
+                      GeneratorCRC::CHUNK_FACTOR);
         run_offset_test(alg);
     }
 }
