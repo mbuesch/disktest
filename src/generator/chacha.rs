@@ -21,8 +21,8 @@
 
 use anyhow as ah;
 use crate::generator::NextRandom;
+use crate::util::fold;
 use rand::prelude::*;
-use std::cmp::min;
 
 macro_rules! GeneratorChaCha {
     ( $Generator:ident,
@@ -48,11 +48,10 @@ macro_rules! GeneratorChaCha {
 
             pub fn new(seed: &Vec<u8>) -> $Generator {
                 assert!(seed.len() > 0);
-                let mut trunc_seed = [0u8; 32];
-                let len = min(trunc_seed.len(), seed.len());
-                trunc_seed[0..len].copy_from_slice(&seed[0..len]);
+                let mut folded_seed = [0u8; 32];
+                folded_seed.copy_from_slice(&fold(seed, 32));
 
-                let rng = $ChaChaRng::from_seed(trunc_seed);
+                let rng = $ChaChaRng::from_seed(folded_seed);
 
                 $Generator {
                     rng,
