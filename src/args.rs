@@ -21,11 +21,15 @@
 
 use anyhow as ah;
 use clap::ErrorKind::{HelpDisplayed, VersionDisplayed};
-use clap::{App, Arg, ArgGroup};
+use clap::{App, Arg};
 use crate::disktest::DtStreamType;
+use crate::seed::gen_seed_string;
 use crate::util::parsebytes;
 use std::ffi::OsString;
 use std::fmt::Display;
+
+/// Length of the generated seed.
+const DEFAULT_GEN_SEED_LEN: usize = 70;
 
 const ABOUT: &str = "\
 Hard Disk (HDD), Solid State Disk (SSD), USB Stick, Memory Card (e.g. SD-Card) tester.\n\n\
@@ -71,15 +75,7 @@ The seed to use for random number stream generation. \
 If you want a unique pattern to be written to disk, supply a random seed to this parameter. \
 If not given, then the pseudo random sequence will be the same for everybody and \
 it will therefore not be secret.
-The seed may be any random string (e.g. a long passphrase).
-This option is mutually exclusive to --gen-seed.";
-
-const HELP_GEN_SEED: &str = "\
-Create a new seed for random number stream generation. \
-This option is similar to --seed, but it will generate a new secure seed instead of \
-using a user supplied seed. The generated seed will be printed to the console \
-and the write and/or verify process will be started with this seed.
-This option is mutually exclusive to --seed.";
+The seed may be any random string (e.g. a long passphrase).";
 
 const HELP_THREADS: &str = "\
 The number of CPUs to use. \
@@ -102,8 +98,7 @@ pub struct Args {
     pub max_bytes:  u64,
     pub algorithm:  DtStreamType,
     pub seed:       String,
-    //TODO make gen-seed the default.
-    pub gen_seed:   bool,
+    pub user_seed:  bool,
     pub threads:    usize,
     pub quiet:      u8,
 }
@@ -152,12 +147,6 @@ where I: IntoIterator<Item = T>,
              .short("S")
              .takes_value(true)
              .help(HELP_SEED))
-        .arg(Arg::with_name("gen-seed")
-             .long("gen-seed")
-             .short("g")
-             .help(HELP_GEN_SEED))
-        .group(ArgGroup::with_name("group-seed")
-               .args(&["seed", "gen-seed"]))
         .arg(Arg::with_name("threads")
              .long("threads")
              .short("j")
@@ -188,20 +177,25 @@ where I: IntoIterator<Item = T>,
         Ok(x) => x,
         Err(e) => return Err(param_err("--quiet", e)),
     };
+
     let device = args.value_of("device").unwrap().to_string();
+
     let write = args.is_present("write");
     let mut verify = args.is_present("verify");
     if !write && !verify {
         verify = true;
     }
+
     let seek = match parsebytes(args.value_of("seek").unwrap_or("0")) {
         Ok(x) => x,
         Err(e) => return Err(param_err("--seek", e)),
     };
+
     let max_bytes = match parsebytes(args.value_of("bytes").unwrap_or(&u64::MAX.to_string())) {
         Ok(x) => x,
         Err(e) => return Err(param_err("--bytes", e)),
     };
+
     let algorithm = match args.value_of("algorithm").unwrap_or("CHACHA20").to_uppercase().as_str() {
         "CHACHA8" => DtStreamType::CHACHA8,
         "CHACHA12" => DtStreamType::CHACHA12,
@@ -209,8 +203,17 @@ where I: IntoIterator<Item = T>,
         "CRC" => DtStreamType::CRC,
         x => return Err(param_err("--algorithm", x)),
     };
-    let seed = args.value_of("seed").unwrap_or("42").to_string();
-    let gen_seed = args.is_present("gen-seed");
+
+    let (seed, user_seed) = match args.value_of("seed") {
+        Some(x) => (x.to_string(), true),
+        None => (gen_seed_string(DEFAULT_GEN_SEED_LEN), false),
+    };
+    if !user_seed && verify && !write {
+        return Err(ah::format_err!("Verify-only mode requires --seed. \
+                                   Please either provide a --seed, \
+                                   or enable --verify and --write mode."));
+    }
+
     let threads: usize = match args.value_of("threads").unwrap_or("1").parse() {
         Ok(x) => {
             if x > std::u16::MAX as usize + 1 {
@@ -229,7 +232,7 @@ where I: IntoIterator<Item = T>,
         max_bytes,
         algorithm,
         seed,
-        gen_seed,
+        user_seed,
         threads,
         quiet,
     })
@@ -243,15 +246,15 @@ mod tests {
     fn test_parse_args() {
         assert!(parse_args(vec!["disktest", "--does-not-exist"]).is_err());
 
-        let a = parse_args(vec!["disktest", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-Sx", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
         assert_eq!(a.write, false);
         assert_eq!(a.verify, true);
         assert_eq!(a.seek, 0);
         assert_eq!(a.max_bytes, u64::MAX);
         assert_eq!(a.algorithm, DtStreamType::CHACHA20);
-        assert_eq!(a.seed, "42");
-        assert_eq!(a.gen_seed, false);
+        assert_eq!(a.seed, "x");
+        assert_eq!(a.user_seed, true);
         assert_eq!(a.threads, 1);
         assert_eq!(a.quiet, 0);
 
@@ -259,77 +262,71 @@ mod tests {
         assert_eq!(a.device, "/dev/foobar");
         assert_eq!(a.write, true);
         assert_eq!(a.verify, false);
+        assert_eq!(a.user_seed, false);
         let a = parse_args(vec!["disktest", "-w", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
         assert_eq!(a.write, true);
         assert_eq!(a.verify, false);
+        assert_eq!(a.user_seed, false);
 
         let a = parse_args(vec!["disktest", "--write", "--verify", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
         assert_eq!(a.write, true);
         assert_eq!(a.verify, true);
+        assert_eq!(a.user_seed, false);
         let a = parse_args(vec!["disktest", "-w", "-v", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
         assert_eq!(a.write, true);
         assert_eq!(a.verify, true);
+        assert_eq!(a.user_seed, false);
 
-        let a = parse_args(vec!["disktest", "--verify", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-Sx", "--verify", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
         assert_eq!(a.write, false);
         assert_eq!(a.verify, true);
-        let a = parse_args(vec!["disktest", "-v", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-Sx", "-v", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
         assert_eq!(a.write, false);
         assert_eq!(a.verify, true);
 
-        let a = parse_args(vec!["disktest", "--seek", "123", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "--seek", "123", "/dev/foobar"]).unwrap();
         assert_eq!(a.seek, 123);
-        let a = parse_args(vec!["disktest", "-s", "123 MiB", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "-s", "123 MiB", "/dev/foobar"]).unwrap();
         assert_eq!(a.seek, 123 * 1024 * 1024);
 
-        let a = parse_args(vec!["disktest", "--bytes", "456", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "--bytes", "456", "/dev/foobar"]).unwrap();
         assert_eq!(a.max_bytes, 456);
-        let a = parse_args(vec!["disktest", "-b", "456 MiB", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "-b", "456 MiB", "/dev/foobar"]).unwrap();
         assert_eq!(a.max_bytes, 456 * 1024 * 1024);
 
-        let a = parse_args(vec!["disktest", "--algorithm", "CHACHA8", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "--algorithm", "CHACHA8", "/dev/foobar"]).unwrap();
         assert_eq!(a.algorithm, DtStreamType::CHACHA8);
-        let a = parse_args(vec!["disktest", "-A", "chacha8", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "-A", "chacha8", "/dev/foobar"]).unwrap();
         assert_eq!(a.algorithm, DtStreamType::CHACHA8);
-        let a = parse_args(vec!["disktest", "-A", "chacha12", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "-A", "chacha12", "/dev/foobar"]).unwrap();
         assert_eq!(a.algorithm, DtStreamType::CHACHA12);
-        let a = parse_args(vec!["disktest", "-A", "crc", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "-A", "crc", "/dev/foobar"]).unwrap();
         assert_eq!(a.algorithm, DtStreamType::CRC);
-        assert!(parse_args(vec!["disktest", "-A", "invalid", "/dev/foobar"]).is_err());
+        assert!(parse_args(vec!["disktest", "-w", "-A", "invalid", "/dev/foobar"]).is_err());
 
         let a = parse_args(vec!["disktest", "-w", "--seed", "mysecret", "/dev/foobar"]).unwrap();
         assert_eq!(a.seed, "mysecret");
-        assert_eq!(a.gen_seed, false);
+        assert_eq!(a.user_seed, true);
         let a = parse_args(vec!["disktest", "-w", "-S", "mysecret", "/dev/foobar"]).unwrap();
         assert_eq!(a.seed, "mysecret");
-        assert_eq!(a.gen_seed, false);
+        assert_eq!(a.user_seed, true);
 
-        let a = parse_args(vec!["disktest", "-w", "--gen-seed", "/dev/foobar"]).unwrap();
-        assert_eq!(a.gen_seed, true);
-        let a = parse_args(vec!["disktest", "-w", "-g", "/dev/foobar"]).unwrap();
-        assert_eq!(a.gen_seed, true);
-
-        assert!(parse_args(vec!["disktest", "-w", "--gen-seed", "--seed", "mysecret",
-                                "/dev/foobar"]).is_err());
-        assert!(parse_args(vec!["disktest", "-w", "-g", "-S", "mysecret",
-                                "/dev/foobar"]).is_err());
-
-        let a = parse_args(vec!["disktest", "--threads", "24", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "--threads", "24", "/dev/foobar"]).unwrap();
         assert_eq!(a.threads, 24);
-        let a = parse_args(vec!["disktest", "-j24", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "-j24", "/dev/foobar"]).unwrap();
         assert_eq!(a.threads, 24);
-        let a = parse_args(vec!["disktest", "-j0", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "-j0", "/dev/foobar"]).unwrap();
         assert_eq!(a.threads, 0);
-        assert!(parse_args(vec!["disktest", "-j65537", "/dev/foobar"]).is_err());
+        assert!(parse_args(vec!["disktest", "-w", "-j65537", "/dev/foobar"]).is_err());
 
-        let a = parse_args(vec!["disktest", "--quiet", "2", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "--quiet", "2", "/dev/foobar"]).unwrap();
         assert_eq!(a.quiet, 2);
-        let a = parse_args(vec!["disktest", "-q2", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec!["disktest", "-w", "-q2", "/dev/foobar"]).unwrap();
         assert_eq!(a.quiet, 2);
     }
 }

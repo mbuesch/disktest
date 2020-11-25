@@ -25,13 +25,9 @@ If more than one thread is used, then each thread generates such a random number
 Security
 ========
 
-The default algorithm `ChaCha20 <https://en.wikipedia.org/wiki/Salsa20>`_ is a cryptographically strong random number generator.
+The default algorithm `ChaCha20 <https://en.wikipedia.org/wiki/Salsa20>`_ is a cryptographically strong random number generator. That means if the seed is kept secret, then the random sequence cannot be predicted or reconstructed by anybody else.
 
-That means if the a custom seed is used (`--seed` or `--gen-seed`) and that seed is kept secret, then the random sequence cannot be predicted or reconstructed by anybody else.
-
-Please note that if the option `--seed` or `--gen-seed` is omitted, then the random number stream will *not* be secure. In that case a hardcoded seed will be used, that is the same for everybody using disktest.
-
-See option `--seed` and `--gen-seed` under `--help` for more details.
+See option `--seed` under `--help` for more details.
 
 
 Example
@@ -41,7 +37,7 @@ The following disktest invocation will write a secure sequence to the disk devic
 
 .. code:: sh
 
-	disktest --gen-seed --write --verify -j0 /dev/sdc
+	disktest --write --verify -j0 /dev/sdc
 
 *WARNING*: This will irrevocably overwrite all data on the disk `/dev/sdc`! Be absolutely certain that the device is correct before starting the command. Your data cannot be recovered.
 

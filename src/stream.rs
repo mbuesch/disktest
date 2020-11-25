@@ -114,9 +114,9 @@ impl DtStream {
     /// Maximum number of chunks that the thread will compute in advance.
     const LEVEL_THRES: isize        = 8;
 
-    pub fn new(stype: DtStreamType,
-               seed: &Vec<u8>,
-               thread_id: u32) -> DtStream {
+    pub fn new(stype:       DtStreamType,
+               seed:        Vec<u8>,
+               thread_id:   u32) -> DtStream {
 
         let abort = Arc::new(AtomicBool::new(false));
         let error = Arc::new(AtomicBool::new(false));
@@ -124,7 +124,7 @@ impl DtStream {
 
         DtStream {
             stype,
-            seed: seed.to_vec(),
+            seed,
             thread_id,
             rx: None,
             is_active: false,
@@ -276,7 +276,7 @@ mod tests {
 
     fn run_base_test(algorithm: DtStreamType) {
         println!("stream base test");
-        let mut s = DtStream::new(algorithm, &vec![1,2,3], 0);
+        let mut s = DtStream::new(algorithm, vec![1,2,3], 0);
         s.activate(0).unwrap();
         assert_eq!(s.is_active(), true);
 
@@ -312,11 +312,11 @@ mod tests {
     fn run_offset_test(algorithm: DtStreamType) {
         println!("stream offset test");
         // a: start at chunk offset 0
-        let mut a = DtStream::new(algorithm, &vec![1,2,3], 0);
+        let mut a = DtStream::new(algorithm, vec![1,2,3], 0);
         a.activate(0).unwrap();
 
         // b: start at chunk offset 1
-        let mut b = DtStream::new(algorithm, &vec![1,2,3], 0);
+        let mut b = DtStream::new(algorithm, vec![1,2,3], 0);
         b.activate(a.get_chunk_size() as u64).unwrap();
 
         let achunk = a.wait_chunk();

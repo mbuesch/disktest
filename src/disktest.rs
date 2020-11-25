@@ -26,9 +26,9 @@ use crate::util::prettybytes;
 use hhmmss::Hhmmss;
 use libc::ENOSPC;
 use std::cmp::min;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -38,26 +38,62 @@ pub use crate::stream_aggregator::DtStreamType;
 const LOG_BYTE_THRES: u64   = 1024 * 1024 * 1;
 const LOG_SEC_THRES: u64    = 10;
 
-pub struct Disktest<'a> {
+pub struct DisktestFile {
+    file:   File,
+    path:   PathBuf,
+}
+
+impl DisktestFile {
+    /// Open a file for use by the Disktest core.
+    pub fn open(path: &str,
+                read: bool,
+                write: bool) -> ah::Result<DisktestFile> {
+
+        let path = Path::new(path);
+        let file = match OpenOptions::new().read(read)
+                                           .write(write)
+                                           .create(write)
+                                           .open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                return Err(ah::format_err!("Failed to open file {:?}: {}", path, e));
+            },
+        };
+
+        Ok(DisktestFile {
+            file,
+            path: path.to_path_buf(),
+        })
+    }
+
+    #[inline]
+    fn get_file(&mut self) -> &mut File {
+        &mut self.file
+    }
+
+    fn get_path(&self) -> &PathBuf {
+        &self.path
+    }
+}
+
+pub struct Disktest {
     quiet_level:    u8,
     stream_agg:     DtStreamAgg,
-    file:           &'a mut File,
-    path:           &'a Path,
+    file:           DisktestFile,
     abort:          Option<Arc<AtomicBool>>,
     log_count:      u64,
     log_time:       Instant,
     begin_time:     Instant,
 }
 
-impl<'a> Disktest<'a> {
+impl Disktest {
     /// Create a new Disktest instance.
     pub fn new(algorithm:   DtStreamType,
-               seed:        &'a Vec<u8>,
+               seed:        Vec<u8>,
                nr_threads:  usize,
-               file:        &'a mut File,
-               path:        &'a Path,
+               file:        DisktestFile,
                quiet_level: u8,
-               abort:       Option<Arc<AtomicBool>>) -> Disktest<'a> {
+               abort:       Option<Arc<AtomicBool>>) -> Disktest {
 
         let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
 
@@ -65,7 +101,6 @@ impl<'a> Disktest<'a> {
             quiet_level,
             stream_agg: DtStreamAgg::new(algorithm, seed, nr_threads),
             file,
-            path,
             abort,
             log_count: 0,
             log_time: Instant::now(),
@@ -126,7 +161,7 @@ impl<'a> Disktest<'a> {
 
         if self.quiet_level < 2 {
             println!("{} {:?}, starting at position {}...",
-                     prefix, self.path, prettybytes(seek, true, true));
+                     prefix, self.file.get_path(), prettybytes(seek, true, true));
         }
 
         let seek = match self.stream_agg.activate(seek) {
@@ -134,7 +169,7 @@ impl<'a> Disktest<'a> {
             Err(e) => return Err(e),
         };
 
-        if let Err(e) = self.file.seek(SeekFrom::Start(seek)) {
+        if let Err(e) = self.file.get_file().seek(SeekFrom::Start(seek)) {
             return Err(ah::format_err!("File seek to {} failed: {}",
                                        seek, e.to_string()));
         }
@@ -147,7 +182,7 @@ impl<'a> Disktest<'a> {
         if self.quiet_level < 2 {
             println!("Writing stopped. Syncing...");
         }
-        if let Err(e) = self.file.sync_all() {
+        if let Err(e) = self.file.get_file().sync_all() {
             return Err(ah::format_err!("Sync failed: {}", e));
         }
         self.log("Done. Wrote ", 0, bytes_written, true, ".");
@@ -168,7 +203,7 @@ impl<'a> Disktest<'a> {
             let write_len = min(chunk_size, bytes_left) as usize;
 
             // Write the chunk to disk.
-            if let Err(e) = self.file.write_all(&chunk.data[0..write_len]) {
+            if let Err(e) = self.file.get_file().write_all(&chunk.data[0..write_len]) {
                 if let Some(err_code) = e.raw_os_error() {
                     if err_code == ENOSPC {
                         self.write_finalize(bytes_written)?;
@@ -239,7 +274,7 @@ impl<'a> Disktest<'a> {
         self.init("Verifying", seek)?;
         loop {
             // Read the next chunk from disk.
-            match self.file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
+            match self.file.get_file().read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
                 Ok(n) => {
                     read_count += n;
 
@@ -299,12 +334,14 @@ mod tests {
         let mut tfile = NamedTempFile::new().unwrap();
         let pstr = String::from(tfile.path().to_str().unwrap());
         let path = Path::new(&pstr);
-        let mut file = tfile.as_file_mut();
+        let file = tfile.as_file_mut();
         let mut loc_file = file.try_clone().unwrap();
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
-        let mut dt = Disktest::new(algorithm, &seed, nr_threads,
-                                   &mut file, &path, 0, None);
+        let mut dt = Disktest::new(algorithm, seed, nr_threads,
+                                   DisktestFile{file: file.try_clone().unwrap(),
+                                                path: path.to_path_buf()},
+                                   0, None);
 
         // Write a couple of bytes and verify them.
         let nr_bytes = 1000;
