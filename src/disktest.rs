@@ -24,7 +24,6 @@ use crate::stream::DtStreamChunk;
 use crate::stream_aggregator::DtStreamAgg;
 use crate::util::prettybytes;
 use hhmmss::Hhmmss;
-use libc::ENOSPC;
 use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Seek, SeekFrom};
@@ -32,6 +31,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
+
+#[cfg(not(target_os="windows"))]
+use libc::ENOSPC;
+#[cfg(target_os="windows")]
+const ENOSPC: i32 = 112; // ERROR_DISK_FULL
 
 pub use crate::stream_aggregator::DtStreamType;
 
