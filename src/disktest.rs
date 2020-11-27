@@ -20,6 +20,7 @@
 //
 
 use anyhow as ah;
+use crate::drop_caches::drop_file_caches;
 use crate::stream::DtStreamChunk;
 use crate::stream_aggregator::DtStreamAgg;
 use crate::util::prettybytes;
@@ -27,6 +28,7 @@ use hhmmss::Hhmmss;
 use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Seek, SeekFrom};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -43,15 +45,19 @@ const LOG_BYTE_THRES: u64   = 1024 * 1024 * 1;
 const LOG_SEC_THRES: u64    = 10;
 
 pub struct DisktestFile {
-    file:   File,
-    path:   PathBuf,
+    file:           Option<File>,
+    path:           PathBuf,
+    seek_offset:    u64,
+    write_count:    u64,
+    quiet_level:    u8,
 }
 
 impl DisktestFile {
     /// Open a file for use by the Disktest core.
-    pub fn open(path: &str,
-                read: bool,
-                write: bool) -> ah::Result<DisktestFile> {
+    pub fn open(path:           &str,
+                read:           bool,
+                write:          bool,
+                quiet_level:    u8) -> ah::Result<DisktestFile> {
 
         let path = Path::new(path);
         let file = match OpenOptions::new().read(read)
@@ -65,25 +71,91 @@ impl DisktestFile {
         };
 
         Ok(DisktestFile {
-            file,
-            path: path.to_path_buf(),
+            file:           Some(file),
+            path:           path.to_path_buf(),
+            seek_offset:    0,
+            write_count:    0,
+            quiet_level,
         })
     }
 
-    #[inline]
-    fn get_file(&mut self) -> &mut File {
-        &mut self.file
+    fn seek(&mut self, offset: u64) -> io::Result<u64> {
+        if let Some(f) = self.file.as_mut() {
+            match f.seek(SeekFrom::Start(offset)) {
+                Ok(x) => {
+                    self.seek_offset = offset;
+                    Ok(x)
+                },
+                Err(e) => Err(e),
+            }
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "File already closed."))
+        }
+    }
+
+    fn sync(&mut self) -> io::Result<()> {
+        if let Some(f) = self.file.as_mut() {
+            f.sync_all()
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "File already closed."))
+        }
+    }
+
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if let Some(f) = self.file.as_mut() {
+            f.read(buffer)
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "File already closed."))
+        }
+    }
+
+    fn write(&mut self, buffer: &[u8]) -> io::Result<()> {
+        if let Some(f) = self.file.as_mut() {
+            match f.write_all(buffer) {
+                Ok(()) => {
+                    self.write_count += buffer.len() as u64;
+                    Ok(())
+                },
+                Err(e) => Err(e),
+            }
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "File already closed."))
+        }
+    }
+
+    fn close(&mut self) {
+        if let Some(file) = self.file.take() {
+            if self.write_count > 0 {
+                if let Err(e) = drop_file_caches(file,
+                                                 self.path.as_path(),
+                                                 self.seek_offset,
+                                                 self.write_count) {
+                    eprintln!("WARNING: Failed to drop operating system caches: {}", e);
+                } else if self.quiet_level < 1 {
+                    println!("Write done and successfully dropped file caches.");
+                }
+                self.write_count = 0;
+            }
+        }
     }
 
     fn get_path(&self) -> &PathBuf {
         &self.path
     }
+
+    fn get_quiet_level(&self) -> u8 {
+        self.quiet_level
+    }
+}
+
+impl Drop for DisktestFile {
+    fn drop(&mut self) {
+        self.close();
+    }
 }
 
 pub struct Disktest {
-    quiet_level:    u8,
     stream_agg:     DtStreamAgg,
-    file:           DisktestFile,
     abort:          Option<Arc<AtomicBool>>,
     log_count:      u64,
     log_time:       Instant,
@@ -95,16 +167,12 @@ impl Disktest {
     pub fn new(algorithm:   DtStreamType,
                seed:        Vec<u8>,
                nr_threads:  usize,
-               file:        DisktestFile,
-               quiet_level: u8,
                abort:       Option<Arc<AtomicBool>>) -> Disktest {
 
         let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
 
         Disktest {
-            quiet_level,
             stream_agg: DtStreamAgg::new(algorithm, seed, nr_threads),
-            file,
             abort,
             log_count: 0,
             log_time: Instant::now(),
@@ -121,6 +189,7 @@ impl Disktest {
 
     /// Log progress.
     fn log(&mut self,
+           quiet_level: u8,
            prefix: &str,
            inc_processed: usize,
            abs_processed: u64,
@@ -128,19 +197,19 @@ impl Disktest {
            suffix: &str) {
 
         // Logging is enabled?
-        if self.quiet_level < 2 {
+        if quiet_level < 2 {
 
             // Increment byte count.
             // Only if byte count is bigger than threshold, then check time.
             // This reduces the number of calls to Instant::now.
             self.log_count += inc_processed as u64;
-            if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == 0) || no_limiting {
+            if (self.log_count >= LOG_BYTE_THRES && quiet_level == 0) || no_limiting {
 
                 // Check if it's time to write the next log entry.
                 let now = Instant::now();
                 let expired = now.duration_since(self.log_time).as_secs() >= LOG_SEC_THRES;
 
-                if (expired && self.quiet_level == 0) || no_limiting {
+                if (expired && quiet_level == 0) || no_limiting {
 
                     let dur_elapsed = now - self.begin_time;
                     let sec_elapsed = dur_elapsed.as_secs();
@@ -160,12 +229,18 @@ impl Disktest {
     }
 
     /// Initialize disktest.
-    fn init(&mut self, prefix: &str, seek: u64) -> ah::Result<()> {
+    fn init(&mut self,
+            file: &mut DisktestFile,
+            prefix: &str,
+            seek: u64) -> ah::Result<()> {
+
         self.log_reset();
 
-        if self.quiet_level < 2 {
+        if file.get_quiet_level() < 2 {
             println!("{} {:?}, starting at position {}...",
-                     prefix, self.file.get_path(), prettybytes(seek, true, true));
+                     prefix,
+                     file.get_path(),
+                     prettybytes(seek, true, true));
         }
 
         let seek = match self.stream_agg.activate(seek) {
@@ -173,7 +248,7 @@ impl Disktest {
             Err(e) => return Err(e),
         };
 
-        if let Err(e) = self.file.get_file().seek(SeekFrom::Start(seek)) {
+        if let Err(e) = file.seek(seek) {
             return Err(ah::format_err!("File seek to {} failed: {}",
                                        seek, e.to_string()));
         }
@@ -182,39 +257,46 @@ impl Disktest {
     }
 
     /// Finalize and flush writing.
-    fn write_finalize(&mut self, bytes_written: u64) -> ah::Result<()> {
-        if self.quiet_level < 2 {
+    fn write_finalize(&mut self,
+                      file: &mut DisktestFile,
+                      bytes_written: u64) -> ah::Result<()> {
+        if file.get_quiet_level() < 2 {
             println!("Writing stopped. Syncing...");
         }
-        if let Err(e) = self.file.get_file().sync_all() {
+        if let Err(e) = file.sync() {
             return Err(ah::format_err!("Sync failed: {}", e));
         }
-        self.log("Done. Wrote ", 0, bytes_written, true, ".");
+        self.log(file.get_quiet_level(),
+                 "Done. Wrote ", 0, bytes_written, true, ".");
 
         Ok(())
     }
 
     /// Run disktest in write mode.
-    pub fn write(&mut self, seek: u64, max_bytes: u64) -> ah::Result<u64> {
+    pub fn write(&mut self,
+                 file: DisktestFile,
+                 seek: u64,
+                 max_bytes: u64) -> ah::Result<u64> {
+        let mut file = file;
         let mut bytes_left = max_bytes;
         let mut bytes_written = 0u64;
         let chunk_size = self.stream_agg.get_chunk_size() as u64;
 
-        self.init("Writing", seek)?;
+        self.init(&mut file, "Writing", seek)?;
         loop {
             // Get the next data chunk.
             let chunk = self.stream_agg.wait_chunk()?;
             let write_len = min(chunk_size, bytes_left) as usize;
 
             // Write the chunk to disk.
-            if let Err(e) = self.file.get_file().write_all(&chunk.data[0..write_len]) {
+            if let Err(e) = file.write(&chunk.data[0..write_len]) {
                 if let Some(err_code) = e.raw_os_error() {
-                    if err_code == ENOSPC {
-                        self.write_finalize(bytes_written)?;
+                    if err_code == ENOSPC {//TODO only success, if max_bytes = unlimited
+                        self.write_finalize(&mut file, bytes_written)?;
                         break; // End of device. -> Success.
                     }
                 }
-                self.write_finalize(bytes_written)?;
+                self.write_finalize(&mut file, bytes_written)?;
                 return Err(ah::format_err!("Write error: {}", e));
             }
 
@@ -222,14 +304,15 @@ impl Disktest {
             bytes_written += write_len as u64;
             bytes_left -= write_len as u64;
             if bytes_left == 0 {
-                self.write_finalize(bytes_written)?;
+                self.write_finalize(&mut file, bytes_written)?;
                 break;
             }
-            self.log("Wrote ", write_len, bytes_written, false, " ...");
+            self.log(file.get_quiet_level(),
+                     "Wrote ", write_len, bytes_written, false, " ...");
 
             if let Some(abort) = &self.abort {
                 if abort.load(Ordering::Relaxed) {
-                    self.write_finalize(bytes_written)?;
+                    self.write_finalize(&mut file, bytes_written)?;
                     return Err(ah::format_err!("Aborted by signal!"));
                 }
             }
@@ -239,8 +322,11 @@ impl Disktest {
     }
 
     /// Finalize verification.
-    fn verify_finalize(&mut self, bytes_read: u64) -> ah::Result<()> {
-        self.log("Done. Verified ", 0, bytes_read, true, ".");
+    fn verify_finalize(&mut self,
+                       file: &DisktestFile,
+                       bytes_read: u64) -> ah::Result<()> {
+        self.log(file.get_quiet_level(),
+                 "Done. Verified ", 0, bytes_read, true, ".");
 
         Ok(())
     }
@@ -266,7 +352,11 @@ impl Disktest {
     }
 
     /// Run disktest in verify mode.
-    pub fn verify(&mut self, seek: u64, max_bytes: u64) -> ah::Result<u64> {
+    pub fn verify(&mut self,
+                  file: DisktestFile,
+                  seek: u64,
+                  max_bytes: u64) -> ah::Result<u64> {
+        let mut file = file;
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0u64;
 
@@ -275,10 +365,10 @@ impl Disktest {
         let mut read_count = 0;
         let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
 
-        self.init("Verifying", seek)?;
+        self.init(&mut file, "Verifying", seek)?;
         loop {
             // Read the next chunk from disk.
-            match self.file.get_file().read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
+            match file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
                 Ok(n) => {
                     read_count += n;
 
@@ -295,17 +385,18 @@ impl Disktest {
                         bytes_read += read_count as u64;
                         bytes_left -= read_count as u64;
                         if bytes_left == 0 {
-                            self.verify_finalize(bytes_read)?;
+                            self.verify_finalize(&file, bytes_read)?;
                             break;
                         }
-                        self.log("Verified ", read_count, bytes_read, false, " ...");
+                        self.log(file.get_quiet_level(),
+                                 "Verified ", read_count, bytes_read, false, " ...");
                         read_count = 0;
                         read_len = min(readbuf_len as u64, bytes_left) as usize;
                     }
 
                     // End of the disk?
                     if n == 0 {
-                        self.verify_finalize(bytes_read)?;
+                        self.verify_finalize(&file, bytes_read)?;
                         break;
                     }
                 },
@@ -317,7 +408,7 @@ impl Disktest {
 
             if let Some(abort) = &self.abort {
                 if abort.load(Ordering::Relaxed) {
-                    self.verify_finalize(bytes_read)?;
+                    self.verify_finalize(&file, bytes_read)?;
                     return Err(ah::format_err!("Aborted by signal!"));
                 }
             }
@@ -342,42 +433,49 @@ mod tests {
         let mut loc_file = file.try_clone().unwrap();
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
-        let mut dt = Disktest::new(algorithm, seed, nr_threads,
-                                   DisktestFile{file: file.try_clone().unwrap(),
-                                                path: path.to_path_buf()},
-                                   0, None);
+        let mut dt = Disktest::new(algorithm, seed, nr_threads, None);
+
+        let mk_file = || {
+            DisktestFile {
+                file: Some(file.try_clone().unwrap()),
+                path: path.to_path_buf(),
+                seek_offset: 0,
+                write_count: 0,
+                quiet_level: 0,
+            }
+        };
 
         // Write a couple of bytes and verify them.
         let nr_bytes = 1000;
-        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(0, u64::MAX).unwrap(), nr_bytes);
+        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(mk_file(), 0, u64::MAX).unwrap(), nr_bytes);
 
         // Write a couple of bytes and verify half of them.
         let nr_bytes = 1000;
         loc_file.set_len(0).unwrap();
-        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(0, nr_bytes / 2).unwrap(), nr_bytes / 2);
+        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(mk_file(), 0, nr_bytes / 2).unwrap(), nr_bytes / 2);
 
         // Write a big chunk that is aggregated and verify it.
         loc_file.set_len(0).unwrap();
         let nr_bytes = (base_size * chunk_factor * nr_threads * 2 + 100) as u64;
-        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(0, u64::MAX).unwrap(), nr_bytes);
+        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(mk_file(), 0, u64::MAX).unwrap(), nr_bytes);
 
         // Check whether write rewinds the file.
         let nr_bytes = 1000;
         loc_file.set_len(100).unwrap();
         loc_file.seek(SeekFrom::Start(10)).unwrap();
-        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(0, u64::MAX).unwrap(), nr_bytes);
+        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(mk_file(), 0, u64::MAX).unwrap(), nr_bytes);
 
         // Modify the written data and assert failure.
         let nr_bytes = 1000;
         loc_file.set_len(0).unwrap();
-        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
         loc_file.seek(SeekFrom::Start(10)).unwrap();
         writeln!(loc_file, "X").unwrap();
-        match dt.verify(0, nr_bytes) {
+        match dt.verify(mk_file(), 0, nr_bytes) {
             Ok(_) => panic!("Verify of modified data did not fail!"),
             Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at byte 10!"),
         }
@@ -385,19 +483,19 @@ mod tests {
         // Check verify with seek.
         loc_file.set_len(0).unwrap();
         let nr_bytes = (base_size * chunk_factor * nr_threads * 10) as u64;
-        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
         for offset in (0..nr_bytes).step_by(base_size * chunk_factor / 2) {
-            let bytes_verified = dt.verify(offset, u64::MAX).unwrap();
+            let bytes_verified = dt.verify(mk_file(), offset, u64::MAX).unwrap();
             assert!(bytes_verified > 0 && bytes_verified <= nr_bytes);
         }
 
         // Check write with seek.
         loc_file.set_len(0).unwrap();
         let nr_bytes = (base_size * chunk_factor * nr_threads * 10) as u64;
-        assert_eq!(dt.write(0, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
         let offset = (base_size * chunk_factor * nr_threads * 2) as u64;
-        assert_eq!(dt.write(offset, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(0, u64::MAX).unwrap(), nr_bytes + offset);
+        assert_eq!(dt.write(mk_file(), offset, nr_bytes).unwrap(), nr_bytes);
+        assert_eq!(dt.verify(mk_file(), 0, u64::MAX).unwrap(), nr_bytes + offset);
     }
 
     #[test]

@@ -43,13 +43,6 @@ The following disktest invocation will write a secure sequence to the disk devic
 
 You probably need `root` permissions to write to raw disk devices (`/dev/sdX` or `/dev/mmcblkX`).
 
-Please note that is it recommended to run `--write` and `--verify` in separate runs and unplug the disk in between these runs. This ensures that the operating system does not cache the data but actually read it back from the disk. See the following example. Replace `SEED_HERE` with the seed printed by the `--write` run.
-
-.. code:: sh
-
-	disktest --write -j0 /dev/sdc
-	disktest --seed SEED_HERE --verify -j0 /dev/sdc
-
 
 Dependencies
 ============

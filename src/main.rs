@@ -21,6 +21,7 @@
 
 mod args;
 mod disktest;
+mod drop_caches;
 mod generator;
 mod kdf;
 mod seed;
@@ -55,13 +56,17 @@ fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
 /// Create a new disktest core instance.
 fn new_disktest(args:  &Args,
                 write: bool,
-                abort: &Arc<AtomicBool>) -> ah::Result<Disktest> {
-    Ok(Disktest::new(args.algorithm,
-                     args.seed.as_bytes().to_vec(),
-                     args.threads,
-                     DisktestFile::open(&args.device, !write, write)?,
-                     args.quiet,
-                     Some(Arc::clone(abort))))
+                abort: &Arc<AtomicBool>) -> ah::Result<(Disktest, DisktestFile)> {
+    Ok((
+        Disktest::new(args.algorithm,
+                      args.seed.as_bytes().to_vec(),
+                      args.threads,
+                      Some(Arc::clone(abort))),
+        DisktestFile::open(&args.device,
+                           !write,
+                           write,
+                           args.quiet)?,
+    ))
 }
 
 /// Main program entry point.
@@ -76,26 +81,26 @@ fn main() -> ah::Result<()> {
     // Run write-mode, if requested.
     let mut result = Ok(());
     if args.write {
-        let mut disktest = new_disktest(&args, true, &abort)?;
-        result = match disktest.write(args.seek, args.max_bytes) {
+        let (mut disktest, file) = new_disktest(&args, true, &abort)?;
+        result = match disktest.write(file, args.seek, args.max_bytes) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
-        }
+        };
     }
 
     // Run verify-mode, if requested.
     if args.verify && result.is_ok() {
-        let mut disktest = new_disktest(&args, false, &abort)?;
-        result = match disktest.verify(args.seek, args.max_bytes) {
+        let (mut disktest, file) = new_disktest(&args, false, &abort)?;
+        result = match disktest.verify(file, args.seek, args.max_bytes) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
-        }
+        };
     }
 
     if !args.user_seed && args.quiet < 2 {
         print_generated_seed(&args.seed, false);
     }
-    if result.is_ok() && args.quiet < 2 {
+    if result.is_ok() && args.quiet < 1 {
         println!("Success!");
     }
 
