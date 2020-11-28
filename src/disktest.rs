@@ -163,6 +163,8 @@ pub struct Disktest {
 }
 
 impl Disktest {
+    pub const UNLIMITED: u64 = u64::MAX;
+
     /// Create a new Disktest instance.
     pub fn new(algorithm:   DtStreamType,
                seed:        Vec<u8>,
@@ -291,7 +293,8 @@ impl Disktest {
             // Write the chunk to disk.
             if let Err(e) = file.write(&chunk.data[0..write_len]) {
                 if let Some(err_code) = e.raw_os_error() {
-                    if err_code == ENOSPC {//TODO only success, if max_bytes = unlimited
+                    if max_bytes == Disktest::UNLIMITED &&
+                       err_code == ENOSPC {
                         self.write_finalize(&mut file, bytes_written)?;
                         break; // End of device. -> Success.
                     }

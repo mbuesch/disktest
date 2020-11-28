@@ -22,7 +22,7 @@
 use anyhow as ah;
 use clap::ErrorKind::{HelpDisplayed, VersionDisplayed};
 use clap::{App, Arg};
-use crate::disktest::DtStreamType;
+use crate::disktest::{DtStreamType, Disktest};
 use crate::seed::gen_seed_string;
 use crate::util::parsebytes;
 use std::ffi::OsString;
@@ -191,7 +191,7 @@ where I: IntoIterator<Item = T>,
         Err(e) => return Err(param_err("--seek", e)),
     };
 
-    let max_bytes = match parsebytes(args.value_of("bytes").unwrap_or(&u64::MAX.to_string())) {
+    let max_bytes = match parsebytes(args.value_of("bytes").unwrap_or(&Disktest::UNLIMITED.to_string())) {
         Ok(x) => x,
         Err(e) => return Err(param_err("--bytes", e)),
     };
@@ -251,7 +251,7 @@ mod tests {
         assert_eq!(a.write, false);
         assert_eq!(a.verify, true);
         assert_eq!(a.seek, 0);
-        assert_eq!(a.max_bytes, u64::MAX);
+        assert_eq!(a.max_bytes, Disktest::UNLIMITED);
         assert_eq!(a.algorithm, DtStreamType::CHACHA20);
         assert_eq!(a.seed, "x");
         assert_eq!(a.user_seed, true);
