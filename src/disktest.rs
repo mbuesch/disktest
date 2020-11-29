@@ -37,7 +37,7 @@ use std::time::Instant;
 #[cfg(not(target_os="windows"))]
 use libc::ENOSPC;
 #[cfg(target_os="windows")]
-const ENOSPC: i32 = 112; // ERROR_DISK_FULL
+use winapi::shared::winerror::ERROR_DISK_FULL as ENOSPC;
 
 pub use crate::stream_aggregator::DtStreamType;
 
@@ -294,7 +294,7 @@ impl Disktest {
             if let Err(e) = file.write(&chunk.data[0..write_len]) {
                 if let Some(err_code) = e.raw_os_error() {
                     if max_bytes == Disktest::UNLIMITED &&
-                       err_code == ENOSPC {
+                       err_code == ENOSPC as i32 {
                         self.write_finalize(&mut file, bytes_written)?;
                         break; // End of device. -> Success.
                     }
