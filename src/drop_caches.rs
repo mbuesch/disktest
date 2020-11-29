@@ -79,6 +79,7 @@ fn os_drop_file_caches(file: File,
     };
 
     // Close the file before re-opening it.
+    file.sync_all().ok();
     drop(file);
 
     // Open the file with FILE_FLAG_NO_BUFFERING.
@@ -125,15 +126,17 @@ pub fn drop_file_caches(file: File,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
+    use tempfile::tempdir;
+    use std::fs::File;
+    use std::io::Write;
 
     #[test]
     fn test_drop_file_caches() {
-        let mut tfile = NamedTempFile::new().unwrap();
-        let pstr = String::from(tfile.path().to_str().unwrap());
-        let path = Path::new(&pstr);
-        let file = tfile.as_file_mut().try_clone().unwrap();
-        drop_file_caches(file, path, 0, 4096).unwrap();
+        let tdir = tempdir().unwrap();
+        let path = tdir.path().join("test_drop_file_caches");
+        let mut file = File::create(&path).unwrap();
+        file.write_all(&[42u8; 4096]).unwrap();
+        drop_file_caches(file, &path, 0, 4096).unwrap();
     }
 }
 
