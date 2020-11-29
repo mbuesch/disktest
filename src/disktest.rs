@@ -79,6 +79,7 @@ impl DisktestFile {
         })
     }
 
+    /// Seek to a position in the file.
     fn seek(&mut self, offset: u64) -> io::Result<u64> {
         if let Some(f) = self.file.as_mut() {
             match f.seek(SeekFrom::Start(offset)) {
@@ -93,6 +94,7 @@ impl DisktestFile {
         }
     }
 
+    /// Sync all written data to disk.
     fn sync(&mut self) -> io::Result<()> {
         if let Some(f) = self.file.as_mut() {
             f.sync_all()
@@ -101,6 +103,7 @@ impl DisktestFile {
         }
     }
 
+    /// Read data from the file.
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         if let Some(f) = self.file.as_mut() {
             f.read(buffer)
@@ -109,6 +112,7 @@ impl DisktestFile {
         }
     }
 
+    /// Write data to the file.
     fn write(&mut self, buffer: &[u8]) -> io::Result<()> {
         if let Some(f) = self.file.as_mut() {
             match f.write_all(buffer) {
@@ -123,9 +127,14 @@ impl DisktestFile {
         }
     }
 
+    /// Close the file and try to drop all write caches.
     fn close(&mut self) {
+        // Take and destruct the File object.
         if let Some(file) = self.file.take() {
+            // If bytes have been written, try to drop the operating system caches.
             if self.write_count > 0 {
+                // Pass the File object to the dropper.
+                // It will destruct the File object.
                 if let Err(e) = drop_file_caches(file,
                                                  self.path.as_path(),
                                                  self.seek_offset,
@@ -139,10 +148,12 @@ impl DisktestFile {
         }
     }
 
+    /// Get a reference to the PathBuf in use.
     fn get_path(&self) -> &PathBuf {
         &self.path
     }
 
+    /// Get the current --quiet level.
     fn get_quiet_level(&self) -> u8 {
         self.quiet_level
     }
@@ -163,6 +174,7 @@ pub struct Disktest {
 }
 
 impl Disktest {
+    /// Unlimited max_bytes.
     pub const UNLIMITED: u64 = u64::MAX;
 
     /// Create a new Disktest instance.
