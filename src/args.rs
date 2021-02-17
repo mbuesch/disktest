@@ -72,10 +72,9 @@ CRC is even faster, but not cryptographically secure at all.";
 
 const HELP_SEED: &str = "\
 The seed to use for random number stream generation. \
-If you want a unique pattern to be written to disk, supply a random seed to this parameter. \
-If not given, then the pseudo random sequence will be the same for everybody and \
-it will therefore not be secret.
-The seed may be any random string (e.g. a long passphrase).";
+The seed may be any random string (e.g. a long passphrase). \
+If no seed is given, then a secure random seed will be generated \
+and also printed to the console.";
 
 const HELP_THREADS: &str = "\
 The number of CPUs to use. \
