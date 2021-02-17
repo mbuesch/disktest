@@ -80,7 +80,7 @@ const HELP_THREADS: &str = "\
 The number of CPUs to use. \
 The special value 0 will select the maximum number of online CPUs in the system. \
 If the number of threads is equal to number of CPUs it is optimal for performance. \
-This parameter must be equal during corresponding verify and --write mode runs. \
+This parameter must be equal during corresponding verify and write mode runs. \
 Otherwise the verification will fail. Default: 1";
 
 const HELP_QUIET: &str = "\
