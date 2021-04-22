@@ -26,7 +26,7 @@ use rand::{thread_rng, Rng};
 /// length: The number of ASCII characters to return.
 pub fn gen_seed_string(length: usize) -> String {
     let rng = thread_rng();
-    rng.sample_iter(Alphanumeric).take(length).collect()
+    rng.sample_iter(Alphanumeric).take(length).map(char::from).collect()
 }
 
 /// Print the generated seed to the console.

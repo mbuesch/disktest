@@ -42,8 +42,8 @@ use std::sync::atomic::AtomicBool;
 /// the abort-flag that is written to true by these handlers.
 fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
     let abort = Arc::new(AtomicBool::new(false));
-    for sig in &[signal_hook::SIGTERM,
-                 signal_hook::SIGINT] {
+    for sig in &[signal_hook::consts::signal::SIGTERM,
+                 signal_hook::consts::signal::SIGINT] {
         if let Err(e) = signal_hook::flag::register(*sig, Arc::clone(&abort)) {
             return Err(ah::format_err!("Failed to register signal {}: {}", sig, e));
         }
