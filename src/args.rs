@@ -196,10 +196,10 @@ where I: IntoIterator<Item = T>,
     };
 
     let algorithm = match args.value_of("algorithm").unwrap_or("CHACHA20").to_uppercase().as_str() {
-        "CHACHA8" => DtStreamType::CHACHA8,
-        "CHACHA12" => DtStreamType::CHACHA12,
-        "CHACHA20" => DtStreamType::CHACHA20,
-        "CRC" => DtStreamType::CRC,
+        "CHACHA8" => DtStreamType::ChaCha8,
+        "CHACHA12" => DtStreamType::ChaCha12,
+        "CHACHA20" => DtStreamType::ChaCha20,
+        "CRC" => DtStreamType::Crc,
         x => return Err(param_err("--algorithm", x)),
     };
 
@@ -251,7 +251,7 @@ mod tests {
         assert_eq!(a.verify, true);
         assert_eq!(a.seek, 0);
         assert_eq!(a.max_bytes, Disktest::UNLIMITED);
-        assert_eq!(a.algorithm, DtStreamType::CHACHA20);
+        assert_eq!(a.algorithm, DtStreamType::ChaCha20);
         assert_eq!(a.seed, "x");
         assert_eq!(a.user_seed, true);
         assert_eq!(a.threads, 1);
@@ -299,13 +299,13 @@ mod tests {
         assert_eq!(a.max_bytes, 456 * 1024 * 1024);
 
         let a = parse_args(vec!["disktest", "-w", "--algorithm", "CHACHA8", "/dev/foobar"]).unwrap();
-        assert_eq!(a.algorithm, DtStreamType::CHACHA8);
+        assert_eq!(a.algorithm, DtStreamType::ChaCha8);
         let a = parse_args(vec!["disktest", "-w", "-A", "chacha8", "/dev/foobar"]).unwrap();
-        assert_eq!(a.algorithm, DtStreamType::CHACHA8);
+        assert_eq!(a.algorithm, DtStreamType::ChaCha8);
         let a = parse_args(vec!["disktest", "-w", "-A", "chacha12", "/dev/foobar"]).unwrap();
-        assert_eq!(a.algorithm, DtStreamType::CHACHA12);
+        assert_eq!(a.algorithm, DtStreamType::ChaCha12);
         let a = parse_args(vec!["disktest", "-w", "-A", "crc", "/dev/foobar"]).unwrap();
-        assert_eq!(a.algorithm, DtStreamType::CRC);
+        assert_eq!(a.algorithm, DtStreamType::Crc);
         assert!(parse_args(vec!["disktest", "-w", "-A", "invalid", "/dev/foobar"]).is_err());
 
         let a = parse_args(vec!["disktest", "-w", "--seed", "mysecret", "/dev/foobar"]).unwrap();

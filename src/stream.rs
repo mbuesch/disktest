@@ -20,7 +20,7 @@
 //
 
 use anyhow as ah;
-use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCRC, NextRandom};
+use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc, NextRandom};
 use crate::kdf::kdf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
@@ -31,10 +31,10 @@ use std::time::Duration;
 /// Stream algorithm type.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DtStreamType {
-    CHACHA8,
-    CHACHA12,
-    CHACHA20,
-    CRC,
+    ChaCha8,
+    ChaCha12,
+    ChaCha20,
+    Crc,
 }
 
 /// Data chunk that contains the computed PRNG data.
@@ -59,10 +59,10 @@ fn thread_worker(stype:         DtStreamType,
 
     // Construct the generator algorithm.
     let mut generator: Box<dyn NextRandom> = match stype {
-        DtStreamType::CHACHA8 => Box::new(GeneratorChaCha8::new(&thread_seed)),
-        DtStreamType::CHACHA12 => Box::new(GeneratorChaCha12::new(&thread_seed)),
-        DtStreamType::CHACHA20 => Box::new(GeneratorChaCha20::new(&thread_seed)),
-        DtStreamType::CRC => Box::new(GeneratorCRC::new(&thread_seed)),
+        DtStreamType::ChaCha8 => Box::new(GeneratorChaCha8::new(&thread_seed)),
+        DtStreamType::ChaCha12 => Box::new(GeneratorChaCha12::new(&thread_seed)),
+        DtStreamType::ChaCha20 => Box::new(GeneratorChaCha20::new(&thread_seed)),
+        DtStreamType::Crc => Box::new(GeneratorCrc::new(&thread_seed)),
     };
 
     // Seek the generator to the specified byte offset.
@@ -205,20 +205,20 @@ impl DtStream {
     /// Get the size of the selected generator output, in bytes.
     fn get_generator_outsize(&self) -> usize {
         match self.stype {
-            DtStreamType::CHACHA8 => GeneratorChaCha8::BASE_SIZE,
-            DtStreamType::CHACHA12 => GeneratorChaCha12::BASE_SIZE,
-            DtStreamType::CHACHA20 => GeneratorChaCha20::BASE_SIZE,
-            DtStreamType::CRC => GeneratorCRC::BASE_SIZE,
+            DtStreamType::ChaCha8 => GeneratorChaCha8::BASE_SIZE,
+            DtStreamType::ChaCha12 => GeneratorChaCha12::BASE_SIZE,
+            DtStreamType::ChaCha20 => GeneratorChaCha20::BASE_SIZE,
+            DtStreamType::Crc => GeneratorCrc::BASE_SIZE,
         }
     }
 
     /// Get the chunk factor of the selected generator.
     fn get_chunk_factor(&self) -> usize {
         match self.stype {
-            DtStreamType::CHACHA8 => GeneratorChaCha8::CHUNK_FACTOR,
-            DtStreamType::CHACHA12 => GeneratorChaCha12::CHUNK_FACTOR,
-            DtStreamType::CHACHA20 => GeneratorChaCha20::CHUNK_FACTOR,
-            DtStreamType::CRC => GeneratorCRC::CHUNK_FACTOR,
+            DtStreamType::ChaCha8 => GeneratorChaCha8::CHUNK_FACTOR,
+            DtStreamType::ChaCha12 => GeneratorChaCha12::CHUNK_FACTOR,
+            DtStreamType::ChaCha20 => GeneratorChaCha20::CHUNK_FACTOR,
+            DtStreamType::Crc => GeneratorCrc::CHUNK_FACTOR,
         }
     }
 
@@ -294,16 +294,16 @@ mod tests {
             assert_eq!(chunk.index, count);
         }
         match algorithm {
-            DtStreamType::CHACHA8 => {
+            DtStreamType::ChaCha8 => {
                 assert_eq!(results_first, vec![66, 209, 254, 224, 203]);
             }
-            DtStreamType::CHACHA12 => {
+            DtStreamType::ChaCha12 => {
                 assert_eq!(results_first, vec![200, 202, 12, 60, 234]);
             }
-            DtStreamType::CHACHA20 => {
+            DtStreamType::ChaCha20 => {
                 assert_eq!(results_first, vec![206, 236, 87, 55, 170]);
             }
-            DtStreamType::CRC => {
+            DtStreamType::Crc => {
                 assert_eq!(results_first, vec![108, 99, 114, 196, 213]);
             }
         }
@@ -328,28 +328,28 @@ mod tests {
 
     #[test]
     fn test_chacha8() {
-        let alg = DtStreamType::CHACHA8;
+        let alg = DtStreamType::ChaCha8;
         run_base_test(alg);
         run_offset_test(alg);
     }
 
     #[test]
     fn test_chacha12() {
-        let alg = DtStreamType::CHACHA12;
+        let alg = DtStreamType::ChaCha12;
         run_base_test(alg);
         run_offset_test(alg);
     }
 
     #[test]
     fn test_chacha20() {
-        let alg = DtStreamType::CHACHA20;
+        let alg = DtStreamType::ChaCha20;
         run_base_test(alg);
         run_offset_test(alg);
     }
 
     #[test]
     fn test_crc() {
-        let alg = DtStreamType::CRC;
+        let alg = DtStreamType::Crc;
         run_base_test(alg);
         run_offset_test(alg);
     }

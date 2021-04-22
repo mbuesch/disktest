@@ -24,30 +24,30 @@ use crate::generator::NextRandom;
 use crate::util::fold;
 use crc::{crc64, Hasher64};
 
-pub struct GeneratorCRC {
+pub struct GeneratorCrc {
     crc:            crc64::Digest,
-    folded_seed:    [u8; GeneratorCRC::FOLDED_SEED_SIZE],
+    folded_seed:    [u8; GeneratorCrc::FOLDED_SEED_SIZE],
     counter:        u64,
 }
 
-impl GeneratorCRC {
+impl GeneratorCrc {
     /// Size of the algorithm base output data.
-    pub const BASE_SIZE: usize = 256 * GeneratorCRC::CRC_SIZE;
+    pub const BASE_SIZE: usize = 256 * GeneratorCrc::CRC_SIZE;
     /// Chunk size. Multiple of the generator base size.
     pub const CHUNK_FACTOR: usize = 1536;
 
     const CRC_SIZE: usize = 64 / 8;
     const FOLDED_SEED_SIZE: usize = 64 / 8;
 
-    pub fn new(seed: &Vec<u8>) -> GeneratorCRC {
+    pub fn new(seed: &Vec<u8>) -> GeneratorCrc {
         assert!(seed.len() > 0);
 
         let crc = crc64::Digest::new(crc64::ECMA);
 
-        let mut folded_seed = [0u8; GeneratorCRC::FOLDED_SEED_SIZE];
-        folded_seed.copy_from_slice(&fold(seed, GeneratorCRC::FOLDED_SEED_SIZE));
+        let mut folded_seed = [0u8; GeneratorCrc::FOLDED_SEED_SIZE];
+        folded_seed.copy_from_slice(&fold(seed, GeneratorCrc::FOLDED_SEED_SIZE));
 
-        GeneratorCRC {
+        GeneratorCrc {
             crc,
             folded_seed,
             counter: 0,
@@ -55,20 +55,20 @@ impl GeneratorCRC {
     }
 }
 
-impl NextRandom for GeneratorCRC {
+impl NextRandom for GeneratorCrc {
     fn get_base_size(&self) -> usize {
-        GeneratorCRC::BASE_SIZE
+        GeneratorCrc::BASE_SIZE
     }
 
     fn next(&mut self, count: usize) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(GeneratorCRC::BASE_SIZE * count);
+        let mut buf = Vec::with_capacity(GeneratorCrc::BASE_SIZE * count);
 
         // All bytes will be overwritten below.
         // Don't initialize. Just resize.
         unsafe { buf.set_len(buf.capacity()); }
 
         for i in 0..count {
-            let chunk_offs = i * GeneratorCRC::BASE_SIZE;
+            let chunk_offs = i * GeneratorCrc::BASE_SIZE;
 
             // Initialize CRC based on the seed and current counter.
             self.crc.reset();
@@ -78,7 +78,7 @@ impl NextRandom for GeneratorCRC {
 
             // Fast inner loop:
             // Generate the next chunk with size = BASE_SIZE.
-            for offs in 0..(GeneratorCRC::BASE_SIZE / GeneratorCRC::CRC_SIZE) {
+            for offs in 0..(GeneratorCrc::BASE_SIZE / GeneratorCrc::CRC_SIZE) {
                 // Advance CRC state.
                 debug_assert!(offs <= 0xFF);
                 self.crc.write(&(offs as u8).to_le_bytes());
@@ -87,8 +87,8 @@ impl NextRandom for GeneratorCRC {
                 let crc = self.crc.sum64().to_le_bytes();
 
                 // Write CRC output to output buffer.
-                let begin = chunk_offs + (offs * GeneratorCRC::CRC_SIZE);
-                let end = chunk_offs + ((offs + 1) * GeneratorCRC::CRC_SIZE);
+                let begin = chunk_offs + (offs * GeneratorCrc::CRC_SIZE);
+                let end = chunk_offs + ((offs + 1) * GeneratorCrc::CRC_SIZE);
                 buf[begin..end].copy_from_slice(&crc);
             }
         }
@@ -96,13 +96,13 @@ impl NextRandom for GeneratorCRC {
     }
 
     fn seek(&mut self, byte_offset: u64) -> ah::Result<()> {
-        if byte_offset % GeneratorCRC::BASE_SIZE as u64 != 0 {
+        if byte_offset % GeneratorCrc::BASE_SIZE as u64 != 0 {
             return Err(ah::format_err!("CRC seek: Byte offset is not a \
                                        multiple of the base size ({} bytes).",
-                                       GeneratorCRC::BASE_SIZE));
+                                       GeneratorCrc::BASE_SIZE));
         }
 
-        self.counter = byte_offset / GeneratorCRC::BASE_SIZE as u64;
+        self.counter = byte_offset / GeneratorCrc::BASE_SIZE as u64;
 
         Ok(())
     }
@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn test_cmp_result() {
-        let mut a = GeneratorCRC::new(&vec![1,2,3]);
+        let mut a = GeneratorCrc::new(&vec![1,2,3]);
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
             acc.rotate_left(i as u32) ^ (*x as u32)
         }
@@ -126,8 +126,8 @@ mod tests {
 
     #[test]
     fn test_seed_equal() {
-        let mut a = GeneratorCRC::new(&vec![1,2,3]);
-        let mut b = GeneratorCRC::new(&vec![1,2,3]);
+        let mut a = GeneratorCrc::new(&vec![1,2,3]);
+        let mut b = GeneratorCrc::new(&vec![1,2,3]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
@@ -142,8 +142,8 @@ mod tests {
 
     #[test]
     fn test_seed_diff() {
-        let mut a = GeneratorCRC::new(&vec![1,2,3]);
-        let mut b = GeneratorCRC::new(&vec![1,2,4]);
+        let mut a = GeneratorCrc::new(&vec![1,2,3]);
+        let mut b = GeneratorCrc::new(&vec![1,2,4]);
         let mut res_a = vec![];
         let mut res_b = vec![];
         for _ in 0..2 {
@@ -158,8 +158,8 @@ mod tests {
 
     #[test]
     fn test_concat_equal() {
-        let mut a = GeneratorCRC::new(&vec![1,2,3]);
-        let mut b = GeneratorCRC::new(&vec![1,2,3]);
+        let mut a = GeneratorCrc::new(&vec![1,2,3]);
+        let mut b = GeneratorCrc::new(&vec![1,2,3]);
         let mut buf_a = a.next(1);
         buf_a.append(&mut a.next(1));
         let buf_b = b.next(2);
@@ -168,9 +168,9 @@ mod tests {
 
     #[test]
     fn test_seek() {
-        let mut a = GeneratorCRC::new(&vec![1,2,3]);
-        let mut b = GeneratorCRC::new(&vec![1,2,3]);
-        b.seek(GeneratorCRC::BASE_SIZE as u64 * 2).unwrap();
+        let mut a = GeneratorCrc::new(&vec![1,2,3]);
+        let mut b = GeneratorCrc::new(&vec![1,2,3]);
+        b.seek(GeneratorCrc::BASE_SIZE as u64 * 2).unwrap();
         let bdata = b.next(1);
         assert_ne!(a.next(1), bdata);
         assert_ne!(a.next(1), bdata);
