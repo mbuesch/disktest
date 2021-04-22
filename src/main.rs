@@ -33,7 +33,6 @@ use anyhow as ah;
 use args::{Args, parse_args};
 use crate::seed::print_generated_seed;
 use disktest::{Disktest, DisktestFile};
-use signal_hook;
 use std::env::args_os;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;

@@ -44,6 +44,7 @@ pub struct DtStreamChunk {
 }
 
 /// Thread worker function, that computes the chunks.
+#[allow(clippy::too_many_arguments)]
 fn thread_worker(stype:         DtStreamType,
                  chunk_factor:  usize,
                  seed:          Vec<u8>,
@@ -234,18 +235,16 @@ impl DtStream {
         if self.is_active() {
             if self.is_thread_error() {
                 Err(ah::format_err!("Generator stream thread aborted with an error."))
-            } else {
-                if let Some(rx) = &self.rx {
-                    match rx.try_recv() {
-                        Ok(chunk) => {
-                            self.level.fetch_sub(1, Ordering::Relaxed);
-                            Ok(Some(chunk))
-                        },
-                        Err(_) => Ok(None),
-                    }
-                } else {
-                    Ok(None)
+            } else if let Some(rx) = &self.rx {
+                match rx.try_recv() {
+                    Ok(chunk) => {
+                        self.level.fetch_sub(1, Ordering::Relaxed);
+                        Ok(Some(chunk))
+                    },
+                    Err(_) => Ok(None),
                 }
+            } else {
+                Ok(None)
             }
         } else {
             Ok(None)

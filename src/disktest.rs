@@ -41,7 +41,7 @@ use winapi::shared::winerror::ERROR_DISK_FULL as ENOSPC;
 
 pub use crate::stream_aggregator::DtStreamType;
 
-const LOG_BYTE_THRES: u64   = 1024 * 1024 * 1;
+const LOG_BYTE_THRES: u64   = 1024 * 1024;
 const LOG_SEC_THRES: u64    = 10;
 
 pub struct DisktestFile {
@@ -183,7 +183,7 @@ impl Disktest {
                nr_threads:  usize,
                abort:       Option<Arc<AtomicBool>>) -> Disktest {
 
-        let nr_threads = if nr_threads <= 0 { num_cpus::get() } else { nr_threads };
+        let nr_threads = if nr_threads == 0 { num_cpus::get() } else { nr_threads };
 
         Disktest {
             stream_agg: DtStreamAgg::new(algorithm, seed, nr_threads),
@@ -339,11 +339,9 @@ impl Disktest {
     /// Finalize verification.
     fn verify_finalize(&mut self,
                        file: &DisktestFile,
-                       bytes_read: u64) -> ah::Result<()> {
+                       bytes_read: u64) {
         self.log(file.get_quiet_level(),
                  "Done. Verified ", 0, bytes_read, true, ".");
-
-        Ok(())
     }
 
     /// Handle verification failure.
@@ -400,7 +398,7 @@ impl Disktest {
                         bytes_read += read_count as u64;
                         bytes_left -= read_count as u64;
                         if bytes_left == 0 {
-                            self.verify_finalize(&file, bytes_read)?;
+                            self.verify_finalize(&file, bytes_read);
                             break;
                         }
                         self.log(file.get_quiet_level(),
@@ -411,7 +409,7 @@ impl Disktest {
 
                     // End of the disk?
                     if n == 0 {
-                        self.verify_finalize(&file, bytes_read)?;
+                        self.verify_finalize(&file, bytes_read);
                         break;
                     }
                 },
@@ -423,7 +421,7 @@ impl Disktest {
 
             if let Some(abort) = &self.abort {
                 if abort.load(Ordering::Relaxed) {
-                    self.verify_finalize(&file, bytes_read)?;
+                    self.verify_finalize(&file, bytes_read);
                     return Err(ah::format_err!("Aborted by signal!"));
                 }
             }

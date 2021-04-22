@@ -79,7 +79,7 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool) -> String {
                 let len = ret.len();
                 if len > 0 { ret.push_str(" ("); }
                 ret.push_str(&dec);
-                if len > 0 { ret.push_str(")"); }
+                if len > 0 { ret.push(')'); }
             }
         }
     }
