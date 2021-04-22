@@ -41,7 +41,7 @@ fn derive_salt(key: &[u8]) -> [u8; 512/8] {
 }
 
 /// Key derivation function for the user supplied seed.
-pub fn kdf(seed: &Vec<u8>, thread_id: u32) -> Vec<u8> {
+pub fn kdf(seed: &[u8], thread_id: u32) -> Vec<u8> {
     // The key is: SEED | THREAD_ID
     let mut key = seed.to_vec();
     key.extend_from_slice(&thread_id.to_le_bytes());

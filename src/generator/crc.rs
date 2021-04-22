@@ -39,7 +39,7 @@ impl GeneratorCrc {
     const CRC_SIZE: usize = 64 / 8;
     const FOLDED_SEED_SIZE: usize = 64 / 8;
 
-    pub fn new(seed: &Vec<u8>) -> GeneratorCrc {
+    pub fn new(seed: &[u8]) -> GeneratorCrc {
         assert!(!seed.is_empty());
 
         let crc = crc64::Digest::new(crc64::ECMA);

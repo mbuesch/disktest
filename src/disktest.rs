@@ -348,10 +348,10 @@ impl Disktest {
     fn verify_failed(&self,
                      read_count: usize,
                      bytes_read: u64,
-                     buffer: &Vec<u8>,
+                     buffer: &[u8],
                      chunk: &DtStreamChunk) -> ah::Error {
-        for i in 0..read_count {
-            if buffer[i] != chunk.data[i] {
+        for (i, buffer_byte) in buffer.iter().enumerate().take(read_count) {
+            if *buffer_byte != chunk.data[i] {
                 let pos = bytes_read + i as u64;
                 if pos >= 1024 {
                     return ah::format_err!("Data MISMATCH at byte {} = {}!",

@@ -137,7 +137,7 @@ pub fn parsebytes(s: &str) -> Result<u64, <u64 as std::str::FromStr>::Err> {
 /// Fold a byte vector into a smaller byte vector using XOR operation.
 /// If output_size is bigger than input.len(), the trailing bytes
 /// will be filled with zeros.
-pub fn fold(input: &Vec<u8>, output_size: usize) -> Vec<u8> {
+pub fn fold(input: &[u8], output_size: usize) -> Vec<u8> {
     let mut output = vec![0; output_size];
 
     if output_size > 0 {
