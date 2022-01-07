@@ -62,7 +62,7 @@ If your storage media under test is drive D, then the following command would ru
 Dependencies
 ============
 
-* `Rust (edition 2018) <https://www.rust-lang.org/>`_ or later.
+* `Rust (edition 2021) <https://www.rust-lang.org/>`_ or later.
 * Crate dependencies will automatically be downloaded by cargo.
 
 
@@ -144,6 +144,6 @@ Note: The default rust compiler shipped with Raspberry Pi OS is too old to compi
 License
 =======
 
-Copyright (c) 2020-2021 Michael Buesch <m@bues.ch>
+Copyright (c) 2020-2022 Michael Buesch <m@bues.ch>
 
 Licensed under the terms of the GNU General Public License version 2, or (at your option) any later version.
