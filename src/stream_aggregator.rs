@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020 Michael Buesch <m@bues.ch>
+// Copyright 2020-2022 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,16 +36,20 @@ pub struct DtStreamAgg {
 }
 
 impl DtStreamAgg {
-    pub fn new(stype:       DtStreamType,
-               seed:        Vec<u8>,
-               num_threads: usize) -> DtStreamAgg {
+    pub fn new(stype:           DtStreamType,
+               seed:            Vec<u8>,
+               invert_pattern:  bool,
+               num_threads:     usize) -> DtStreamAgg {
 
         assert!(num_threads > 0);
         assert!(num_threads <= std::u16::MAX as usize + 1);
 
         let mut streams = Vec::with_capacity(num_threads);
         for i in 0..num_threads {
-            streams.push(DtStream::new(stype, seed.to_vec(), i as u32));
+            streams.push(DtStream::new(stype,
+                                       seed.to_vec(),
+                                       invert_pattern,
+                                       i as u32));
         }
 
         DtStreamAgg {
@@ -139,7 +143,7 @@ mod tests {
     fn run_base_test(algorithm: DtStreamType, gen_base_size: usize, chunk_factor: usize) {
         println!("stream aggregator base test");
         let num_threads = 2;
-        let mut agg = DtStreamAgg::new(algorithm, vec![1,2,3], num_threads);
+        let mut agg = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads);
         agg.activate(0).unwrap();
         assert_eq!(agg.is_active(), true);
 
@@ -207,10 +211,10 @@ mod tests {
         let num_threads = 2;
 
         for offset in 0..5 {
-            let mut a = DtStreamAgg::new(algorithm, vec![1,2,3], num_threads);
+            let mut a = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads);
             a.activate(0).unwrap();
 
-            let mut b = DtStreamAgg::new(algorithm, vec![1,2,3], num_threads);
+            let mut b = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads);
             b.activate(a.get_chunk_size() as u64 * offset).unwrap();
 
             // Until offset the chunks must not be equal.

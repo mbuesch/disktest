@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020 Michael Buesch <m@bues.ch>
+// Copyright 2020-2022 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -178,15 +178,19 @@ impl Disktest {
     pub const UNLIMITED: u64 = u64::MAX;
 
     /// Create a new Disktest instance.
-    pub fn new(algorithm:   DtStreamType,
-               seed:        Vec<u8>,
-               nr_threads:  usize,
-               abort:       Option<Arc<AtomicBool>>) -> Disktest {
+    pub fn new(algorithm:       DtStreamType,
+               seed:            Vec<u8>,
+               invert_pattern:  bool,
+               nr_threads:      usize,
+               abort:           Option<Arc<AtomicBool>>) -> Disktest {
 
         let nr_threads = if nr_threads == 0 { num_cpus::get() } else { nr_threads };
 
         Disktest {
-            stream_agg: DtStreamAgg::new(algorithm, seed, nr_threads),
+            stream_agg: DtStreamAgg::new(algorithm,
+                                         seed,
+                                         invert_pattern,
+                                         nr_threads),
             abort,
             log_count: 0,
             log_time: Instant::now(),
@@ -446,7 +450,7 @@ mod tests {
         let mut loc_file = file.try_clone().unwrap();
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
-        let mut dt = Disktest::new(algorithm, seed, nr_threads, None);
+        let mut dt = Disktest::new(algorithm, seed, false, nr_threads, None);
 
         let mk_file = || {
             DisktestFile {

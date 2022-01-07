@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020 Michael Buesch <m@bues.ch>
+// Copyright 2020-2022 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -59,6 +59,7 @@ fn new_disktest(args:  &Args,
     Ok((
         Disktest::new(args.algorithm,
                       args.seed.as_bytes().to_vec(),
+                      args.invert_pattern,
                       args.threads,
                       Some(Arc::clone(abort))),
         DisktestFile::open(&args.device,

@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020 Michael Buesch <m@bues.ch>
+// Copyright 2020-2022 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -45,15 +45,16 @@ pub struct DtStreamChunk {
 
 /// Thread worker function, that computes the chunks.
 #[allow(clippy::too_many_arguments)]
-fn thread_worker(stype:         DtStreamType,
-                 chunk_factor:  usize,
-                 seed:          Vec<u8>,
-                 thread_id:     u32,
-                 byte_offset:   u64,
-                 abort:         Arc<AtomicBool>,
-                 error:         Arc<AtomicBool>,
-                 level:         Arc<AtomicIsize>,
-                 tx:            Sender<DtStreamChunk>) {
+fn thread_worker(stype:             DtStreamType,
+                 chunk_factor:      usize,
+                 seed:              Vec<u8>,
+                 thread_id:         u32,
+                 byte_offset:       u64,
+                 invert_pattern:    bool,
+                 abort:             Arc<AtomicBool>,
+                 error:             Arc<AtomicBool>,
+                 level:             Arc<AtomicIsize>,
+                 tx:                Sender<DtStreamChunk>) {
     // Calculate the per-thread-seed from the global seed.
     let thread_seed = kdf(&seed, thread_id);
     drop(seed);
@@ -79,8 +80,15 @@ fn thread_worker(stype:         DtStreamType,
         if level.load(Ordering::Relaxed) < DtStream::LEVEL_THRES {
 
             // Get the next chunk from the generator.
-            let data = generator.next(chunk_factor);
+            let mut data = generator.next(chunk_factor);
             debug_assert_eq!(data.len(), generator.get_base_size() * chunk_factor);
+
+            // Invert the bit pattern, if requested.
+            if invert_pattern {
+                for x in &mut data {
+                    *x ^= 0xFFu8;
+                }
+            };
 
             let chunk = DtStreamChunk {
                 index,
@@ -102,6 +110,7 @@ fn thread_worker(stype:         DtStreamType,
 pub struct DtStream {
     stype:          DtStreamType,
     seed:           Vec<u8>,
+    invert_pattern: bool,
     thread_id:      u32,
     rx:             Option<Receiver<DtStreamChunk>>,
     is_active:      bool,
@@ -115,9 +124,10 @@ impl DtStream {
     /// Maximum number of chunks that the thread will compute in advance.
     const LEVEL_THRES: isize        = 8;
 
-    pub fn new(stype:       DtStreamType,
-               seed:        Vec<u8>,
-               thread_id:   u32) -> DtStream {
+    pub fn new(stype:           DtStreamType,
+               seed:            Vec<u8>,
+               invert_pattern:  bool,
+               thread_id:       u32) -> DtStream {
 
         let abort = Arc::new(AtomicBool::new(false));
         let error = Arc::new(AtomicBool::new(false));
@@ -126,6 +136,7 @@ impl DtStream {
         DtStream {
             stype,
             seed,
+            invert_pattern,
             thread_id,
             rx: None,
             is_active: false,
@@ -166,6 +177,7 @@ impl DtStream {
         let thread_seed = self.seed.to_vec();
         let thread_id = self.thread_id;
         let thread_byte_offset = byte_offset;
+        let thread_invert_pattern = self.invert_pattern;
         let thread_abort = Arc::clone(&self.abort);
         let thread_error = Arc::clone(&self.error);
         let thread_level = Arc::clone(&self.level);
@@ -175,6 +187,7 @@ impl DtStream {
                           thread_seed,
                           thread_id,
                           thread_byte_offset,
+                          thread_invert_pattern,
                           thread_abort,
                           thread_error,
                           thread_level,
@@ -275,7 +288,7 @@ mod tests {
 
     fn run_base_test(algorithm: DtStreamType) {
         println!("stream base test");
-        let mut s = DtStream::new(algorithm, vec![1,2,3], 0);
+        let mut s = DtStream::new(algorithm, vec![1,2,3], false, 0);
         s.activate(0).unwrap();
         assert_eq!(s.is_active(), true);
 
@@ -311,11 +324,11 @@ mod tests {
     fn run_offset_test(algorithm: DtStreamType) {
         println!("stream offset test");
         // a: start at chunk offset 0
-        let mut a = DtStream::new(algorithm, vec![1,2,3], 0);
+        let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0);
         a.activate(0).unwrap();
 
         // b: start at chunk offset 1
-        let mut b = DtStream::new(algorithm, vec![1,2,3], 0);
+        let mut b = DtStream::new(algorithm, vec![1,2,3], false, 0);
         b.activate(a.get_chunk_size() as u64).unwrap();
 
         let achunk = a.wait_chunk();
@@ -325,11 +338,26 @@ mod tests {
         assert!(achunk.data == bchunk.data);
     }
 
+    fn run_invert_test(algorithm: DtStreamType) {
+        println!("stream invert test");
+        let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0);
+        a.activate(0).unwrap();
+        let mut b = DtStream::new(algorithm, vec![1,2,3], true, 0);
+        b.activate(0).unwrap();
+
+        let achunk = a.wait_chunk();
+        let bchunk = b.wait_chunk();
+        let inv_bchunk: Vec<u8> = bchunk.data.iter().map(|x| x ^ 0xFF).collect();
+        assert!(achunk.data != bchunk.data);
+        assert!(achunk.data == inv_bchunk);
+    }
+
     #[test]
     fn test_chacha8() {
         let alg = DtStreamType::ChaCha8;
         run_base_test(alg);
         run_offset_test(alg);
+        run_invert_test(alg);
     }
 
     #[test]
@@ -337,6 +365,7 @@ mod tests {
         let alg = DtStreamType::ChaCha12;
         run_base_test(alg);
         run_offset_test(alg);
+        run_invert_test(alg);
     }
 
     #[test]
@@ -344,6 +373,7 @@ mod tests {
         let alg = DtStreamType::ChaCha20;
         run_base_test(alg);
         run_offset_test(alg);
+        run_invert_test(alg);
     }
 
     #[test]
@@ -351,6 +381,7 @@ mod tests {
         let alg = DtStreamType::Crc;
         run_base_test(alg);
         run_offset_test(alg);
+        run_invert_test(alg);
     }
 }
 
