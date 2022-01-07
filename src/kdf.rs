@@ -33,8 +33,8 @@ fn derive_salt(key: &[u8]) -> [u8; 512/8] {
     // That's not a great salt, but good enough for our purposes.
     let mut salt = [0; 512/8];
     let mut salt_hash = Sha512::new();
-    salt_hash.input_str(&"disktest salt");
-    salt_hash.input(&key);
+    salt_hash.input_str("disktest salt");
+    salt_hash.input(key);
     salt_hash.result(&mut salt);
 
     salt

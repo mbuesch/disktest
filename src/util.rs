@@ -103,17 +103,17 @@ pub fn parsebytes(s: &str) -> Result<u64, <u64 as std::str::FromStr>::Err> {
     } else if let Some(s) = s.strip_suffix("kib") {
         Ok(s.trim().parse::<u64>()? * KIB)
 
-    } else if let Some(s) = s.strip_suffix("e") {
+    } else if let Some(s) = s.strip_suffix('e') {
         Ok(s.trim().parse::<u64>()? * EIB)
-    } else if let Some(s) = s.strip_suffix("p") {
+    } else if let Some(s) = s.strip_suffix('p') {
         Ok(s.trim().parse::<u64>()? * PIB)
-    } else if let Some(s) = s.strip_suffix("t") {
+    } else if let Some(s) = s.strip_suffix('t') {
         Ok(s.trim().parse::<u64>()? * TIB)
-    } else if let Some(s) = s.strip_suffix("g") {
+    } else if let Some(s) = s.strip_suffix('g') {
         Ok(s.trim().parse::<u64>()? * GIB)
-    } else if let Some(s) = s.strip_suffix("m") {
+    } else if let Some(s) = s.strip_suffix('m') {
         Ok(s.trim().parse::<u64>()? * MIB)
-    } else if let Some(s) = s.strip_suffix("k") {
+    } else if let Some(s) = s.strip_suffix('k') {
         Ok(s.trim().parse::<u64>()? * KIB)
 
     } else if let Some(s) = s.strip_suffix("eb") {
