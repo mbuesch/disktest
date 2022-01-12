@@ -21,8 +21,7 @@
 
 use anyhow as ah;
 use crate::drop_caches::drop_file_caches;
-use crate::stream::DtStreamChunk;
-use crate::stream_aggregator::DtStreamAgg;
+use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
 use crate::util::prettybytes;
 use hhmmss::Hhmmss;
 use std::cmp::min;
@@ -307,7 +306,7 @@ impl Disktest {
             let write_len = min(chunk_size, bytes_left) as usize;
 
             // Write the chunk to disk.
-            if let Err(e) = file.write(&chunk.data[0..write_len]) {
+            if let Err(e) = file.write(&chunk.get_data()[0..write_len]) {
                 if let Some(err_code) = e.raw_os_error() {
                     if max_bytes == Disktest::UNLIMITED &&
                        err_code == ENOSPC as i32 {
@@ -353,9 +352,9 @@ impl Disktest {
                      read_count: usize,
                      bytes_read: u64,
                      buffer: &[u8],
-                     chunk: &DtStreamChunk) -> ah::Error {
+                     chunk: &DtStreamAggChunk) -> ah::Error {
         for (i, buffer_byte) in buffer.iter().enumerate().take(read_count) {
-            if *buffer_byte != chunk.data[i] {
+            if *buffer_byte != chunk.get_data()[i] {
                 let pos = bytes_read + i as u64;
                 if pos >= 1024 {
                     return ah::format_err!("Data MISMATCH at byte {} = {}!",
@@ -394,7 +393,7 @@ impl Disktest {
                     if read_count == read_len || (read_count > 0 && n == 0) {
                         // Calculate and compare the read buffer to the pseudo random sequence.
                         let chunk = self.stream_agg.wait_chunk()?;
-                        if buffer[..read_count] != chunk.data[..read_count] {
+                        if buffer[..read_count] != chunk.get_data()[..read_count] {
                             return Err(self.verify_failed(read_count, bytes_read, &buffer, &chunk));
                         }
 

@@ -35,9 +35,10 @@ pub trait NextRandom {
     fn get_base_size(&self) -> usize;
 
     /// Generate the next chunks.
+    /// buf: Buffer to hold all chunks.
     /// count: The number of chunks to return.
     /// Returns all chunks concatenated in a Vec.
-    fn next(&mut self, count: usize) -> Vec<u8>;
+    fn next(&mut self, buf: &mut [u8], count: usize);
 
     /// Seek the algorithm to the specified offset.
     fn seek(&mut self, byte_offset: u64) -> ah::Result<()> {

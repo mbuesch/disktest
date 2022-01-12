@@ -20,17 +20,42 @@
 //
 
 use anyhow as ah;
-use crate::stream::DtStream;
+use crate::bufcache::BufCache;
+use crate::stream::{DtStream, DtStreamChunk};
 use crate::util::prettybytes;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::thread;
 use std::time::Duration;
 
 pub use crate::stream::DtStreamType;
-pub use crate::stream::DtStreamChunk;
+
+pub struct DtStreamAggChunk {
+    chunk:      DtStreamChunk,
+    thread_id:  usize,
+    cache:      Rc<RefCell<BufCache>>,
+}
+
+impl DtStreamAggChunk {
+    pub fn get_data(&self) -> &[u8] {
+        self.chunk.data.as_ref()
+            .expect("DtStreamChunk data was None before drop!")
+    }
+}
+
+impl Drop for DtStreamAggChunk {
+    fn drop(&mut self) {
+        // Recycle the buffer.
+        let buf = self.chunk.data.take()
+            .expect("DtStreamChunk data was None during drop!");
+        self.cache.borrow_mut().push(self.thread_id, buf);
+    }
+}
 
 pub struct DtStreamAgg {
     num_threads:    usize,
     streams:        Vec<DtStream>,
+    cache:          Rc<RefCell<BufCache>>,
     current_index:  usize,
     is_active:      bool,
 }
@@ -44,17 +69,20 @@ impl DtStreamAgg {
         assert!(num_threads > 0);
         assert!(num_threads <= std::u16::MAX as usize + 1);
 
+        let cache = Rc::new(RefCell::new(BufCache::new()));
         let mut streams = Vec::with_capacity(num_threads);
         for i in 0..num_threads {
             streams.push(DtStream::new(stype,
                                        seed.to_vec(),
                                        invert_pattern,
-                                       i as u32));
+                                       i as u32,
+                                       Rc::clone(&cache)));
         }
 
         DtStreamAgg {
             num_threads,
             streams,
+            cache,
             current_index: 0,
             is_active: false,
         }
@@ -108,11 +136,15 @@ impl DtStreamAgg {
     }
 
     #[inline]
-    fn get_chunk(&mut self) -> ah::Result<Option<DtStreamChunk>> {
+    fn get_chunk(&mut self) -> ah::Result<Option<DtStreamAggChunk>> {
         if self.is_active() {
             if let Some(chunk) = self.streams[self.current_index].get_chunk()? {
                 self.current_index = (self.current_index + 1) % self.num_threads;
-                Ok(Some(chunk))
+                Ok(Some(DtStreamAggChunk {
+                    chunk,
+                    thread_id: self.current_index,
+                    cache: Rc::clone(&self.cache),
+                } ))
             } else {
                 Ok(None)
             }
@@ -121,7 +153,7 @@ impl DtStreamAgg {
         }
     }
 
-    pub fn wait_chunk(&mut self) -> ah::Result<DtStreamChunk> {
+    pub fn wait_chunk(&mut self) -> ah::Result<DtStreamAggChunk> {
         if self.is_active() {
             loop {
                 if let Some(chunk) = self.get_chunk()? {
@@ -150,7 +182,7 @@ mod tests {
         let onestream_chunksize = chunk_factor * gen_base_size;
         assert_eq!(agg.get_chunk_size(), onestream_chunksize);
 
-        let mut prev_chunks: Option<Vec<DtStreamChunk>> = None;
+        let mut prev_chunks: Option<Vec<DtStreamAggChunk>> = None;
 
         for _ in 0..4 {
             // Generate the next chunk.
@@ -158,12 +190,12 @@ mod tests {
             
             for _ in 0..num_threads {
                 let chunk = agg.wait_chunk().unwrap();
-                assert_eq!(chunk.data.len(), onestream_chunksize);
+                assert_eq!(chunk.get_data().len(), onestream_chunksize);
 
                 // Check if we have an even distribution.
                 let mut avg = vec![0; 256];
-                for i in 0..chunk.data.len() {
-                    let index = chunk.data[i] as usize;
+                for i in 0..chunk.get_data().len() {
+                    let index = chunk.get_data()[i] as usize;
                     avg[index] += 1;
                 }
                 let expected_avg = onestream_chunksize / 256;
@@ -179,7 +211,7 @@ mod tests {
             let mut equal = 0;
             let nr_check = onestream_chunksize;
             for i in 0..nr_check {
-                if chunks[0].data[i] == chunks[1].data[i] {
+                if chunks[0].get_data()[i] == chunks[1].get_data()[i] {
                     equal += 1;
                 }
             }
@@ -193,7 +225,7 @@ mod tests {
                     let mut equal = 0;
                     let nr_check = onestream_chunksize;
                     for j in 0..nr_check {
-                        if chunks[i].data[j] == pchunks[i].data[j] {
+                        if chunks[i].get_data()[j] == pchunks[i].get_data()[j] {
                             equal += 1;
                         }
                     }
@@ -220,11 +252,11 @@ mod tests {
             // Until offset the chunks must not be equal.
             let mut bchunk = b.wait_chunk().unwrap();
             for _ in 0..offset {
-                assert!(a.wait_chunk().unwrap().data != bchunk.data);
+                assert!(a.wait_chunk().unwrap().get_data() != bchunk.get_data());
             }
             // The rest must be equal.
             for _ in 0..20 {
-                assert!(a.wait_chunk().unwrap().data == bchunk.data);
+                assert!(a.wait_chunk().unwrap().get_data() == bchunk.get_data());
                 bchunk = b.wait_chunk().unwrap();
             }
         }

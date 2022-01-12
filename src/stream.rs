@@ -20,8 +20,11 @@
 //
 
 use anyhow as ah;
+use crate::bufcache::{BufCache, BufCacheCons};
 use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc, NextRandom};
 use crate::kdf::kdf;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -39,8 +42,8 @@ pub enum DtStreamType {
 
 /// Data chunk that contains the computed PRNG data.
 pub struct DtStreamChunk {
-    pub index: u64,
-    pub data: Vec<u8>,
+    pub index:  u64,
+    pub data:   Option<Vec<u8>>,
 }
 
 /// Thread worker function, that computes the chunks.
@@ -49,6 +52,7 @@ fn thread_worker(stype:             DtStreamType,
                  chunk_factor:      usize,
                  seed:              Vec<u8>,
                  thread_id:         u32,
+                 mut cache_cons:    BufCacheCons,
                  byte_offset:       u64,
                  invert_pattern:    bool,
                  abort:             Arc<AtomicBool>,
@@ -80,8 +84,10 @@ fn thread_worker(stype:             DtStreamType,
         if level.load(Ordering::Relaxed) < DtStream::LEVEL_THRES {
 
             // Get the next chunk from the generator.
-            let mut data = generator.next(chunk_factor);
-            debug_assert_eq!(data.len(), generator.get_base_size() * chunk_factor);
+            let size = generator.get_base_size() * chunk_factor;
+            let mut data = cache_cons.pull(size);
+            generator.next(&mut data, chunk_factor);
+            debug_assert_eq!(data.len(), size);
 
             // Invert the bit pattern, if requested.
             if invert_pattern {
@@ -92,7 +98,7 @@ fn thread_worker(stype:             DtStreamType,
 
             let chunk = DtStreamChunk {
                 index,
-                data,
+                data: Some(data),
             };
             index += 1;
 
@@ -113,6 +119,7 @@ pub struct DtStream {
     invert_pattern: bool,
     thread_id:      u32,
     rx:             Option<Receiver<DtStreamChunk>>,
+    cache:          Rc<RefCell<BufCache>>,
     is_active:      bool,
     thread_join:    Option<thread::JoinHandle<()>>,
     abort:          Arc<AtomicBool>,
@@ -127,7 +134,8 @@ impl DtStream {
     pub fn new(stype:           DtStreamType,
                seed:            Vec<u8>,
                invert_pattern:  bool,
-               thread_id:       u32) -> DtStream {
+               thread_id:       u32,
+               cache:           Rc<RefCell<BufCache>>) -> DtStream {
 
         let abort = Arc::new(AtomicBool::new(false));
         let error = Arc::new(AtomicBool::new(false));
@@ -139,6 +147,7 @@ impl DtStream {
             invert_pattern,
             thread_id,
             rx: None,
+            cache,
             is_active: false,
             thread_join: None,
             abort,
@@ -176,6 +185,7 @@ impl DtStream {
         let thread_chunk_factor = self.get_chunk_factor();
         let thread_seed = self.seed.to_vec();
         let thread_id = self.thread_id;
+        let thread_cache_cons = self.cache.borrow_mut().new_consumer(self.thread_id as usize);
         let thread_byte_offset = byte_offset;
         let thread_invert_pattern = self.invert_pattern;
         let thread_abort = Arc::clone(&self.abort);
@@ -186,6 +196,7 @@ impl DtStream {
                           thread_chunk_factor,
                           thread_seed,
                           thread_id,
+                          thread_cache_cons,
                           thread_byte_offset,
                           thread_invert_pattern,
                           thread_abort,
@@ -288,7 +299,8 @@ mod tests {
 
     fn run_base_test(algorithm: DtStreamType) {
         println!("stream base test");
-        let mut s = DtStream::new(algorithm, vec![1,2,3], false, 0);
+        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let mut s = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
         s.activate(0).unwrap();
         assert_eq!(s.is_active(), true);
 
@@ -301,8 +313,8 @@ mod tests {
         for count in 0..5 {
             let chunk = s.wait_chunk();
             println!("{}: index={} data[0]={} (current level = {})",
-                     count, chunk.index, chunk.data[0], s.level.load(Ordering::Relaxed));
-            results_first.push(chunk.data[0]);
+                     count, chunk.index, chunk.data.as_ref().unwrap()[0], s.level.load(Ordering::Relaxed));
+            results_first.push(chunk.data.as_ref().unwrap()[0]);
             assert_eq!(chunk.index, count);
         }
         match algorithm {
@@ -324,32 +336,36 @@ mod tests {
     fn run_offset_test(algorithm: DtStreamType) {
         println!("stream offset test");
         // a: start at chunk offset 0
-        let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0);
+        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
         a.activate(0).unwrap();
 
         // b: start at chunk offset 1
-        let mut b = DtStream::new(algorithm, vec![1,2,3], false, 0);
+        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let mut b = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
         b.activate(a.get_chunk_size() as u64).unwrap();
 
         let achunk = a.wait_chunk();
         let bchunk = b.wait_chunk();
-        assert!(achunk.data != bchunk.data);
+        assert!(achunk.data.as_ref().unwrap() != bchunk.data.as_ref().unwrap());
         let achunk = a.wait_chunk();
-        assert!(achunk.data == bchunk.data);
+        assert!(achunk.data.as_ref().unwrap() == bchunk.data.as_ref().unwrap());
     }
 
     fn run_invert_test(algorithm: DtStreamType) {
         println!("stream invert test");
-        let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0);
+        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
         a.activate(0).unwrap();
-        let mut b = DtStream::new(algorithm, vec![1,2,3], true, 0);
+        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let mut b = DtStream::new(algorithm, vec![1,2,3], true, 0, cache);
         b.activate(0).unwrap();
 
         let achunk = a.wait_chunk();
         let bchunk = b.wait_chunk();
-        let inv_bchunk: Vec<u8> = bchunk.data.iter().map(|x| x ^ 0xFF).collect();
-        assert!(achunk.data != bchunk.data);
-        assert!(achunk.data == inv_bchunk);
+        let inv_bchunk: Vec<u8> = bchunk.data.as_ref().unwrap().iter().map(|x| x ^ 0xFF).collect();
+        assert!(achunk.data.as_ref().unwrap() != bchunk.data.as_ref().unwrap());
+        assert!(achunk.data.as_ref().unwrap() == &inv_bchunk);
     }
 
     #[test]

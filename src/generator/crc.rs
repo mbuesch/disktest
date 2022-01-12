@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020 Michael Buesch <m@bues.ch>
+// Copyright 2020-2022 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -60,12 +60,8 @@ impl NextRandom for GeneratorCrc {
         GeneratorCrc::BASE_SIZE
     }
 
-    fn next(&mut self, count: usize) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(GeneratorCrc::BASE_SIZE * count);
-
-        // All bytes will be overwritten below.
-        // Don't initialize. Just resize.
-        unsafe { buf.set_len(buf.capacity()); }
+    fn next(&mut self, buf: &mut [u8], count: usize) {
+        debug_assert!(buf.len() == GeneratorCrc::BASE_SIZE * count);
 
         for i in 0..count {
             let chunk_offs = i * GeneratorCrc::BASE_SIZE;
@@ -92,7 +88,6 @@ impl NextRandom for GeneratorCrc {
                 buf[begin..end].copy_from_slice(&crc);
             }
         }
-        buf
     }
 
     fn seek(&mut self, byte_offset: u64) -> ah::Result<()> {
@@ -118,21 +113,30 @@ mod tests {
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
             acc.rotate_left(i as u32) ^ (*x as u32)
         }
-        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 2183862535);
-        assert_eq!(a.next(1).iter().enumerate().fold(0, reduce), 2200729683);
-        assert_eq!(a.next(2).iter().enumerate().fold(0, reduce), 17260884);
-        assert_eq!(a.next(3).iter().enumerate().fold(0, reduce), 581162875);
+        let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE * 3];
+        a.next(&mut buf[0..GeneratorCrc::BASE_SIZE], 1);
+        assert_eq!(buf.iter().enumerate().fold(0, reduce), 2183862535);
+        a.next(&mut buf[0..GeneratorCrc::BASE_SIZE], 1);
+        assert_eq!(buf.iter().enumerate().fold(0, reduce), 2200729683);
+        a.next(&mut buf[0..GeneratorCrc::BASE_SIZE*2], 2);
+        assert_eq!(buf.iter().enumerate().fold(0, reduce), 17260884);
+        a.next(&mut buf[0..GeneratorCrc::BASE_SIZE*3], 3);
+        assert_eq!(buf.iter().enumerate().fold(0, reduce), 581162875);
     }
 
     #[test]
     fn test_seed_equal() {
         let mut a = GeneratorCrc::new(&vec![1,2,3]);
         let mut b = GeneratorCrc::new(&vec![1,2,3]);
-        let mut res_a = vec![];
-        let mut res_b = vec![];
+        let mut res_a: Vec<Vec<u8>> = vec![];
+        let mut res_b: Vec<Vec<u8>> = vec![];
         for _ in 0..2 {
-            res_a.push(a.next(1));
-            res_b.push(b.next(1));
+            let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE];
+            a.next(&mut buf, 1);
+            res_a.push(buf);
+            let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE];
+            b.next(&mut buf, 1);
+            res_b.push(buf);
         }
         assert_eq!(res_a[0], res_b[0]);
         assert_eq!(res_a[1], res_b[1]);
@@ -144,11 +148,15 @@ mod tests {
     fn test_seed_diff() {
         let mut a = GeneratorCrc::new(&vec![1,2,3]);
         let mut b = GeneratorCrc::new(&vec![1,2,4]);
-        let mut res_a = vec![];
-        let mut res_b = vec![];
+        let mut res_a: Vec<Vec<u8>> = vec![];
+        let mut res_b: Vec<Vec<u8>> = vec![];
         for _ in 0..2 {
-            res_a.push(a.next(1));
-            res_b.push(b.next(1));
+            let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE];
+            a.next(&mut buf, 1);
+            res_a.push(buf);
+            let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE];
+            b.next(&mut buf, 1);
+            res_b.push(buf);
         }
         assert_ne!(res_a[0], res_b[0]);
         assert_ne!(res_a[1], res_b[1]);
@@ -160,9 +168,11 @@ mod tests {
     fn test_concat_equal() {
         let mut a = GeneratorCrc::new(&vec![1,2,3]);
         let mut b = GeneratorCrc::new(&vec![1,2,3]);
-        let mut buf_a = a.next(1);
-        buf_a.append(&mut a.next(1));
-        let buf_b = b.next(2);
+        let mut buf_a = vec![0u8; GeneratorCrc::BASE_SIZE * 2];
+        a.next(&mut buf_a[0..GeneratorCrc::BASE_SIZE], 1);
+        a.next(&mut buf_a[GeneratorCrc::BASE_SIZE..GeneratorCrc::BASE_SIZE*2], 1);
+        let mut buf_b = vec![0u8; GeneratorCrc::BASE_SIZE * 2];
+        b.next(&mut buf_b, 2);
         assert_eq!(buf_a, buf_b);
     }
 
@@ -171,11 +181,17 @@ mod tests {
         let mut a = GeneratorCrc::new(&vec![1,2,3]);
         let mut b = GeneratorCrc::new(&vec![1,2,3]);
         b.seek(GeneratorCrc::BASE_SIZE as u64 * 2).unwrap();
-        let bdata = b.next(1);
-        assert_ne!(a.next(1), bdata);
-        assert_ne!(a.next(1), bdata);
-        assert_eq!(a.next(1), bdata);
-        assert_ne!(a.next(1), bdata);
+        let mut bdata = vec![0u8; GeneratorCrc::BASE_SIZE];
+        b.next(&mut bdata, 1);
+        let mut adata = vec![0u8; GeneratorCrc::BASE_SIZE];
+        a.next(&mut adata, 1);
+        assert_ne!(adata, bdata);
+        a.next(&mut adata, 1);
+        assert_ne!(adata, bdata);
+        a.next(&mut adata, 1);
+        assert_eq!(adata, bdata);
+        a.next(&mut adata, 1);
+        assert_ne!(adata, bdata);
     }
 }
 
