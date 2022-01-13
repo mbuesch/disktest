@@ -20,7 +20,7 @@
 //
 
 use anyhow as ah;
-use clap::ErrorKind::{HelpDisplayed, VersionDisplayed};
+use clap::ErrorKind::{DisplayHelp, DisplayVersion};
 use clap::{App, Arg};
 use crate::disktest::{DtStreamType, Disktest};
 use crate::seed::gen_seed_string;
@@ -129,59 +129,59 @@ where I: IntoIterator<Item = T>,
 
     let args = App::new("disktest")
         .about(&*(ABOUT.to_string() + EXAMPLE))
-        .arg(Arg::with_name("device")
+        .arg(Arg::new("device")
              .index(1)
              .required(true)
              .help(HELP_DEVICE))
-        .arg(Arg::with_name("write")
+        .arg(Arg::new("write")
              .long("write")
-             .short("w")
+             .short('w')
              .help(HELP_WRITE))
-        .arg(Arg::with_name("verify")
+        .arg(Arg::new("verify")
              .long("verify")
-             .short("v")
+             .short('v')
              .help(HELP_VERIFY))
-        .arg(Arg::with_name("seek")
+        .arg(Arg::new("seek")
              .long("seek")
-             .short("s")
+             .short('s')
              .takes_value(true)
              .help(HELP_SEEK))
-        .arg(Arg::with_name("bytes")
+        .arg(Arg::new("bytes")
              .long("bytes")
-             .short("b")
+             .short('b')
              .takes_value(true)
              .help(HELP_BYTES))
-        .arg(Arg::with_name("algorithm")
+        .arg(Arg::new("algorithm")
              .long("algorithm")
-             .short("A")
+             .short('A')
              .takes_value(true)
              .help(HELP_ALGORITHM))
-        .arg(Arg::with_name("seed")
+        .arg(Arg::new("seed")
              .long("seed")
-             .short("S")
+             .short('S')
              .takes_value(true)
              .help(HELP_SEED))
-        .arg(Arg::with_name("invert-pattern")
+        .arg(Arg::new("invert-pattern")
              .long("invert-pattern")
-             .short("i")
+             .short('i')
              .help(HELP_INVERT_PATTERN))
-        .arg(Arg::with_name("threads")
+        .arg(Arg::new("threads")
              .long("threads")
-             .short("j")
+             .short('j')
              .takes_value(true)
              .help(HELP_THREADS))
-        .arg(Arg::with_name("quiet")
+        .arg(Arg::new("quiet")
              .long("quiet")
-             .short("q")
+             .short('q')
              .takes_value(true)
              .help(HELP_QUIET))
-        .get_matches_from_safe(args);
+        .try_get_matches_from(args);
 
     let args = match args {
         Ok(x) => x,
         Err(e) => {
             match e.kind {
-                HelpDisplayed | VersionDisplayed => {
+                DisplayHelp | DisplayVersion => {
                     print!("{}", e);
                     std::process::exit(0);
                 },
