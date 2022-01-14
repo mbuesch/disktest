@@ -67,4 +67,44 @@ impl BufCacheCons {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bufcache() {
+        let mut cache = BufCache::new();
+        let mut cons0 = cache.new_consumer(42);
+        let mut cons1 = cache.new_consumer(43);
+
+        let buf = cons0.pull(4);
+        assert_eq!(buf.len(), 4);
+        assert_eq!(buf, vec![0, 0, 0, 0]);
+
+        cache.push(42, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        let buf = cons0.pull(4);
+        assert_eq!(buf.len(), 4);
+        assert_eq!(buf, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+
+        let buf = cons0.pull(4);
+        assert_eq!(buf.len(), 4);
+        assert_eq!(buf, vec![0, 0, 0, 0]);
+
+        cache.push(43, vec![0xCA, 0xFE, 0xAF, 0xFE]);
+        let buf = cons0.pull(4);
+        assert_eq!(buf.len(), 4);
+        assert_eq!(buf, vec![0, 0, 0, 0]);
+        let buf = cons1.pull(4);
+        assert_eq!(buf.len(), 4);
+        assert_eq!(buf, vec![0xCA, 0xFE, 0xAF, 0xFE]);
+    }
+
+    #[test]
+    #[should_panic(expected="Consumer 42 does not exist")]
+    fn test_bufcache_cons_invalid() {
+        let mut cache = BufCache::new();
+        cache.push(42, vec![]);
+    }
+}
+
 // vim: ts=4 sw=4 expandtab
