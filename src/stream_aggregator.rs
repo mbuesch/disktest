@@ -48,7 +48,7 @@ impl Drop for DtStreamAggChunk {
         // Recycle the buffer.
         let buf = self.chunk.data.take()
             .expect("DtStreamChunk data was None during drop!");
-        self.cache.borrow_mut().push(self.thread_id, buf);
+        self.cache.borrow_mut().push(self.thread_id as u32, buf);
     }
 }
 

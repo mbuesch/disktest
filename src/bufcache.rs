@@ -23,7 +23,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::HashMap;
 
 pub struct BufCache {
-    snd:    HashMap<usize, Sender<Vec<u8>>>,
+    snd:    HashMap<u32, Sender<Vec<u8>>>,
 }
 
 impl BufCache {
@@ -33,7 +33,7 @@ impl BufCache {
         }
     }
 
-    pub fn new_consumer(&mut self, cons_id: usize) -> BufCacheCons {
+    pub fn new_consumer(&mut self, cons_id: u32) -> BufCacheCons {
         let (snd, rcv) = channel();
         self.snd.insert(cons_id, snd);
         BufCacheCons {
@@ -41,7 +41,7 @@ impl BufCache {
         }
     }
 
-    pub fn push(&mut self, cons_id: usize, buf: Vec<u8>) {
+    pub fn push(&mut self, cons_id: u32, buf: Vec<u8>) {
         if let Some(snd) = self.snd.get(&cons_id) {
             snd.send(buf).ok();
         } else {

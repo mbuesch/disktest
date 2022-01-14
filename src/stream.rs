@@ -185,7 +185,7 @@ impl DtStream {
         let thread_chunk_factor = self.get_chunk_factor();
         let thread_seed = self.seed.to_vec();
         let thread_id = self.thread_id;
-        let thread_cache_cons = self.cache.borrow_mut().new_consumer(self.thread_id as usize);
+        let thread_cache_cons = self.cache.borrow_mut().new_consumer(self.thread_id);
         let thread_byte_offset = byte_offset;
         let thread_invert_pattern = self.invert_pattern;
         let thread_abort = Arc::clone(&self.abort);
