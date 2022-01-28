@@ -248,12 +248,16 @@ impl Disktest {
 
                     let dur_elapsed = now - self.begin_time;
                     let sec_elapsed = dur_elapsed.as_secs();
-                    let rate = if sec_elapsed > 0 { abs_processed / sec_elapsed } else { 0 };
+                    let rate = if sec_elapsed > 0 {
+                        format!(" @ {}/s", prettybytes(abs_processed / sec_elapsed, true, false))
+                    } else {
+                        "".to_string()
+                    };
 
-                    println!("{}{} @ {}/s ({}){}",
+                    println!("{}{}{} ({}){}",
                              prefix,
                              prettybytes(abs_processed, true, true),
-                             prettybytes(rate, true, false),
+                             rate,
                              dur_elapsed.hhmmss(),
                              suffix);
                     self.log_time = now;
