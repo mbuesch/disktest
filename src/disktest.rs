@@ -28,7 +28,7 @@ use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -44,52 +44,87 @@ const LOG_BYTE_THRES: u64   = 1024 * 1024;
 const LOG_SEC_THRES: u64    = 10;
 
 pub struct DisktestFile {
-    file:           Option<File>,
     path:           PathBuf,
-    seek_offset:    u64,
-    write_count:    u64,
-    quiet_level:    u8,
+    read:           bool,
+    write:          bool,
+    file:           Option<File>,
+    drop_offset:    u64,
+    drop_count:     u64,
 }
 
 impl DisktestFile {
     /// Open a file for use by the Disktest core.
     pub fn open(path:           &str,
                 read:           bool,
-                write:          bool,
-                quiet_level:    u8) -> ah::Result<DisktestFile> {
-
-        let path = Path::new(path);
-        let file = match OpenOptions::new().read(read)
-                                           .write(write)
-                                           .create(write)
-                                           .open(path) {
-            Ok(f) => f,
-            Err(e) => {
-                return Err(ah::format_err!("Failed to open file {:?}: {}", path, e));
-            },
-        };
-
+                write:          bool) -> ah::Result<DisktestFile> {
         Ok(DisktestFile {
-            file:           Some(file),
-            path:           path.to_path_buf(),
-            seek_offset:    0,
-            write_count:    0,
-            quiet_level,
+            path:           path.into(),
+            read,
+            write,
+            file:           None,
+            drop_offset:    0,
+            drop_count:     0,
         })
+    }
+
+    fn do_open(&mut self) -> io::Result<()> {
+        if self.file.is_none() {
+            self.file = match OpenOptions::new().read(self.read)
+                                                .write(self.write)
+                                                .create(self.write)
+                                                .open(self.path.as_path()) {
+                Ok(f) => Some(f),
+                Err(e) => {
+                    let msg = format!("Failed to open file {:?}: {}", self.path, e);
+                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                },
+            };
+            self.drop_offset = 0;
+            self.drop_count = 0;
+        }
+        Ok(())
+    }
+
+    /// Close the file and try to drop all write caches.
+    fn close(&mut self) -> io::Result<()> {
+        let drop_offset = self.drop_offset;
+        let drop_count = self.drop_count;
+
+        self.drop_offset += drop_count;
+        self.drop_count = 0;
+
+        // Take and destruct the File object.
+        if let Some(file) = self.file.take() {
+            // If bytes have been written, try to drop the operating system caches.
+            if drop_count > 0 {
+                // Pass the File object to the dropper.
+                // It will destruct the File object.
+                if let Err(e) = drop_file_caches(file,
+                                                 self.path.as_path(),
+                                                 drop_offset,
+                                                 drop_count) {
+                    return Err(io::Error::new(io::ErrorKind::Other, e));
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Seek to a position in the file.
     fn seek(&mut self, offset: u64) -> io::Result<u64> {
+        self.close()?;
+        self.do_open()?;
         if let Some(f) = self.file.as_mut() {
             match f.seek(SeekFrom::Start(offset)) {
                 Ok(x) => {
-                    self.seek_offset = offset;
+                    self.drop_offset = offset;
+                    self.drop_count = 0;
                     Ok(x)
                 },
                 Err(e) => Err(e),
             }
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "File already closed."))
+            panic!("seek: No file.");
         }
     }
 
@@ -98,52 +133,33 @@ impl DisktestFile {
         if let Some(f) = self.file.as_mut() {
             f.sync_all()
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "File already closed."))
+            Ok(())
         }
     }
 
     /// Read data from the file.
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.do_open()?;
         if let Some(f) = self.file.as_mut() {
             f.read(buffer)
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "File already closed."))
+            panic!("read: No file.");
         }
     }
 
     /// Write data to the file.
     fn write(&mut self, buffer: &[u8]) -> io::Result<()> {
+        self.do_open()?;
         if let Some(f) = self.file.as_mut() {
             match f.write_all(buffer) {
                 Ok(()) => {
-                    self.write_count += buffer.len() as u64;
+                    self.drop_count += buffer.len() as u64;
                     Ok(())
                 },
                 Err(e) => Err(e),
             }
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "File already closed."))
-        }
-    }
-
-    /// Close the file and try to drop all write caches.
-    fn close(&mut self) {
-        // Take and destruct the File object.
-        if let Some(file) = self.file.take() {
-            // If bytes have been written, try to drop the operating system caches.
-            if self.write_count > 0 {
-                // Pass the File object to the dropper.
-                // It will destruct the File object.
-                if let Err(e) = drop_file_caches(file,
-                                                 self.path.as_path(),
-                                                 self.seek_offset,
-                                                 self.write_count) {
-                    eprintln!("WARNING: Failed to drop operating system caches: {}", e);
-                } else if self.quiet_level < 1 {
-                    println!("Write done and successfully dropped file caches.");
-                }
-                self.write_count = 0;
-            }
+            panic!("write: No file.");
         }
     }
 
@@ -151,16 +167,16 @@ impl DisktestFile {
     fn get_path(&self) -> &PathBuf {
         &self.path
     }
-
-    /// Get the current --quiet level.
-    fn get_quiet_level(&self) -> u8 {
-        self.quiet_level
-    }
 }
 
 impl Drop for DisktestFile {
     fn drop(&mut self) {
-        self.close();
+        if self.file.is_some() {
+            eprintln!("WARNING: File not closed. Closing now...");
+            if let Err(e) = self.close() {
+                panic!("Failed to drop operating system caches: {}", e);
+            }
+        }
     }
 }
 
@@ -170,6 +186,7 @@ pub struct Disktest {
     log_count:      u64,
     log_time:       Instant,
     begin_time:     Instant,
+    quiet_level:    u8,
 }
 
 impl Disktest {
@@ -181,6 +198,7 @@ impl Disktest {
                seed:            Vec<u8>,
                invert_pattern:  bool,
                nr_threads:      usize,
+               quiet_level:     u8,
                abort:           Option<Arc<AtomicBool>>) -> Disktest {
 
         let nr_threads = if nr_threads == 0 { num_cpus::get() } else { nr_threads };
@@ -194,6 +212,7 @@ impl Disktest {
             log_count: 0,
             log_time: Instant::now(),
             begin_time: Instant::now(),
+            quiet_level,
         }
     }
 
@@ -206,7 +225,6 @@ impl Disktest {
 
     /// Log progress.
     fn log(&mut self,
-           quiet_level: u8,
            prefix: &str,
            inc_processed: usize,
            abs_processed: u64,
@@ -214,19 +232,19 @@ impl Disktest {
            suffix: &str) {
 
         // Logging is enabled?
-        if quiet_level < 2 {
+        if self.quiet_level < 2 {
 
             // Increment byte count.
             // Only if byte count is bigger than threshold, then check time.
             // This reduces the number of calls to Instant::now.
             self.log_count += inc_processed as u64;
-            if (self.log_count >= LOG_BYTE_THRES && quiet_level == 0) || no_limiting {
+            if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == 0) || no_limiting {
 
                 // Check if it's time to write the next log entry.
                 let now = Instant::now();
                 let expired = now.duration_since(self.log_time).as_secs() >= LOG_SEC_THRES;
 
-                if (expired && quiet_level == 0) || no_limiting {
+                if (expired && self.quiet_level == 0) || no_limiting {
 
                     let dur_elapsed = now - self.begin_time;
                     let sec_elapsed = dur_elapsed.as_secs();
@@ -253,7 +271,7 @@ impl Disktest {
 
         self.log_reset();
 
-        if file.get_quiet_level() < 2 {
+        if self.quiet_level < 2 {
             println!("{} {:?}, starting at position {}...",
                      prefix,
                      file.get_path(),
@@ -277,14 +295,19 @@ impl Disktest {
     fn write_finalize(&mut self,
                       file: &mut DisktestFile,
                       bytes_written: u64) -> ah::Result<()> {
-        if file.get_quiet_level() < 2 {
+        if self.quiet_level < 2 {
             println!("Writing stopped. Syncing...");
         }
         if let Err(e) = file.sync() {
             return Err(ah::format_err!("Sync failed: {}", e));
         }
-        self.log(file.get_quiet_level(),
-                 "Done. Wrote ", 0, bytes_written, true, ".");
+
+        self.log("Done. Wrote ", 0, bytes_written, true, ".");
+
+        if let Err(e) = file.close() {
+            return Err(ah::format_err!("Failed to drop operating system caches: {}", e));
+        }
+        println!("Successfully dropped file caches.");
 
         Ok(())
     }
@@ -325,8 +348,7 @@ impl Disktest {
                 self.write_finalize(&mut file, bytes_written)?;
                 break;
             }
-            self.log(file.get_quiet_level(),
-                     "Wrote ", write_len, bytes_written, false, " ...");
+            self.log("Wrote ", write_len, bytes_written, false, " ...");
 
             if let Some(abort) = &self.abort {
                 if abort.load(Ordering::Relaxed) {
@@ -340,11 +362,8 @@ impl Disktest {
     }
 
     /// Finalize verification.
-    fn verify_finalize(&mut self,
-                       file: &DisktestFile,
-                       bytes_read: u64) {
-        self.log(file.get_quiet_level(),
-                 "Done. Verified ", 0, bytes_read, true, ".");
+    fn verify_finalize(&mut self, bytes_read: u64) {
+        self.log("Done. Verified ", 0, bytes_read, true, ".");
     }
 
     /// Handle verification failure.
@@ -401,18 +420,17 @@ impl Disktest {
                         bytes_read += read_count as u64;
                         bytes_left -= read_count as u64;
                         if bytes_left == 0 {
-                            self.verify_finalize(&file, bytes_read);
+                            self.verify_finalize(bytes_read);
                             break;
                         }
-                        self.log(file.get_quiet_level(),
-                                 "Verified ", read_count, bytes_read, false, " ...");
+                        self.log("Verified ", read_count, bytes_read, false, " ...");
                         read_count = 0;
                         read_len = min(readbuf_len as u64, bytes_left) as usize;
                     }
 
                     // End of the disk?
                     if n == 0 {
-                        self.verify_finalize(&file, bytes_read);
+                        self.verify_finalize(bytes_read);
                         break;
                     }
                 },
@@ -424,7 +442,7 @@ impl Disktest {
 
             if let Some(abort) = &self.abort {
                 if abort.load(Ordering::Relaxed) {
-                    self.verify_finalize(&file, bytes_read);
+                    self.verify_finalize(bytes_read);
                     return Err(ah::format_err!("Aborted by signal!"));
                 }
             }
@@ -449,15 +467,16 @@ mod tests {
         let mut loc_file = file.try_clone().unwrap();
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
-        let mut dt = Disktest::new(algorithm, seed, false, nr_threads, None);
+        let mut dt = Disktest::new(algorithm, seed, false, nr_threads, 0, None);
 
         let mk_file = || {
             DisktestFile {
-                file: Some(file.try_clone().unwrap()),
                 path: path.to_path_buf(),
-                seek_offset: 0,
-                write_count: 0,
-                quiet_level: 0,
+                read: true,
+                write: true,
+                file: Some(file.try_clone().unwrap()),
+                drop_offset: 0,
+                drop_count: 0,
             }
         };
 

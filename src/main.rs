@@ -62,11 +62,11 @@ fn new_disktest(args:  &Args,
                       args.seed.as_bytes().to_vec(),
                       args.invert_pattern,
                       args.threads,
+                      args.quiet,
                       Some(Arc::clone(abort))),
         DisktestFile::open(&args.device,
                            !write,
-                           write,
-                           args.quiet)?,
+                           write)?,
     ))
 }
 
