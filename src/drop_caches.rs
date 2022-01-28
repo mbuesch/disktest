@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020 Michael Buesch <m@bues.ch>
+// Copyright 2020-2022 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -34,7 +34,9 @@ fn os_drop_file_caches(file: File,
     use std::os::unix::io::AsRawFd;
 
     // Try FADV_DONTNEED to drop caches.
-    file.sync_all().ok();
+    if let Err(e) = file.sync_all() {
+        return Err(ah::format_err!("Failed to flush: {}", e));
+    }
     let ret = unsafe { posix_fadvise(file.as_raw_fd(),
                                      offset as off_t,
                                      size as off_t,
@@ -79,7 +81,9 @@ fn os_drop_file_caches(file: File,
     };
 
     // Close the file before re-opening it.
-    file.sync_all().ok();
+    if let Err(e) = file.sync_all() {
+        return Err(ah::format_err!("Failed to flush: {}", e));
+    }
     drop(file);
 
     // Open the file with FILE_FLAG_NO_BUFFERING.
