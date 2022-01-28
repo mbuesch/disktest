@@ -362,8 +362,14 @@ impl Disktest {
     }
 
     /// Finalize verification.
-    fn verify_finalize(&mut self, bytes_read: u64) {
+    fn verify_finalize(&mut self,
+                       file: &mut DisktestFile,
+                       bytes_read: u64) -> ah::Result<()> {
         self.log("Done. Verified ", 0, bytes_read, true, ".");
+        if let Err(e) = file.close() {
+            return Err(ah::format_err!("Failed to close device: {}", e));
+        }
+        Ok(())
     }
 
     /// Handle verification failure.
@@ -420,7 +426,7 @@ impl Disktest {
                         bytes_read += read_count as u64;
                         bytes_left -= read_count as u64;
                         if bytes_left == 0 {
-                            self.verify_finalize(bytes_read);
+                            self.verify_finalize(&mut file, bytes_read)?;
                             break;
                         }
                         self.log("Verified ", read_count, bytes_read, false, " ...");
@@ -430,7 +436,7 @@ impl Disktest {
 
                     // End of the disk?
                     if n == 0 {
-                        self.verify_finalize(bytes_read);
+                        self.verify_finalize(&mut file, bytes_read)?;
                         break;
                     }
                 },
@@ -442,7 +448,7 @@ impl Disktest {
 
             if let Some(abort) = &self.abort {
                 if abort.load(Ordering::Relaxed) {
-                    self.verify_finalize(bytes_read);
+                    self.verify_finalize(&mut file, bytes_read)?;
                     return Err(ah::format_err!("Aborted by signal!"));
                 }
             }
