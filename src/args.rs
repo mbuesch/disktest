@@ -21,7 +21,7 @@
 
 use anyhow as ah;
 use clap::ErrorKind::{DisplayHelp, DisplayVersion};
-use clap::{App, Arg};
+use clap::{Command, Arg};
 use crate::disktest::{DtStreamType, Disktest};
 use crate::seed::gen_seed_string;
 use crate::util::parsebytes;
@@ -127,7 +127,7 @@ where I: IntoIterator<Item = T>,
         ah::format_err!("Invalid {} value: {}", param, error)
     }
 
-    let args = App::new("disktest")
+    let args = Command::new("disktest")
         .about(&*(ABOUT.to_string() + EXAMPLE))
         .arg(Arg::new("device")
              .index(1)
@@ -180,7 +180,7 @@ where I: IntoIterator<Item = T>,
     let args = match args {
         Ok(x) => x,
         Err(e) => {
-            match e.kind {
+            match e.kind() {
                 DisplayHelp | DisplayVersion => {
                     print!("{}", e);
                     std::process::exit(0);
