@@ -31,6 +31,7 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::available_parallelism;
 use std::time::Instant;
 
 #[cfg(not(target_os="windows"))]
@@ -201,7 +202,15 @@ impl Disktest {
                quiet_level:     u8,
                abort:           Option<Arc<AtomicBool>>) -> Disktest {
 
-        let nr_threads = if nr_threads == 0 { num_cpus::get() } else { nr_threads };
+        let nr_threads = if nr_threads == 0 {
+            if let Ok(cpus) = available_parallelism() {
+                cpus.get()
+            } else {
+                1
+            }
+        } else {
+            nr_threads
+        };
 
         Disktest {
             stream_agg: DtStreamAgg::new(algorithm,

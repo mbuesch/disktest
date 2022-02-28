@@ -62,7 +62,7 @@ If your storage media under test is drive D, then the following command would ru
 Dependencies
 ============
 
-* `Rust (edition 2021) <https://www.rust-lang.org/>`_ or later.
+* `Rust 1.59.0 <https://www.rust-lang.org/>`_ or later.
 * Crate dependencies will automatically be downloaded by cargo.
 
 
