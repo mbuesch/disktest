@@ -474,82 +474,113 @@ impl Disktest {
 #[cfg(test)]
 mod tests {
     use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc};
-    use std::path::Path;
+    use std::path::PathBuf;
     use super::*;
-    use tempfile::NamedTempFile;
+    use tempfile::tempdir;
 
     fn run_test(algorithm: DtStreamType, base_size: usize, chunk_factor: usize) {
-        let mut tfile = NamedTempFile::new().unwrap();
-        let pstr = String::from(tfile.path().to_str().unwrap());
-        let path = Path::new(&pstr);
-        let file = tfile.as_file_mut();
-        let mut loc_file = file.try_clone().unwrap();
+        let tdir = tempdir().unwrap();
+        let tdir_path = tdir.path();
+        let mut serial = 0;
+
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
         let mut dt = Disktest::new(algorithm, seed, false, nr_threads, 0, None);
 
-        let mk_file = || {
+        let mk_file = |num, create| {
+            let mut path = PathBuf::from(tdir_path);
+            path.push(format!("tmp-{}.img", num));
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(create)
+                .open(&path)
+                .unwrap();
             DisktestFile {
                 path: path.to_path_buf(),
                 read: true,
                 write: true,
-                file: Some(file.try_clone().unwrap()),
+                file: Some(file),
                 drop_offset: 0,
                 drop_count: 0,
             }
         };
 
         // Write a couple of bytes and verify them.
-        let nr_bytes = 1000;
-        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(mk_file(), 0, u64::MAX).unwrap(), nr_bytes);
+        {
+            let nr_bytes = 1000;
+            assert_eq!(dt.write(mk_file(serial, true), 0, nr_bytes).unwrap(), nr_bytes);
+            assert_eq!(dt.verify(mk_file(serial, false), 0, u64::MAX).unwrap(), nr_bytes);
+            serial += 1;
+        }
 
         // Write a couple of bytes and verify half of them.
-        let nr_bytes = 1000;
-        loc_file.set_len(0).unwrap();
-        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(mk_file(), 0, nr_bytes / 2).unwrap(), nr_bytes / 2);
+        {
+            let nr_bytes = 1000;
+            assert_eq!(dt.write(mk_file(serial, true), 0, nr_bytes).unwrap(), nr_bytes);
+            assert_eq!(dt.verify(mk_file(serial, false), 0, nr_bytes / 2).unwrap(), nr_bytes / 2);
+            serial += 1;
+        }
 
         // Write a big chunk that is aggregated and verify it.
-        loc_file.set_len(0).unwrap();
-        let nr_bytes = (base_size * chunk_factor * nr_threads * 2 + 100) as u64;
-        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(mk_file(), 0, u64::MAX).unwrap(), nr_bytes);
+        {
+            let nr_bytes = (base_size * chunk_factor * nr_threads * 2 + 100) as u64;
+            assert_eq!(dt.write(mk_file(serial, true), 0, nr_bytes).unwrap(), nr_bytes);
+            assert_eq!(dt.verify(mk_file(serial, false), 0, u64::MAX).unwrap(), nr_bytes);
+            serial += 1;
+        }
 
         // Check whether write rewinds the file.
-        let nr_bytes = 1000;
-        loc_file.set_len(100).unwrap();
-        loc_file.seek(SeekFrom::Start(10)).unwrap();
-        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(mk_file(), 0, u64::MAX).unwrap(), nr_bytes);
+        {
+            let nr_bytes = 1000;
+            {
+                let mut f = mk_file(serial, true);
+                f.file.as_mut().unwrap().set_len(100).unwrap();
+                f.file.as_mut().unwrap().seek(SeekFrom::Start(10)).unwrap();
+                assert_eq!(dt.write(f, 0, nr_bytes).unwrap(), nr_bytes);
+            }
+            assert_eq!(dt.verify(mk_file(serial, false), 0, u64::MAX).unwrap(), nr_bytes);
+            serial += 1;
+        }
 
         // Modify the written data and assert failure.
-        let nr_bytes = 1000;
-        loc_file.set_len(0).unwrap();
-        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
-        loc_file.seek(SeekFrom::Start(10)).unwrap();
-        writeln!(loc_file, "X").unwrap();
-        match dt.verify(mk_file(), 0, nr_bytes) {
-            Ok(_) => panic!("Verify of modified data did not fail!"),
-            Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at byte 10!"),
+        {
+            let nr_bytes = 1000;
+            assert_eq!(dt.write(mk_file(serial, true), 0, nr_bytes).unwrap(), nr_bytes);
+            {
+                let mut f = mk_file(serial, false);
+                f.file.as_mut().unwrap().seek(SeekFrom::Start(10)).unwrap();
+                writeln!(f.file.as_mut().unwrap(), "X").unwrap();
+            }
+            match dt.verify(mk_file(serial, false), 0, nr_bytes) {
+                Ok(_) => panic!("Verify of modified data did not fail!"),
+                Err(e) => assert_eq!(e.to_string(), "Data MISMATCH at byte 10!"),
+            }
+            serial += 1;
         }
 
         // Check verify with seek.
-        loc_file.set_len(0).unwrap();
-        let nr_bytes = (base_size * chunk_factor * nr_threads * 10) as u64;
-        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
-        for offset in (0..nr_bytes).step_by(base_size * chunk_factor / 2) {
-            let bytes_verified = dt.verify(mk_file(), offset, u64::MAX).unwrap();
-            assert!(bytes_verified > 0 && bytes_verified <= nr_bytes);
+        {
+            let nr_bytes = (base_size * chunk_factor * nr_threads * 10) as u64;
+            assert_eq!(dt.write(mk_file(serial, true), 0, nr_bytes).unwrap(), nr_bytes);
+            for offset in (0..nr_bytes).step_by(base_size * chunk_factor / 2) {
+                let bytes_verified = dt.verify(mk_file(serial, false), offset, u64::MAX).unwrap();
+                assert!(bytes_verified > 0 && bytes_verified <= nr_bytes);
+            }
+            serial += 1;
         }
 
         // Check write with seek.
-        loc_file.set_len(0).unwrap();
-        let nr_bytes = (base_size * chunk_factor * nr_threads * 10) as u64;
-        assert_eq!(dt.write(mk_file(), 0, nr_bytes).unwrap(), nr_bytes);
-        let offset = (base_size * chunk_factor * nr_threads * 2) as u64;
-        assert_eq!(dt.write(mk_file(), offset, nr_bytes).unwrap(), nr_bytes);
-        assert_eq!(dt.verify(mk_file(), 0, u64::MAX).unwrap(), nr_bytes + offset);
+        {
+            let nr_bytes = (base_size * chunk_factor * nr_threads * 10) as u64;
+            assert_eq!(dt.write(mk_file(serial, true), 0, nr_bytes).unwrap(), nr_bytes);
+            let offset = (base_size * chunk_factor * nr_threads * 2) as u64;
+            assert_eq!(dt.write(mk_file(serial, false), offset, nr_bytes).unwrap(), nr_bytes);
+            assert_eq!(dt.verify(mk_file(serial, false), 0, u64::MAX).unwrap(), nr_bytes + offset);
+            //serial += 1;
+        }
+
+        tdir.close().unwrap();
     }
 
     #[test]
