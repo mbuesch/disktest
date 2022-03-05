@@ -25,18 +25,28 @@ use std::path::Path;
 
 #[cfg(target_os="linux")]
 fn os_drop_file_caches(file: File,
-                       _path: &Path,
+                       path: &Path,
                        offset: u64,
                        size: u64) -> ah::Result<()> {
-    use libc::{posix_fadvise, POSIX_FADV_DONTNEED, off_t};
-    use std::fs::OpenOptions;
+    use libc::{posix_fadvise, POSIX_FADV_DONTNEED, off_t, S_IFMT, S_IFCHR};
+    use std::fs::{OpenOptions, metadata};
     use std::io::Write;
-    use std::os::unix::io::AsRawFd;
+    use std::os::unix::{fs::MetadataExt, io::AsRawFd};
 
-    // Try FADV_DONTNEED to drop caches.
+    if let Ok(meta) = metadata(path) {
+        if meta.mode() & S_IFMT == S_IFCHR {
+            // This is a character device.
+            // We're done. Don't flush.
+            return Ok(());
+        }
+    }
+
+    // fsync()
     if let Err(e) = file.sync_all() {
         return Err(ah::format_err!("Failed to flush: {}", e));
     }
+
+    // Try FADV_DONTNEED to drop caches.
     let ret = unsafe { posix_fadvise(file.as_raw_fd(),
                                      offset as off_t,
                                      size as off_t,
