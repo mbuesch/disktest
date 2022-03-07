@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020 Michael Buesch <m@bues.ch>
+// Copyright 2020-2022 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,10 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use crypto::digest::Digest;
-use crypto::hmac::Hmac;
-use crypto::pbkdf2::pbkdf2;
-use crypto::sha2::Sha512;
+use ring::{digest, pbkdf2};
 
 const ITERATIONS: u32   = 50000;
 const DK_SIZE: usize    = 256 / 8;
@@ -32,11 +29,10 @@ fn derive_salt(key: &[u8]) -> [u8; 512/8] {
     // Generate the salt from the key.
     // That's not a great salt, but good enough for our purposes.
     let mut salt = [0; 512/8];
-    let mut salt_hash = Sha512::new();
-    salt_hash.input_str("disktest salt");
-    salt_hash.input(key);
-    salt_hash.result(&mut salt);
-
+    let mut salt_hash = digest::Context::new(&digest::SHA512);
+    salt_hash.update(b"disktest salt");
+    salt_hash.update(key);
+    salt.copy_from_slice(salt_hash.finish().as_ref());
     salt
 }
 
@@ -46,13 +42,13 @@ pub fn kdf(seed: &[u8], thread_id: u32) -> Vec<u8> {
     let mut key = seed.to_vec();
     key.extend_from_slice(&thread_id.to_le_bytes());
 
-    // Use HMAC-SHA512 as PRF.
-    let mut mac = Hmac::new(Sha512::new(), &key);
-
     // Calculated the DK (derived key).
     let mut dk = [0; DK_SIZE];
-    pbkdf2(&mut mac, &derive_salt(&key), ITERATIONS, &mut dk);
-
+    pbkdf2::derive(pbkdf2::PBKDF2_HMAC_SHA512,
+                   ITERATIONS.try_into().unwrap(),
+                   &derive_salt(&key),
+                   &key,
+                   &mut dk);
     dk.to_vec()
 }
 
