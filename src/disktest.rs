@@ -21,8 +21,9 @@
 
 use anyhow as ah;
 use crate::drop_caches::drop_file_caches;
+use crate::fifo::BackedFifo;
 use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
-use crate::util::prettybytes;
+use crate::util::{prettybytes, hash_sha256};
 use hhmmss::Hhmmss;
 use std::cmp::min;
 use std::fs::{File, OpenOptions};
@@ -46,6 +47,7 @@ const LOG_SEC_THRES: u64    = 10;
 
 pub struct DisktestFile {
     path:           PathBuf,
+    recovery_db:    Option<PathBuf>,
     read:           bool,
     write:          bool,
     file:           Option<File>,
@@ -56,10 +58,12 @@ pub struct DisktestFile {
 impl DisktestFile {
     /// Open a file for use by the Disktest core.
     pub fn open(path:           &Path,
+                recovery_db:    Option<&Path>,
                 read:           bool,
                 write:          bool) -> ah::Result<DisktestFile> {
         Ok(DisktestFile {
             path:           path.to_path_buf(),
+            recovery_db:    recovery_db.map(|r| r.to_path_buf()),
             read,
             write,
             file:           None,
@@ -70,10 +74,11 @@ impl DisktestFile {
 
     fn do_open(&mut self) -> io::Result<()> {
         if self.file.is_none() {
-            self.file = match OpenOptions::new().read(self.read)
-                                                .write(self.write)
-                                                .create(self.write)
-                                                .open(self.path.as_path()) {
+            self.file = match OpenOptions::new()
+                        .read(self.read || (self.write && self.is_nondestructive_mode()))
+                        .write(self.write || (self.read && self.is_nondestructive_mode()))
+                        .create(self.write && !self.is_nondestructive_mode())
+                        .open(self.path.as_path()) {
                 Ok(f) => Some(f),
                 Err(e) => {
                     let msg = format!("Failed to open file {:?}: {}", self.path, e);
@@ -173,6 +178,16 @@ impl DisktestFile {
     fn get_path(&self) -> &PathBuf {
         &self.path
     }
+
+    /// Get the path to the recovery database, if any.
+    fn get_recovery_db(&self) -> Option<PathBuf> {
+        self.recovery_db.as_ref().cloned()
+    }
+
+    /// Non-destructive mode enabled?
+    fn is_nondestructive_mode(&self) -> bool {
+        self.recovery_db.is_some()
+    }
 }
 
 impl Drop for DisktestFile {
@@ -184,6 +199,33 @@ impl Drop for DisktestFile {
             }
         }
     }
+}
+
+/// Transform a read disk data lump into a pseudo random stream or vice versa.
+fn transform_lump(lump: &mut [u8],
+                  mut spare_chunk: Option<(DtStreamAggChunk, usize)>,
+                  stream_agg: &mut DtStreamAgg)
+                  -> ah::Result<Option<(DtStreamAggChunk, usize)>> {
+    let mut i = 0;
+    'main: loop {
+        let (chunk, start) = if let Some((chunk, offs)) = spare_chunk.take() {
+            (chunk, offs)
+        } else {
+            (stream_agg.wait_chunk()?, 0)
+        };
+        let chunk_data = chunk.get_data();
+        for j in start..chunk_data.len() {
+            lump[i] ^= chunk_data[j];
+            i += 1;
+            if i >= lump.len() {
+                if j < chunk_data.len() - 1 {
+                    spare_chunk = Some((chunk, j + 1));
+                }
+                break 'main;
+            }
+        }
+    }
+    Ok(spare_chunk)
 }
 
 pub struct Disktest {
@@ -198,6 +240,9 @@ pub struct Disktest {
 impl Disktest {
     /// Unlimited max_bytes.
     pub const UNLIMITED: u64 = u64::MAX;
+
+    /// Lump length. (non-destructive mode only).
+    const LUMP_LEN: usize = 512 * 65536;
 
     /// Create a new Disktest instance.
     pub fn new(algorithm:       DtStreamType,
@@ -344,17 +389,107 @@ impl Disktest {
         Ok(())
     }
 
-    /// Run disktest in write mode.
-    pub fn write(&mut self,
-                 file: DisktestFile,
-                 seek: u64,
-                 max_bytes: u64) -> ah::Result<u64> {
-        let mut file = file;
+    fn write_nondestructive_mode(&mut self,
+                                 mut file: DisktestFile,
+                                 seek: u64,
+                                 max_bytes: u64) -> ah::Result<u64> {
         let mut bytes_left = max_bytes;
-        let mut bytes_written = 0u64;
+        let mut bytes_written = 0_u64;
+        let mut read_sum;
+        let mut lump = vec![0_u8; Self::LUMP_LEN];
+        let mut spare_chunk: Option<(DtStreamAggChunk, usize)> = None;
+
+        // Create the hash database.
+        let db_path = file.get_recovery_db().expect("No DB in non-destructive mode.");
+        let mut db: BackedFifo<[u8; 256/8]> = BackedFifo::create(db_path.as_path())?;
+
+        self.init(&mut file, "Writing", seek)?;
+
+        'main: loop {
+            // First read the disk data.
+            let mut lump_len = min(Self::LUMP_LEN as u64, bytes_left) as usize;
+            read_sum = 0;
+            'read: loop {
+                match file.read(&mut lump[read_sum..read_sum+(lump_len-read_sum)]) {
+                    Ok(n) => {
+                        read_sum += n;
+                        assert!(read_sum <= lump_len);
+                        if n == 0 || read_sum >= lump_len {
+                            break 'read;
+                        }
+                    },
+                    Err(e) => {
+                        //TODO attempt to restore
+                        return Err(ah::format_err!("Read error at {}: {}",
+                                                   prettybytes(bytes_written, true, true), e));
+                    },
+                }
+            }
+            lump_len = read_sum;
+
+            // Rewind the file pointer.
+            if let Err(e) = file.seek_noflush(bytes_written) {
+                //TODO
+            }
+
+            if lump_len == 0 { // We are done.
+                bytes_left = 0;
+            } else {
+                // Hash the lump and store to DB for later verification.
+                if let Err(e) = db.push_back(hash_sha256(&lump[0..lump_len])) {
+                    //TODO
+                }
+
+                // Transform the disk data into a pseudo random stream.
+                spare_chunk = transform_lump(&mut lump[0..lump_len],
+                                             spare_chunk,
+                                             &mut self.stream_agg)?;
+
+                // Write the transformed lump to disk.
+                if let Err(e) = file.write(&lump[0..lump_len]) {
+                    if let Some(err_code) = e.raw_os_error() {
+                        //FIXME should not happen
+                        if max_bytes == Disktest::UNLIMITED &&
+                           err_code == ENOSPC as i32 {
+                            self.write_finalize(&mut file, true, bytes_written)?;
+                            break 'main; // End of device. -> Success.
+                        }
+                    }
+                    self.write_finalize(&mut file, false, bytes_written).ok();
+                    return Err(ah::format_err!("Write error: {}", e));
+                }
+
+                // Account for the processed bytes.
+                bytes_written += lump_len as u64;
+                bytes_left -= lump_len as u64;
+            }
+
+            if bytes_left == 0 { // We are done.
+                self.write_finalize(&mut file, true, bytes_written)?;
+                break 'main;
+            }
+            self.log("Wrote ", lump_len, bytes_written, false);
+
+            if self.abort_requested() {
+                self.write_finalize(&mut file, false, bytes_written).ok();
+                //TODO revert the disk changes.
+                break 'main;
+            }
+        }
+
+        Ok(bytes_written)
+    }
+
+    fn write_destructive_mode(&mut self,
+                              mut file: DisktestFile,
+                              seek: u64,
+                              max_bytes: u64) -> ah::Result<u64> {
+        let mut bytes_left = max_bytes;
+        let mut bytes_written = 0_u64;
         let chunk_size = self.stream_agg.get_chunk_size() as u64;
 
         self.init(&mut file, "Writing", seek)?;
+
         loop {
             // Get the next data chunk.
             let chunk = self.stream_agg.wait_chunk()?;
@@ -389,6 +524,18 @@ impl Disktest {
         }
 
         Ok(bytes_written)
+    }
+
+    /// Run disktest in write mode.
+    pub fn write(&mut self,
+                 file: DisktestFile,
+                 seek: u64,
+                 max_bytes: u64) -> ah::Result<u64> {
+        if file.is_nondestructive_mode() {
+            self.write_nondestructive_mode(file, seek, max_bytes)
+        } else {
+            self.write_destructive_mode(file, seek, max_bytes)
+        }
     }
 
     /// Finalize verification.
@@ -428,21 +575,101 @@ impl Disktest {
         panic!("Internal error: verify_failed() no mismatch.");
     }
 
-    /// Run disktest in verify mode.
-    pub fn verify(&mut self,
-                  file: DisktestFile,
-                  seek: u64,
-                  max_bytes: u64) -> ah::Result<u64> {
-        let mut file = file;
+    fn verify_nondestructive_mode(&mut self,
+                                  mut file: DisktestFile,
+                                  seek: u64,
+                                  max_bytes: u64) -> ah::Result<u64> {
         let mut bytes_left = max_bytes;
-        let mut bytes_read = 0u64;
+        let mut bytes_read = 0_u64;
+        let mut read_sum;
+        let mut lump = vec![0_u8; Self::LUMP_LEN];
+        let mut spare_chunk: Option<(DtStreamAggChunk, usize)> = None;
 
+        self.init(&mut file, "Verifying and restoring old data", seek)?;
+
+        // Open the hash database.
+        let db_path = file.get_recovery_db().expect("No DB in non-destructive mode.");
+        let mut db: BackedFifo<[u8; 256/8]> = BackedFifo::open(db_path.as_path())?;
+
+        'main: loop {
+            let mut lump_len = min(Self::LUMP_LEN as u64, bytes_left) as usize;
+            read_sum = 0;
+            'read: loop {
+                match file.read(&mut lump[read_sum..read_sum+(lump_len-read_sum)]) {
+                    Ok(n) => {
+                        read_sum += n;
+                        assert!(read_sum <= lump_len);
+                        if n == 0 || read_sum >= lump_len {
+                            break 'read;
+                        }
+                    },
+                    Err(e) => {
+                        //TODO what to do?
+                        return Err(ah::format_err!("Read error at {}: {}",
+                                                   prettybytes(bytes_read, true, true), e));
+                    },
+                }
+            }
+            lump_len = read_sum;
+
+            // Rewind the file pointer.
+            if let Err(e) = file.seek_noflush(bytes_read) {
+                //TODO
+            }
+
+            if lump_len == 0 && bytes_left > 0 {
+                //TODO
+                return Err(ah::format_err!("Short read error at {}.",
+                                           prettybytes(bytes_read, true, true)));
+            }
+
+            // Transform the disk data back into a plain stream.
+            spare_chunk = transform_lump(&mut lump[0..lump_len],
+                                         spare_chunk,
+                                         &mut self.stream_agg)?;
+
+            // Verify the hash.
+            let expected_hash = db.pop_front().expect("Hash list empty.");//TODO handle this error
+            let actual_hash = hash_sha256(&lump[0..lump_len]);
+            if expected_hash != actual_hash {
+                //TODO
+                return Err(ah::format_err!("Data MISMATCH at {}!",
+                                           prettybytes(bytes_read, true, true)));
+            }
+
+            // Write the plain lump to disk.
+            if let Err(e) = file.write(&lump[0..lump_len]) {
+                self.verify_finalize(&mut file, false, bytes_read).ok();
+                //TODO?
+                return Err(ah::format_err!("Write error: {}", e));
+            }
+
+            // Account for the processed bytes.
+            bytes_read += lump_len as u64;
+            bytes_left -= lump_len as u64;
+
+            if bytes_left == 0 { // We are done.
+                self.verify_finalize(&mut file, true, bytes_read)?;
+                break 'main;
+            }
+        }
+
+        Ok(bytes_read)
+    }
+
+    fn verify_destructive_mode(&mut self,
+                               mut file: DisktestFile,
+                               seek: u64,
+                               max_bytes: u64) -> ah::Result<u64> {
+        let mut bytes_left = max_bytes;
+        let mut bytes_read = 0_u64;
         let readbuf_len = self.stream_agg.get_chunk_size();
         let mut buffer = vec![0; readbuf_len];
         let mut read_count = 0;
         let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
 
         self.init(&mut file, "Verifying", seek)?;
+
         loop {
             // Read the next chunk from disk.
             match file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
@@ -492,6 +719,18 @@ impl Disktest {
 
         Ok(bytes_read)
     }
+
+    /// Run disktest in verify mode.
+    pub fn verify(&mut self,
+                  file: DisktestFile,
+                  seek: u64,
+                  max_bytes: u64) -> ah::Result<u64> {
+        if file.is_nondestructive_mode() {
+            self.verify_nondestructive_mode(file, seek, max_bytes)
+        } else {
+            self.verify_destructive_mode(file, seek, max_bytes)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -521,6 +760,7 @@ mod tests {
                 .unwrap();
             DisktestFile {
                 path: path.to_path_buf(),
+                recovery_db: None,
                 read: true,
                 write: true,
                 file: Some(file),
@@ -603,6 +843,8 @@ mod tests {
             //serial += 1;
         }
 
+        //TODO
+
         tdir.close().unwrap();
     }
 
@@ -632,6 +874,26 @@ mod tests {
         run_test(DtStreamType::Crc,
                  GeneratorCrc::BASE_SIZE,
                  GeneratorCrc::CHUNK_FACTOR);
+    }
+
+    #[test]
+    fn test_transform_lump() {
+        let mut stream_agg = DtStreamAgg::new(DtStreamType::ChaCha20, vec![1, 2, 3], false, 1);
+
+        let mut a = [1, 2, 3, 4, 5, 6];
+        let mut b = [10, 20, 30, 40, 50, 60, 70];
+
+        stream_agg.activate(0).unwrap();
+        let (spare, offs) = transform_lump(&mut a, None, &mut stream_agg).unwrap().unwrap();
+        transform_lump(&mut b, Some((spare, offs)), &mut stream_agg).unwrap().unwrap();
+        assert_ne!(a, [1, 2, 3, 4, 5, 6]);
+        assert_ne!(b, [10, 20, 30, 40, 50, 60, 70]);
+
+        stream_agg.activate(0).unwrap();
+        let (spare, offs) = transform_lump(&mut a, None, &mut stream_agg).unwrap().unwrap();
+        transform_lump(&mut b, Some((spare, offs)), &mut stream_agg).unwrap().unwrap();
+        assert_eq!(a, [1, 2, 3, 4, 5, 6]);
+        assert_eq!(b, [10, 20, 30, 40, 50, 60, 70]);
     }
 }
 

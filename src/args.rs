@@ -68,6 +68,17 @@ random sequence.
 If both --write and --verify are specified, then the device
 will first be written and then be verified with the same seed.";
 
+const HELP_RECOVERY_DB: &str = "\
+Run --write and --verify mode in such a way that after --verify the original data is written back to the disk. \
+That means a successful --write and --verify sequence both with the same --recovery-database enabled \
+is non-destructive.\n\
+To achieve that, a bookkeeping database has to be stored on another disk drive. \
+The path to that bookkeeping database is passed as --recovery-database argument. \
+This database stores hashes of the original disk content. These hashes are written to the database \
+during the --write then used during the --verify run. \
+Please note that after the --write and before the --verify, the disk under test contains random data. \
+It is recommended (but not required) to use --write and --verify options simultaneously in recovery mode.";
+
 const HELP_SEEK: &str = "\
 Seek to the specified byte position on disk
 before starting the write/verify operation. This skips the specified
@@ -114,6 +125,7 @@ Quiet level:
 /// All command line arguments.
 pub struct Args {
     pub device:         PathBuf,
+    pub recovery_db:    Option<PathBuf>,
     pub write:          bool,
     pub verify:         bool,
     pub seek:           u64,
@@ -139,6 +151,12 @@ where I: IntoIterator<Item = T>,
              .required(true)
              .value_parser(value_parser!(PathBuf))
              .help(HELP_DEVICE))
+        .arg(Arg::new("recovery-database")
+             .long("recovery-database")
+             .short('r')
+             .value_name("DB")
+             .value_parser(value_parser!(PathBuf))
+             .help(HELP_RECOVERY_DB))
         .arg(Arg::new("write")
              .long("write")
              .short('w')
@@ -221,6 +239,8 @@ where I: IntoIterator<Item = T>,
         verify = true;
     }
 
+    let recovery_db = args.get_one::<PathBuf>("recovery-database").cloned();
+
     let seek = *args.get_one::<u64>("seek").unwrap();
 
     let max_bytes = *args.get_one::<u64>("bytes").unwrap();
@@ -257,6 +277,7 @@ where I: IntoIterator<Item = T>,
         seed,
         user_seed,
         invert_pattern,
+        recovery_db,
         threads,
         quiet,
     })
@@ -299,21 +320,36 @@ mod tests {
         assert_eq!(a.device, PathBuf::from("/dev/foobar"));
         assert!(a.write);
         assert!(a.verify);
+        assert!(a.recovery_db.is_none());
         assert!(!a.user_seed);
         let a = parse_args(vec!["disktest", "-w", "-v", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, PathBuf::from("/dev/foobar"));
         assert!(a.write);
         assert!(a.verify);
+        assert!(a.recovery_db.is_none());
         assert!(!a.user_seed);
 
         let a = parse_args(vec!["disktest", "-Sx", "--verify", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, PathBuf::from("/dev/foobar"));
         assert!(!a.write);
         assert!(a.verify);
+        assert!(a.recovery_db.is_none());
         let a = parse_args(vec!["disktest", "-Sx", "-v", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, PathBuf::from("/dev/foobar"));
         assert!(!a.write);
         assert!(a.verify);
+        assert!(a.recovery_db.is_none());
+
+        let a = parse_args(vec!["disktest", "-w", "-v", "--recovery-database", "/tmp/recovery.db", "/dev/foobar"]).unwrap();
+        assert_eq!(a.device, PathBuf::from("/dev/foobar"));
+        assert!(a.write);
+        assert!(a.verify);
+        assert_eq!(a.recovery_db.unwrap(), PathBuf::from("/tmp/recovery.db"));
+        let a = parse_args(vec!["disktest", "-v", "-S", "X", "-r", "/tmp/recovery.db", "/dev/foobar"]).unwrap();
+        assert_eq!(a.device, PathBuf::from("/dev/foobar"));
+        assert!(!a.write);
+        assert!(a.verify);
+        assert_eq!(a.recovery_db.unwrap(), PathBuf::from("/tmp/recovery.db"));
 
         let a = parse_args(vec!["disktest", "-w", "--seek", "123", "/dev/foobar"]).unwrap();
         assert_eq!(a.seek, 123);

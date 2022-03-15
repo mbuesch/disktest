@@ -341,4 +341,13 @@ mod tests {
     }
 }
 
+/// Hash some data with SHA256.
+pub fn hash_sha256(data: &[u8]) -> [u8; 256/8] {
+    use ring::digest::{digest, SHA256};
+
+    let mut hash = [0; 256/8];
+    hash.copy_from_slice(digest(&SHA256, data).as_ref());
+    hash
+}
+
 // vim: ts=4 sw=4 expandtab

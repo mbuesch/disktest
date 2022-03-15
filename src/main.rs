@@ -23,6 +23,7 @@ mod args;
 mod bufcache;
 mod disktest;
 mod drop_caches;
+mod fifo;
 mod generator;
 mod kdf;
 mod seed;
@@ -54,9 +55,10 @@ fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
 }
 
 /// Create a new disktest core instance.
-fn new_disktest(args:  &Args,
-                write: bool,
-                abort: &Arc<AtomicBool>) -> ah::Result<(Disktest, DisktestFile)> {
+fn new_disktest(args:   &Args,
+                read:   bool,
+                write:  bool,
+                abort:  &Arc<AtomicBool>) -> ah::Result<(Disktest, DisktestFile)> {
     Ok((
         Disktest::new(args.algorithm,
                       args.seed.as_bytes().to_vec(),
@@ -65,7 +67,8 @@ fn new_disktest(args:  &Args,
                       args.quiet,
                       Some(Arc::clone(abort))),
         DisktestFile::open(&args.device,
-                           !write,
+                           args.recovery_db.as_deref(),
+                           read,
                            write)?,
     ))
 }
@@ -79,19 +82,19 @@ fn main() -> ah::Result<()> {
         print_generated_seed(&args.seed, true);
     }
 
-    // Run write-mode, if requested.
     let mut result = Ok(());
+
+    // Run write-mode, if requested.
     if args.write {
-        let (mut disktest, file) = new_disktest(&args, true, &abort)?;
+        let (mut disktest, file) = new_disktest(&args, false, true, &abort)?;
         result = match disktest.write(file, args.seek, args.max_bytes) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         };
     }
-
     // Run verify-mode, if requested.
     if args.verify && result.is_ok() {
-        let (mut disktest, file) = new_disktest(&args, false, &abort)?;
+        let (mut disktest, file) = new_disktest(&args, true, false, &abort)?;
         result = match disktest.verify(file, args.seek, args.max_bytes) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
