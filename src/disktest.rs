@@ -225,6 +225,15 @@ impl Disktest {
         }
     }
 
+    /// Abort was requested by user?
+    fn abort_requested(&self) -> bool {
+        if let Some(abort) = &self.abort {
+            abort.load(Ordering::Relaxed)
+        } else {
+            false
+        }
+    }
+
     /// Reset logging.
     fn log_reset(&mut self) {
         self.log_count = 0;
@@ -363,11 +372,9 @@ impl Disktest {
             }
             self.log("Wrote ", write_len, bytes_written, false, " ...");
 
-            if let Some(abort) = &self.abort {
-                if abort.load(Ordering::Relaxed) {
-                    self.write_finalize(&mut file, bytes_written)?;
-                    return Err(ah::format_err!("Aborted by signal!"));
-                }
+            if self.abort_requested() {
+                self.write_finalize(&mut file, bytes_written)?;
+                return Err(ah::format_err!("Aborted by signal!"));
             }
         }
 
@@ -459,11 +466,9 @@ impl Disktest {
                 },
             };
 
-            if let Some(abort) = &self.abort {
-                if abort.load(Ordering::Relaxed) {
-                    self.verify_finalize(&mut file, bytes_read)?;
-                    return Err(ah::format_err!("Aborted by signal!"));
-                }
+            if self.abort_requested() {
+                self.verify_finalize(&mut file, bytes_read)?;
+                return Err(ah::format_err!("Aborted by signal!"));
             }
         }
 
