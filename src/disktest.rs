@@ -316,6 +316,7 @@ impl Disktest {
     /// Finalize and flush writing.
     fn write_finalize(&mut self,
                       file: &mut DisktestFile,
+                      success: bool,
                       bytes_written: u64) -> ah::Result<()> {
         if self.quiet_level < 2 {
             println!("Writing stopped. Syncing...");
@@ -324,12 +325,15 @@ impl Disktest {
             return Err(ah::format_err!("Sync failed: {}", e));
         }
 
-        self.log("Done. Wrote ", 0, bytes_written, true, ".");
+        self.log(if success { "Done. Wrote " } else { "Wrote " },
+                 0, bytes_written, true, ".");
 
         if let Err(e) = file.close() {
             return Err(ah::format_err!("Failed to drop operating system caches: {}", e));
         }
-        println!("Successfully dropped file caches.");
+        if success && self.quiet_level < 2 {
+            println!("Successfully dropped file caches.");
+        }
 
         Ok(())
     }
@@ -355,11 +359,11 @@ impl Disktest {
                 if let Some(err_code) = e.raw_os_error() {
                     if max_bytes == Disktest::UNLIMITED &&
                        err_code == ENOSPC as i32 {
-                        self.write_finalize(&mut file, bytes_written)?;
+                        self.write_finalize(&mut file, true, bytes_written)?;
                         break; // End of device. -> Success.
                     }
                 }
-                self.write_finalize(&mut file, bytes_written)?;
+                self.write_finalize(&mut file, false, bytes_written).ok();
                 return Err(ah::format_err!("Write error: {}", e));
             }
 
@@ -367,13 +371,13 @@ impl Disktest {
             bytes_written += write_len as u64;
             bytes_left -= write_len as u64;
             if bytes_left == 0 {
-                self.write_finalize(&mut file, bytes_written)?;
+                self.write_finalize(&mut file, true, bytes_written)?;
                 break;
             }
             self.log("Wrote ", write_len, bytes_written, false, " ...");
 
             if self.abort_requested() {
-                self.write_finalize(&mut file, bytes_written)?;
+                self.write_finalize(&mut file, false, bytes_written).ok();
                 return Err(ah::format_err!("Aborted by signal!"));
             }
         }
@@ -384,8 +388,10 @@ impl Disktest {
     /// Finalize verification.
     fn verify_finalize(&mut self,
                        file: &mut DisktestFile,
+                       success: bool,
                        bytes_read: u64) -> ah::Result<()> {
-        self.log("Done. Verified ", 0, bytes_read, true, ".");
+        self.log(if success { "Done. Verified " } else { "Verified " },
+                 0, bytes_read, true, ".");
         if let Err(e) = file.close() {
             return Err(ah::format_err!("Failed to close device: {}", e));
         }
@@ -393,11 +399,15 @@ impl Disktest {
     }
 
     /// Handle verification failure.
-    fn verify_failed(&self,
+    fn verify_failed(&mut self,
+                     file: &mut DisktestFile,
                      read_count: usize,
                      bytes_read: u64,
                      buffer: &[u8],
                      chunk: &DtStreamAggChunk) -> ah::Error {
+        if let Err(e) = self.verify_finalize(file, false, bytes_read) {
+            eprintln!("{}", e);
+        }
         for (i, buffer_byte) in buffer.iter().enumerate().take(read_count) {
             if *buffer_byte != chunk.get_data()[i] {
                 let pos = bytes_read + i as u64;
@@ -439,14 +449,15 @@ impl Disktest {
                         // Calculate and compare the read buffer to the pseudo random sequence.
                         let chunk = self.stream_agg.wait_chunk()?;
                         if buffer[..read_count] != chunk.get_data()[..read_count] {
-                            return Err(self.verify_failed(read_count, bytes_read, &buffer, &chunk));
+                            return Err(self.verify_failed(&mut file, read_count, bytes_read, &buffer, &chunk));
                         }
+
 
                         // Account for the read bytes.
                         bytes_read += read_count as u64;
                         bytes_left -= read_count as u64;
                         if bytes_left == 0 {
-                            self.verify_finalize(&mut file, bytes_read)?;
+                            self.verify_finalize(&mut file, true, bytes_read)?;
                             break;
                         }
                         self.log("Verified ", read_count, bytes_read, false, " ...");
@@ -456,18 +467,19 @@ impl Disktest {
 
                     // End of the disk?
                     if n == 0 {
-                        self.verify_finalize(&mut file, bytes_read)?;
+                        self.verify_finalize(&mut file, true, bytes_read)?;
                         break;
                     }
                 },
                 Err(e) => {
+                    self.verify_finalize(&mut file, false, bytes_read).ok();
                     return Err(ah::format_err!("Read error at {}: {}",
                                                prettybytes(bytes_read, true, true), e));
                 },
             };
 
             if self.abort_requested() {
-                self.verify_finalize(&mut file, bytes_read)?;
+                self.verify_finalize(&mut file, false, bytes_read).ok();
                 return Err(ah::format_err!("Aborted by signal!"));
             }
         }
