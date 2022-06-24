@@ -1,7 +1,7 @@
 [package]
 name            = "disktest"
 description     = "Hard Disk and Solid State Disk tester"
-version         = "1.7.0"
+version         = "1.8.0"
 homepage        = "https://bues.ch/h/disktest"
 license         = "GPL-2.0-or-later"
 readme          = "README.md"
