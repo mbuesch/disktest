@@ -3,6 +3,8 @@ disktest - Hard Disk (HDD), Solid State Disk (SSD), USB Stick, SD-Card tester
 
 `https://bues.ch/h/disktest <https://bues.ch/h/disktest>`_
 
+`https://bues.ch/cgit/disktest.git <https://bues.ch/cgit/disktest.git>`_
+
 Disktest is a tool to check Hard Disks, Solid State Disks, USB sticks, SD cards or similar storage media for errors.
 
 It does so by writing a pseudo random sequence to the device and then reading it back and verifying it to the expected pseudo random sequence.
@@ -62,7 +64,7 @@ If your storage media under test is drive D, then the following command would ru
 Dependencies
 ============
 
-* `Rust 1.59.0 <https://www.rust-lang.org/>`_ or later.
+* `Rust 1.61.0 <https://www.rust-lang.org/>`_ or later.
 * Crate dependencies will automatically be downloaded by cargo.
 
 
