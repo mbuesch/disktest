@@ -93,7 +93,7 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_cmp_result() {
-                let mut a = $Generator::new(&vec![1,2,3]);
+                let mut a = $Generator::new(&[1,2,3]);
                 fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
                     acc.rotate_left(i as u32) ^ (*x as u32)
                 }
@@ -110,8 +110,8 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_seed_equal() {
-                let mut a = $Generator::new(&vec![1,2,3]);
-                let mut b = $Generator::new(&vec![1,2,3]);
+                let mut a = $Generator::new(&[1,2,3]);
+                let mut b = $Generator::new(&[1,2,3]);
                 let mut res_a: Vec<Vec<u8>> = vec![];
                 let mut res_b: Vec<Vec<u8>> = vec![];
                 for _ in 0..2 {
@@ -130,8 +130,8 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_seed_diff() {
-                let mut a = $Generator::new(&vec![1,2,3]);
-                let mut b = $Generator::new(&vec![1,2,4]);
+                let mut a = $Generator::new(&[1,2,3]);
+                let mut b = $Generator::new(&[1,2,4]);
                 let mut res_a: Vec<Vec<u8>> = vec![];
                 let mut res_b: Vec<Vec<u8>> = vec![];
                 for _ in 0..2 {
@@ -150,8 +150,8 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_concat_equal() {
-                let mut a = $Generator::new(&vec![1,2,3]);
-                let mut b = $Generator::new(&vec![1,2,3]);
+                let mut a = $Generator::new(&[1,2,3]);
+                let mut b = $Generator::new(&[1,2,3]);
                 let mut buf_a = vec![0u8; $Generator::BASE_SIZE * 2];
                 a.next(&mut buf_a[0..$Generator::BASE_SIZE], 1);
                 a.next(&mut buf_a[$Generator::BASE_SIZE..$Generator::BASE_SIZE*2], 1);
@@ -162,8 +162,8 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_seek() {
-                let mut a = $Generator::new(&vec![1,2,3]);
-                let mut b = $Generator::new(&vec![1,2,3]);
+                let mut a = $Generator::new(&[1,2,3]);
+                let mut b = $Generator::new(&[1,2,3]);
                 b.seek($Generator::BASE_SIZE as u64 * 2).unwrap();
                 let mut bdata = vec![0u8; $Generator::BASE_SIZE];
                 b.next(&mut bdata, 1);

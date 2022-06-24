@@ -302,7 +302,7 @@ mod tests {
         let cache = Rc::new(RefCell::new(BufCache::new()));
         let mut s = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
         s.activate(0).unwrap();
-        assert_eq!(s.is_active(), true);
+        assert!(s.is_active());
 
         assert_eq!(s.get_chunk_size(), s.get_generator_outsize() * s.get_chunk_factor());
         assert!(s.get_chunk_size() > 0);

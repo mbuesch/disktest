@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn test_cmp_result() {
-        let mut a = GeneratorCrc::new(&vec![1,2,3]);
+        let mut a = GeneratorCrc::new(&[1,2,3]);
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
             acc.rotate_left(i as u32) ^ (*x as u32)
         }
@@ -126,8 +126,8 @@ mod tests {
 
     #[test]
     fn test_seed_equal() {
-        let mut a = GeneratorCrc::new(&vec![1,2,3]);
-        let mut b = GeneratorCrc::new(&vec![1,2,3]);
+        let mut a = GeneratorCrc::new(&[1,2,3]);
+        let mut b = GeneratorCrc::new(&[1,2,3]);
         let mut res_a: Vec<Vec<u8>> = vec![];
         let mut res_b: Vec<Vec<u8>> = vec![];
         for _ in 0..2 {
@@ -146,8 +146,8 @@ mod tests {
 
     #[test]
     fn test_seed_diff() {
-        let mut a = GeneratorCrc::new(&vec![1,2,3]);
-        let mut b = GeneratorCrc::new(&vec![1,2,4]);
+        let mut a = GeneratorCrc::new(&[1,2,3]);
+        let mut b = GeneratorCrc::new(&[1,2,4]);
         let mut res_a: Vec<Vec<u8>> = vec![];
         let mut res_b: Vec<Vec<u8>> = vec![];
         for _ in 0..2 {
@@ -166,8 +166,8 @@ mod tests {
 
     #[test]
     fn test_concat_equal() {
-        let mut a = GeneratorCrc::new(&vec![1,2,3]);
-        let mut b = GeneratorCrc::new(&vec![1,2,3]);
+        let mut a = GeneratorCrc::new(&[1,2,3]);
+        let mut b = GeneratorCrc::new(&[1,2,3]);
         let mut buf_a = vec![0u8; GeneratorCrc::BASE_SIZE * 2];
         a.next(&mut buf_a[0..GeneratorCrc::BASE_SIZE], 1);
         a.next(&mut buf_a[GeneratorCrc::BASE_SIZE..GeneratorCrc::BASE_SIZE*2], 1);
@@ -178,8 +178,8 @@ mod tests {
 
     #[test]
     fn test_seek() {
-        let mut a = GeneratorCrc::new(&vec![1,2,3]);
-        let mut b = GeneratorCrc::new(&vec![1,2,3]);
+        let mut a = GeneratorCrc::new(&[1,2,3]);
+        let mut b = GeneratorCrc::new(&[1,2,3]);
         b.seek(GeneratorCrc::BASE_SIZE as u64 * 2).unwrap();
         let mut bdata = vec![0u8; GeneratorCrc::BASE_SIZE];
         b.next(&mut bdata, 1);

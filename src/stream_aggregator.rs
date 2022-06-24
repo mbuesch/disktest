@@ -177,7 +177,7 @@ mod tests {
         let num_threads = 2;
         let mut agg = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads);
         agg.activate(0).unwrap();
-        assert_eq!(agg.is_active(), true);
+        assert!(agg.is_active());
 
         let onestream_chunksize = chunk_factor * gen_base_size;
         assert_eq!(agg.get_chunk_size(), onestream_chunksize);

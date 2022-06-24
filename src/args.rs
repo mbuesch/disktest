@@ -269,47 +269,47 @@ mod tests {
 
         let a = parse_args(vec!["disktest", "-Sx", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
-        assert_eq!(a.write, false);
-        assert_eq!(a.verify, true);
+        assert!(!a.write);
+        assert!(a.verify);
         assert_eq!(a.seek, 0);
         assert_eq!(a.max_bytes, Disktest::UNLIMITED);
         assert_eq!(a.algorithm, DtStreamType::ChaCha20);
         assert_eq!(a.seed, "x");
-        assert_eq!(a.user_seed, true);
-        assert_eq!(a.invert_pattern, false);
+        assert!(a.user_seed);
+        assert!(!a.invert_pattern);
         assert_eq!(a.threads, 1);
         assert_eq!(a.quiet, 0);
 
         let a = parse_args(vec!["disktest", "--write", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
-        assert_eq!(a.write, true);
-        assert_eq!(a.verify, false);
-        assert_eq!(a.user_seed, false);
+        assert!(a.write);
+        assert!(!a.verify);
+        assert!(!a.user_seed);
         let a = parse_args(vec!["disktest", "-w", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
-        assert_eq!(a.write, true);
-        assert_eq!(a.verify, false);
-        assert_eq!(a.user_seed, false);
+        assert!(a.write);
+        assert!(!a.verify);
+        assert!(!a.user_seed);
 
         let a = parse_args(vec!["disktest", "--write", "--verify", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
-        assert_eq!(a.write, true);
-        assert_eq!(a.verify, true);
-        assert_eq!(a.user_seed, false);
+        assert!(a.write);
+        assert!(a.verify);
+        assert!(!a.user_seed);
         let a = parse_args(vec!["disktest", "-w", "-v", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
-        assert_eq!(a.write, true);
-        assert_eq!(a.verify, true);
-        assert_eq!(a.user_seed, false);
+        assert!(a.write);
+        assert!(a.verify);
+        assert!(!a.user_seed);
 
         let a = parse_args(vec!["disktest", "-Sx", "--verify", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
-        assert_eq!(a.write, false);
-        assert_eq!(a.verify, true);
+        assert!(!a.write);
+        assert!(a.verify);
         let a = parse_args(vec!["disktest", "-Sx", "-v", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, "/dev/foobar");
-        assert_eq!(a.write, false);
-        assert_eq!(a.verify, true);
+        assert!(!a.write);
+        assert!(a.verify);
 
         let a = parse_args(vec!["disktest", "-w", "--seek", "123", "/dev/foobar"]).unwrap();
         assert_eq!(a.seek, 123);
@@ -333,10 +333,10 @@ mod tests {
 
         let a = parse_args(vec!["disktest", "-w", "--seed", "mysecret", "/dev/foobar"]).unwrap();
         assert_eq!(a.seed, "mysecret");
-        assert_eq!(a.user_seed, true);
+        assert!(a.user_seed);
         let a = parse_args(vec!["disktest", "-w", "-S", "mysecret", "/dev/foobar"]).unwrap();
         assert_eq!(a.seed, "mysecret");
-        assert_eq!(a.user_seed, true);
+        assert!(a.user_seed);
 
         let a = parse_args(vec!["disktest", "-w", "--threads", "24", "/dev/foobar"]).unwrap();
         assert_eq!(a.threads, 24);
@@ -352,9 +352,9 @@ mod tests {
         assert_eq!(a.quiet, 2);
 
         let a = parse_args(vec!["disktest", "-w", "--invert-pattern", "/dev/foobar"]).unwrap();
-        assert_eq!(a.invert_pattern, true);
+        assert!(a.invert_pattern);
         let a = parse_args(vec!["disktest", "-w", "-i", "/dev/foobar"]).unwrap();
-        assert_eq!(a.invert_pattern, true);
+        assert!(a.invert_pattern);
     }
 }
 

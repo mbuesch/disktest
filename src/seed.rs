@@ -55,8 +55,8 @@ mod tests {
     #[test]
     fn test_print() {
         // Just check if it doesn't panic.
-        print_generated_seed(&"foo", false);
-        print_generated_seed(&"bar", true);
+        print_generated_seed("foo", false);
+        print_generated_seed("bar", true);
     }
 }
 
