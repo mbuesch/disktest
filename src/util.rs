@@ -19,6 +19,8 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
+use std::fmt::Write;
+
 const EIB: u64 = 1024 * 1024 * 1024 * 1024 * 1024 * 1024;
 const PIB: u64 = 1024 * 1024 * 1024 * 1024 * 1024;
 const TIB: u64 = 1024 * 1024 * 1024 * 1024;
@@ -52,33 +54,29 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool) -> String {
 
     if binary || decimal {
         if count < KIB {
-            ret.push_str(&format!("{} bytes", count))
+            write!(ret, "{} bytes", count).ok();
         } else {
-            let bin = match count {
-                EIB..=u64::MAX => format!("{:.4} EiB", ((count / TIB) as f64) / (MIB as f64)),
-                PIB..=EIBM1    => format!("{:.4} PiB", ((count / GIB) as f64) / (MIB as f64)),
-                TIB..=PIBM1    => format!("{:.4} TiB", ((count / MIB) as f64) / (MIB as f64)),
-                GIB..=TIBM1    => format!("{:.2} GiB", ((count / MIB) as f64) / (KIB as f64)),
-                MIB..=GIBM1    => format!("{:.1} MiB", (count as f64) / (MIB as f64)),
-                0..=MIBM1      => format!("{:.1} kiB", (count as f64) / (KIB as f64)),
-            };
-
-            let dec = match count {
-                EB..=u64::MAX => format!("{:.4} EB", ((count / TB) as f64) / (MB as f64)),
-                PB..=EBM1     => format!("{:.4} PB", ((count / GB) as f64) / (MB as f64)),
-                TB..=PBM1     => format!("{:.4} TB", ((count / MB) as f64) / (MB as f64)),
-                GB..=TBM1     => format!("{:.2} GB", ((count / MB) as f64) / (KB as f64)),
-                MB..=GBM1     => format!("{:.1} MB", (count as f64) / (MB as f64)),
-                0..=MBM1      => format!("{:.1} kB", (count as f64) / (KB as f64)),
-            };
-
             if binary {
-                ret.push_str(&bin);
+                match count {
+                    EIB..=u64::MAX => write!(ret, "{:.4} EiB", ((count / TIB) as f64) / (MIB as f64)),
+                    PIB..=EIBM1    => write!(ret, "{:.4} PiB", ((count / GIB) as f64) / (MIB as f64)),
+                    TIB..=PIBM1    => write!(ret, "{:.4} TiB", ((count / MIB) as f64) / (MIB as f64)),
+                    GIB..=TIBM1    => write!(ret, "{:.2} GiB", ((count / MIB) as f64) / (KIB as f64)),
+                    MIB..=GIBM1    => write!(ret, "{:.1} MiB", (count as f64) / (MIB as f64)),
+                    0..=MIBM1      => write!(ret, "{:.1} kiB", (count as f64) / (KIB as f64)),
+                }.ok();
             }
             if decimal {
                 let len = ret.len();
                 if len > 0 { ret.push_str(" ("); }
-                ret.push_str(&dec);
+                match count {
+                    EB..=u64::MAX => write!(ret, "{:.4} EB", ((count / TB) as f64) / (MB as f64)),
+                    PB..=EBM1     => write!(ret, "{:.4} PB", ((count / GB) as f64) / (MB as f64)),
+                    TB..=PBM1     => write!(ret, "{:.4} TB", ((count / MB) as f64) / (MB as f64)),
+                    GB..=TBM1     => write!(ret, "{:.2} GB", ((count / MB) as f64) / (KB as f64)),
+                    MB..=GBM1     => write!(ret, "{:.1} MB", (count as f64) / (MB as f64)),
+                    0..=MBM1      => write!(ret, "{:.1} kB", (count as f64) / (KB as f64)),
+                }.ok();
                 if len > 0 { ret.push(')'); }
             }
         }
