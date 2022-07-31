@@ -28,7 +28,7 @@ use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::available_parallelism;
@@ -55,11 +55,11 @@ pub struct DisktestFile {
 
 impl DisktestFile {
     /// Open a file for use by the Disktest core.
-    pub fn open(path:           &str,
+    pub fn open(path:           &Path,
                 read:           bool,
                 write:          bool) -> ah::Result<DisktestFile> {
         Ok(DisktestFile {
-            path:           path.into(),
+            path:           path.to_path_buf(),
             read,
             write,
             file:           None,
