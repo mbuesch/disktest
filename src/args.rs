@@ -147,16 +147,21 @@ where I: IntoIterator<Item = T>,
              .long("seek")
              .short('s')
              .takes_value(true)
+             .default_value("0")
              .help(HELP_SEEK))
         .arg(Arg::new("bytes")
              .long("bytes")
              .short('b')
              .takes_value(true)
+             .default_value(&Disktest::UNLIMITED.to_string())
              .help(HELP_BYTES))
         .arg(Arg::new("algorithm")
              .long("algorithm")
              .short('A')
              .takes_value(true)
+             .default_value("CHACHA20")
+             .value_parser(["CHACHA8", "CHACHA12", "CHACHA20", "CRC"])
+             .ignore_case(true)
              .help(HELP_ALGORITHM))
         .arg(Arg::new("seed")
              .long("seed")
@@ -171,11 +176,15 @@ where I: IntoIterator<Item = T>,
              .long("threads")
              .short('j')
              .takes_value(true)
+             .default_value("1")
+             .value_parser(value_parser!(u32).range(0_i64..=std::u16::MAX as i64 + 1))
              .help(HELP_THREADS))
         .arg(Arg::new("quiet")
              .long("quiet")
              .short('q')
              .takes_value(true)
+             .default_value("0")
+             .value_parser(value_parser!(u8))
              .help(HELP_QUIET))
         .try_get_matches_from(args);
 
@@ -193,10 +202,7 @@ where I: IntoIterator<Item = T>,
         },
     };
 
-    let quiet: u8 = match args.value_of("quiet").unwrap_or("0").parse() {
-        Ok(x) => x,
-        Err(e) => return Err(param_err("--quiet", e)),
-    };
+    let quiet = *args.get_one::<u8>("quiet").unwrap();
 
     let device = args.get_one::<PathBuf>("device").unwrap().clone();
 
@@ -206,26 +212,26 @@ where I: IntoIterator<Item = T>,
         verify = true;
     }
 
-    let seek = match parsebytes(args.value_of("seek").unwrap_or("0")) {
+    let seek = match parsebytes(args.get_one::<String>("seek").unwrap()) {
         Ok(x) => x,
         Err(e) => return Err(param_err("--seek", e)),
     };
 
-    let max_bytes = match parsebytes(args.value_of("bytes").unwrap_or(&Disktest::UNLIMITED.to_string())) {
+    let max_bytes = match parsebytes(args.get_one::<String>("bytes").unwrap()) {
         Ok(x) => x,
         Err(e) => return Err(param_err("--bytes", e)),
     };
 
-    let algorithm = match args.value_of("algorithm").unwrap_or("CHACHA20").to_uppercase().as_str() {
+    let algorithm = match args.get_one::<String>("algorithm").unwrap().to_ascii_uppercase().as_str() {
         "CHACHA8" => DtStreamType::ChaCha8,
         "CHACHA12" => DtStreamType::ChaCha12,
         "CHACHA20" => DtStreamType::ChaCha20,
         "CRC" => DtStreamType::Crc,
-        x => return Err(param_err("--algorithm", x)),
+        _ => panic!("Invalid algorithm parameter."),
     };
 
-    let (seed, user_seed) = match args.value_of("seed") {
-        Some(x) => (x.to_string(), true),
+    let (seed, user_seed) = match args.get_one::<String>("seed") {
+        Some(x) => (x.clone(), true),
         None => (gen_seed_string(DEFAULT_GEN_SEED_LEN), false),
     };
     if !user_seed && verify && !write {
@@ -236,15 +242,7 @@ where I: IntoIterator<Item = T>,
 
     let invert_pattern = args.is_present("invert-pattern");
 
-    let threads: usize = match args.value_of("threads").unwrap_or("1").parse() {
-        Ok(x) => {
-            if x > std::u16::MAX as usize + 1 {
-                return Err(param_err("--threads", x))
-            }
-            x
-        },
-        Err(e) => return Err(param_err("--threads", e)),
-    };
+    let threads = *args.get_one::<u32>("threads").unwrap_or(&1) as usize;
 
     Ok(Args {
         device,
