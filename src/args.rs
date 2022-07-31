@@ -21,12 +21,12 @@
 
 use anyhow as ah;
 use clap::ErrorKind::{DisplayHelp, DisplayVersion};
+use clap::builder::ValueParser;
 use clap::{Command, Arg, value_parser};
 use crate::disktest::{DtStreamType, Disktest};
 use crate::seed::gen_seed_string;
 use crate::util::parsebytes;
 use std::ffi::OsString;
-use std::fmt::Display;
 use std::path::PathBuf;
 
 /// Length of the generated seed.
@@ -123,11 +123,6 @@ pub fn parse_args<I, T>(args: I) -> ah::Result<Args>
 where I: IntoIterator<Item = T>,
       T: Into<OsString> + Clone
 {
-    fn param_err(param: impl Display,
-                 error: impl Display) -> ah::Error {
-        ah::format_err!("Invalid {} value: {}", param, error)
-    }
-
     let args = Command::new("disktest")
         .about(&*(ABOUT.to_string() + EXAMPLE))
         .arg(Arg::new("device")
@@ -148,12 +143,14 @@ where I: IntoIterator<Item = T>,
              .short('s')
              .takes_value(true)
              .default_value("0")
+             .value_parser(ValueParser::new(parsebytes))
              .help(HELP_SEEK))
         .arg(Arg::new("bytes")
              .long("bytes")
              .short('b')
              .takes_value(true)
              .default_value(&Disktest::UNLIMITED.to_string())
+             .value_parser(ValueParser::new(parsebytes))
              .help(HELP_BYTES))
         .arg(Arg::new("algorithm")
              .long("algorithm")
@@ -212,15 +209,9 @@ where I: IntoIterator<Item = T>,
         verify = true;
     }
 
-    let seek = match parsebytes(args.get_one::<String>("seek").unwrap()) {
-        Ok(x) => x,
-        Err(e) => return Err(param_err("--seek", e)),
-    };
+    let seek = *args.get_one::<u64>("seek").unwrap();
 
-    let max_bytes = match parsebytes(args.get_one::<String>("bytes").unwrap()) {
-        Ok(x) => x,
-        Err(e) => return Err(param_err("--bytes", e)),
-    };
+    let max_bytes = *args.get_one::<u64>("bytes").unwrap();
 
     let algorithm = match args.get_one::<String>("algorithm").unwrap().to_ascii_uppercase().as_str() {
         "CHACHA8" => DtStreamType::ChaCha8,

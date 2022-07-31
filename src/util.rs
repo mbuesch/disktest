@@ -85,7 +85,7 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool) -> String {
     ret
 }
 
-pub fn parsebytes(s: &str) -> Result<u64, <u64 as std::str::FromStr>::Err> {
+pub fn parsebytes(s: &str) -> Result<u64, std::num::ParseIntError> {
     let s = s.trim().to_lowercase();
 
     if let Some(s) = s.strip_suffix("eib") {
