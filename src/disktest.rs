@@ -251,8 +251,7 @@ impl Disktest {
            prefix: &str,
            inc_processed: usize,
            abs_processed: u64,
-           no_limiting: bool,
-           suffix: &str) {
+           final_step: bool) {
 
         // Logging is enabled?
         if self.quiet_level < 2 {
@@ -261,13 +260,13 @@ impl Disktest {
             // Only if byte count is bigger than threshold, then check time.
             // This reduces the number of calls to Instant::now.
             self.log_count += inc_processed as u64;
-            if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == 0) || no_limiting {
+            if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == 0) || final_step {
 
                 // Check if it's time to write the next log entry.
                 let now = Instant::now();
                 let expired = now.duration_since(self.log_time).as_secs() >= LOG_SEC_THRES;
 
-                if (expired && self.quiet_level == 0) || no_limiting {
+                if (expired && self.quiet_level == 0) || final_step {
 
                     let dur_elapsed = now - self.begin_time;
                     let sec_elapsed = dur_elapsed.as_secs();
@@ -276,6 +275,8 @@ impl Disktest {
                     } else {
                         "".to_string()
                     };
+
+                    let suffix = if final_step { "." } else { " ..." };
 
                     println!("{}{}{} ({}){}",
                              prefix,
@@ -331,7 +332,7 @@ impl Disktest {
         }
 
         self.log(if success { "Done. Wrote " } else { "Wrote " },
-                 0, bytes_written, true, ".");
+                 0, bytes_written, true);
 
         if let Err(e) = file.close() {
             return Err(ah::format_err!("Failed to drop operating system caches: {}", e));
@@ -379,7 +380,7 @@ impl Disktest {
                 self.write_finalize(&mut file, true, bytes_written)?;
                 break;
             }
-            self.log("Wrote ", write_len, bytes_written, false, " ...");
+            self.log("Wrote ", write_len, bytes_written, false);
 
             if self.abort_requested() {
                 self.write_finalize(&mut file, false, bytes_written).ok();
@@ -396,7 +397,7 @@ impl Disktest {
                        success: bool,
                        bytes_read: u64) -> ah::Result<()> {
         self.log(if success { "Done. Verified " } else { "Verified " },
-                 0, bytes_read, true, ".");
+                 0, bytes_read, true);
         if let Err(e) = file.close() {
             return Err(ah::format_err!("Failed to close device: {}", e));
         }
@@ -465,7 +466,7 @@ impl Disktest {
                             self.verify_finalize(&mut file, true, bytes_read)?;
                             break;
                         }
-                        self.log("Verified ", read_count, bytes_read, false, " ...");
+                        self.log("Verified ", read_count, bytes_read, false);
                         read_count = 0;
                         read_len = min(readbuf_len as u64, bytes_left) as usize;
                     }
