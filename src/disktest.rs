@@ -111,19 +111,24 @@ impl DisktestFile {
         Ok(())
     }
 
-    /// Seek to a position in the file.
+    /// Flush written data and seek to a position in the file.
     fn seek(&mut self, offset: u64) -> io::Result<u64> {
         self.close()?;
         self.do_open()?;
+        match self.seek_noflush(offset) {
+            Ok(x) => {
+                self.drop_offset = offset;
+                self.drop_count = 0;
+                Ok(x)
+            },
+            other => other,
+        }
+    }
+
+    /// Seek to a position in the file.
+    fn seek_noflush(&mut self, offset: u64) -> io::Result<u64> {
         if let Some(f) = self.file.as_mut() {
-            match f.seek(SeekFrom::Start(offset)) {
-                Ok(x) => {
-                    self.drop_offset = offset;
-                    self.drop_count = 0;
-                    Ok(x)
-                },
-                Err(e) => Err(e),
-            }
+            f.seek(SeekFrom::Start(offset))
         } else {
             panic!("seek: No file.");
         }
