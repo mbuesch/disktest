@@ -19,6 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
+use anyhow as ah;
 use std::fmt::Write;
 
 const EIB: u64 = 1024 * 1024 * 1024 * 1024 * 1024 * 1024;
@@ -85,50 +86,79 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool) -> String {
     ret
 }
 
-pub fn parsebytes(s: &str) -> Result<u64, std::num::ParseIntError> {
+fn try_one_parsebytes(s: &str, suffix: &str, factor: u64) -> ah::Result<u64> {
+    if let Some(s) = s.strip_suffix(suffix) {
+        let s = s.trim();
+        if let Ok(value) = s.parse::<u64>() {
+            // Integer value.
+            if let Some(prod) = value.checked_mul(factor) {
+                Ok(prod)
+            } else {
+                Err(ah::format_err!("Value integer overflow."))
+            }
+        } else if let Ok(value) = s.parse::<f64>() {
+            // Floating point value.
+            let factor = factor as f64;
+            if value.log2() + factor.log2() < 61.0 {
+                Ok((value * factor).round() as u64)
+            } else {
+                Err(ah::format_err!("Value float overflow."))
+            }
+        } else {
+            Err(ah::format_err!("Value is neither integer nor float."))
+        }
+    } else {
+        Err(ah::format_err!("Value suffix does not match."))
+    }
+}
+
+pub fn parsebytes(s: &str) -> ah::Result<u64> {
     let s = s.trim().to_lowercase();
 
-    if let Some(s) = s.strip_suffix("eib") {
-        Ok(s.trim().parse::<u64>()? * EIB)
-    } else if let Some(s) = s.strip_suffix("pib") {
-        Ok(s.trim().parse::<u64>()? * PIB)
-    } else if let Some(s) = s.strip_suffix("tib") {
-        Ok(s.trim().parse::<u64>()? * TIB)
-    } else if let Some(s) = s.strip_suffix("gib") {
-        Ok(s.trim().parse::<u64>()? * GIB)
-    } else if let Some(s) = s.strip_suffix("mib") {
-        Ok(s.trim().parse::<u64>()? * MIB)
-    } else if let Some(s) = s.strip_suffix("kib") {
-        Ok(s.trim().parse::<u64>()? * KIB)
+    if let Ok(v) = try_one_parsebytes(&s, "eib", EIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "pib", PIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "tib", TIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "gib", GIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "mib", MIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "kib", KIB) {
+        Ok(v)
 
-    } else if let Some(s) = s.strip_suffix('e') {
-        Ok(s.trim().parse::<u64>()? * EIB)
-    } else if let Some(s) = s.strip_suffix('p') {
-        Ok(s.trim().parse::<u64>()? * PIB)
-    } else if let Some(s) = s.strip_suffix('t') {
-        Ok(s.trim().parse::<u64>()? * TIB)
-    } else if let Some(s) = s.strip_suffix('g') {
-        Ok(s.trim().parse::<u64>()? * GIB)
-    } else if let Some(s) = s.strip_suffix('m') {
-        Ok(s.trim().parse::<u64>()? * MIB)
-    } else if let Some(s) = s.strip_suffix('k') {
-        Ok(s.trim().parse::<u64>()? * KIB)
+    } else if let Ok(v) = try_one_parsebytes(&s, "e", EIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "p", PIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "t", TIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "g", GIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "m", MIB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "k", KIB) {
+        Ok(v)
 
-    } else if let Some(s) = s.strip_suffix("eb") {
-        Ok(s.trim().parse::<u64>()? * EB)
-    } else if let Some(s) = s.strip_suffix("pb") {
-        Ok(s.trim().parse::<u64>()? * PB)
-    } else if let Some(s) = s.strip_suffix("tb") {
-        Ok(s.trim().parse::<u64>()? * TB)
-    } else if let Some(s) = s.strip_suffix("gb") {
-        Ok(s.trim().parse::<u64>()? * GB)
-    } else if let Some(s) = s.strip_suffix("mb") {
-        Ok(s.trim().parse::<u64>()? * MB)
-    } else if let Some(s) = s.strip_suffix("kb") {
-        Ok(s.trim().parse::<u64>()? * KB)
+    } else if let Ok(v) = try_one_parsebytes(&s, "eb", EB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "pb", PB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "tb", TB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "gb", GB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "mb", MB) {
+        Ok(v)
+    } else if let Ok(v) = try_one_parsebytes(&s, "kb", KB) {
+        Ok(v)
+
+    } else if let Ok(v) = s.parse::<u64>() { // byte count w/o suffix.
+        Ok(v)
 
     } else {
-        s.parse()
+        Err(ah::format_err!("Cannot parse byte count: {}", s))
     }
 }
 
@@ -185,9 +215,11 @@ mod tests {
 
     #[test]
     fn test_parsebytes() {
+        // No suffix.
         assert_eq!(parsebytes("42").unwrap(),
                    42);
 
+        // Binary suffix, integer.
         assert_eq!(parsebytes("42kib").unwrap(),
                    42 * 1024);
         assert_eq!(parsebytes("42 mib").unwrap(),
@@ -201,6 +233,27 @@ mod tests {
         assert_eq!(parsebytes("2 EIB ").unwrap(),
                    2 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024);
 
+        // Binary suffix, fractional.
+        assert_eq!(parsebytes("42.5kib").unwrap(),
+                   42 * 1024 +
+                        1024 / 2);
+        assert_eq!(parsebytes("42.5 mib").unwrap(),
+                   42 * 1024 * 1024 +
+                        1024 * 1024 / 2);
+        assert_eq!(parsebytes(" 42.5 gib ").unwrap(),
+                   42 * 1024 * 1024 * 1024 +
+                        1024 * 1024 * 1024 / 2);
+        assert_eq!(parsebytes("42.5Tib").unwrap(),
+                   42 * 1024 * 1024 * 1024 * 1024 +
+                        1024 * 1024 * 1024 * 1024 / 2);
+        assert_eq!(parsebytes("42.5PiB").unwrap(),
+                   42 * 1024 * 1024 * 1024 * 1024 * 1024 +
+                        1024 * 1024 * 1024 * 1024 * 1024 / 2);
+        assert_eq!(parsebytes("1.5 EIB ").unwrap(),
+                   1024 * 1024 * 1024 * 1024 * 1024 * 1024 +
+                   1024 * 1024 * 1024 * 1024 * 1024 * 1024 / 2);
+
+        // Binary suffix, integer.
         assert_eq!(parsebytes("42k").unwrap(),
                    42 * 1024);
         assert_eq!(parsebytes("42 m").unwrap(),
@@ -214,6 +267,27 @@ mod tests {
         assert_eq!(parsebytes("2 E ").unwrap(),
                    2 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024);
 
+        // Binary suffix, fractional.
+        assert_eq!(parsebytes("42.5k").unwrap(),
+                   42 * 1024 +
+                        1024 / 2);
+        assert_eq!(parsebytes("42.5 m").unwrap(),
+                   42 * 1024 * 1024 +
+                        1024 * 1024 / 2);
+        assert_eq!(parsebytes(" 42.5 g ").unwrap(),
+                   42 * 1024 * 1024 * 1024 +
+                        1024 * 1024 * 1024 / 2);
+        assert_eq!(parsebytes("42.5T").unwrap(),
+                   42 * 1024 * 1024 * 1024 * 1024 +
+                        1024 * 1024 * 1024 * 1024 / 2);
+        assert_eq!(parsebytes("42.5P").unwrap(),
+                   42 * 1024 * 1024 * 1024 * 1024 * 1024 +
+                        1024 * 1024 * 1024 * 1024 * 1024 / 2);
+        assert_eq!(parsebytes("1.5 E ").unwrap(),
+                   1024 * 1024 * 1024 * 1024 * 1024 * 1024 +
+                   1024 * 1024 * 1024 * 1024 * 1024 * 1024 / 2);
+
+        // Decimal suffix, integer.
         assert_eq!(parsebytes("42kb").unwrap(),
                    42 * 1000);
         assert_eq!(parsebytes("42 mb").unwrap(),
@@ -226,6 +300,26 @@ mod tests {
                    42 * 1000 * 1000 * 1000 * 1000 * 1000);
         assert_eq!(parsebytes("2 EB ").unwrap(),
                    2 * 1000 * 1000 * 1000 * 1000 * 1000 * 1000);
+
+        // Decimal suffix, fractional.
+        assert_eq!(parsebytes("42.5kb").unwrap(),
+                   42 * 1000 +
+                        1000 / 2);
+        assert_eq!(parsebytes("42.5 mb").unwrap(),
+                   42 * 1000 * 1000 +
+                        1000 * 1000 / 2);
+        assert_eq!(parsebytes(" 42.5 gb ").unwrap(),
+                   42 * 1000 * 1000 * 1000 +
+                        1000 * 1000 * 1000 / 2);
+        assert_eq!(parsebytes("42.5Tb").unwrap(),
+                   42 * 1000 * 1000 * 1000 * 1000 +
+                        1000 * 1000 * 1000 * 1000 / 2);
+        assert_eq!(parsebytes("42.5PB").unwrap(),
+                   42 * 1000 * 1000 * 1000 * 1000 * 1000 +
+                        1000 * 1000 * 1000 * 1000 * 1000 / 2);
+        assert_eq!(parsebytes("1.5 EB ").unwrap(),
+                   1000 * 1000 * 1000 * 1000 * 1000 * 1000 +
+                   1000 * 1000 * 1000 * 1000 * 1000 * 1000 / 2);
     }
 
     #[test]
