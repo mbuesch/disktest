@@ -74,9 +74,7 @@ Number of bytes to write/verify. \
 If not given, then the whole disk will be overwritten/verified.";
 
 const HELP_ALGORITHM: &str = "\
-Select the random number generator algorithm. \
-The selection can be: CHACHA20, CHACHA12, CHACHA8 or CRC.\n\
-Default: CHACHA20.\n\
+Select the random number generator algorithm.\n\
 ChaCha12 and ChaCha8 are less cryptographically secure than ChaCha20, but faster.\n\
 CRC is even faster, but not cryptographically secure at all.";
 
@@ -96,10 +94,10 @@ The number of CPUs to use. \
 The special value 0 will select the maximum number of online CPUs in the system. \
 If the number of threads is equal to number of CPUs it is optimal for performance. \
 This parameter must be equal during corresponding verify and write mode runs. \
-Otherwise the verification will fail. Default: 1";
+Otherwise the verification will fail.";
 
 const HELP_QUIET: &str = "\
-Quiet level: 0: Normal verboseness (default). \
+Quiet level: 0: Normal verboseness. \
 1: Reduced verboseness. \
 2: No informational output.";
 
