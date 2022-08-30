@@ -32,7 +32,7 @@ use std::thread;
 use std::time::Duration;
 
 /// Stream algorithm type.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DtStreamType {
     ChaCha8,
     ChaCha12,
