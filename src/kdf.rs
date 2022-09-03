@@ -43,13 +43,13 @@ pub fn kdf(seed: &[u8], thread_id: u32) -> Vec<u8> {
     key.extend_from_slice(&thread_id.to_le_bytes());
 
     // Calculated the DK (derived key).
-    let mut dk = [0; DK_SIZE];
+    let mut dk = vec![0; DK_SIZE];
     pbkdf2::derive(pbkdf2::PBKDF2_HMAC_SHA512,
                    ITERATIONS.try_into().unwrap(),
                    &derive_salt(&key),
                    &key,
                    &mut dk);
-    dk.to_vec()
+    dk
 }
 
 #[cfg(test)]
