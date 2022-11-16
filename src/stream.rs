@@ -25,11 +25,10 @@ use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, G
 use crate::kdf::kdf;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread;
-use std::time::Duration;
 
 /// Stream algorithm type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -58,6 +57,7 @@ fn thread_worker(stype:             DtStreamType,
                  abort:             Arc<AtomicBool>,
                  error:             Arc<AtomicBool>,
                  level:             Arc<AtomicIsize>,
+                 wait:              Arc<(Mutex<bool>, Condvar)>,
                  tx:                Sender<DtStreamChunk>) {
     // Calculate the per-thread-seed from the global seed.
     let thread_seed = kdf(&seed, thread_id);
@@ -74,15 +74,15 @@ fn thread_worker(stype:             DtStreamType,
     // Seek the generator to the specified byte offset.
     if let Err(e) = generator.seek(byte_offset) {
         eprintln!("ERROR in generator thread {}: {}", thread_id, e);
-        error.store(true, Ordering::Release);
+        error.store(true, Ordering::Relaxed);
         return;
     }
 
     // Run the generator work loop.
     let mut index = 0;
-    while !abort.load(Ordering::Relaxed) {
-        if level.load(Ordering::Relaxed) < DtStream::LEVEL_THRES {
-
+    let mut cur_level = level.load(Ordering::Relaxed);
+    while !abort.load(Ordering::SeqCst) {
+        if cur_level < DtStream::HI_THRES {
             // Get the next chunk from the generator.
             let size = generator.get_base_size() * chunk_factor;
             let mut data = cache_cons.pull(size);
@@ -104,10 +104,15 @@ fn thread_worker(stype:             DtStreamType,
 
             // Send the chunk to the main thread.
             tx.send(chunk).expect("Worker thread: Send failed.");
-            level.fetch_add(1, Ordering::Relaxed);
+            cur_level = level.fetch_add(1, Ordering::Relaxed) + 1;
         } else {
             // The chunk buffer is full. Wait...
-            thread::sleep(Duration::from_millis(10));
+            let mut sleeping = wait.0.lock().expect("Thread Condvar lock poison");
+            *sleeping = true;
+            while *sleeping {
+                sleeping = wait.1.wait(sleeping).expect("Thread Condvar wait poison");
+            }
+            cur_level = level.load(Ordering::Relaxed);
         }
     }
 }
@@ -125,11 +130,14 @@ pub struct DtStream {
     abort:          Arc<AtomicBool>,
     error:          Arc<AtomicBool>,
     level:          Arc<AtomicIsize>,
+    wait:           Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl DtStream {
     /// Maximum number of chunks that the thread will compute in advance.
-    const LEVEL_THRES: isize        = 8;
+    const HI_THRES: isize = 8;
+    /// Low watermark for thread wakeup.
+    const LO_THRES: isize = 4;
 
     pub fn new(stype:           DtStreamType,
                seed:            Vec<u8>,
@@ -140,6 +148,7 @@ impl DtStream {
         let abort = Arc::new(AtomicBool::new(false));
         let error = Arc::new(AtomicBool::new(false));
         let level = Arc::new(AtomicIsize::new(0));
+        let wait = Arc::new((Mutex::new(false), Condvar::new()));
 
         DtStream {
             stype,
@@ -153,6 +162,16 @@ impl DtStream {
             abort,
             error,
             level,
+            wait,
+        }
+    }
+
+    /// Wake up the worker thread, if it is currently sleeping.
+    fn wake_thread(&self) {
+        let mut sleeping = self.wait.0.lock().expect("Wake Condvar lock poison");
+        if *sleeping {
+            *sleeping = false;
+            self.wait.1.notify_one();
         }
     }
 
@@ -160,11 +179,12 @@ impl DtStream {
     /// Does nothing, if the thread is not running.
     fn stop(&mut self) {
         self.is_active = false;
-        self.abort.store(true, Ordering::Release);
+        self.abort.store(true, Ordering::SeqCst);
+        self.wake_thread();
         if let Some(thread_join) = self.thread_join.take() {
-            thread_join.join().unwrap();
+            thread_join.join().expect("Thread join failed");
         }
-        self.abort.store(false, Ordering::Release);
+        self.abort.store(false, Ordering::SeqCst);
     }
 
     /// Spawn the worker thread.
@@ -174,9 +194,9 @@ impl DtStream {
         assert!(self.thread_join.is_none());
 
         // Initialize thread communication
-        self.abort.store(false, Ordering::Release);
-        self.error.store(false, Ordering::Release);
-        self.level.store(0, Ordering::Release);
+        self.abort.store(false, Ordering::SeqCst);
+        self.error.store(false, Ordering::SeqCst);
+        self.level.store(0, Ordering::SeqCst);
         let (tx, rx) = channel();
         self.rx = Some(rx);
 
@@ -191,6 +211,7 @@ impl DtStream {
         let thread_abort = Arc::clone(&self.abort);
         let thread_error = Arc::clone(&self.error);
         let thread_level = Arc::clone(&self.level);
+        let thread_wait = Arc::clone(&self.wait);
         self.thread_join = Some(thread::spawn(move || {
             thread_worker(thread_stype,
                           thread_chunk_factor,
@@ -202,6 +223,7 @@ impl DtStream {
                           thread_abort,
                           thread_error,
                           thread_level,
+                          thread_wait,
                           tx);
         }));
         self.is_active = true;
@@ -256,23 +278,26 @@ impl DtStream {
     /// Returns None, if no chunk is available, yet.
     #[inline]
     pub fn get_chunk(&mut self) -> ah::Result<Option<DtStreamChunk>> {
-        if self.is_active() {
-            if self.is_thread_error() {
-                Err(ah::format_err!("Generator stream thread aborted with an error."))
-            } else if let Some(rx) = &self.rx {
-                match rx.try_recv() {
-                    Ok(chunk) => {
-                        self.level.fetch_sub(1, Ordering::Relaxed);
-                        Ok(Some(chunk))
-                    },
-                    Err(_) => Ok(None),
-                }
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
+        if !self.is_active() {
+            return Err(ah::format_err!("Generator stream is not active."));
         }
+        if self.is_thread_error() {
+            return Err(ah::format_err!("Generator stream thread aborted with an error."));
+        }
+        let Some(rx) = &self.rx else {
+            return Err(ah::format_err!("Generator stream RX channel not present."));
+        };
+        let Ok(chunk) = rx.try_recv() else {
+            // Queue is empty. Wake thread.
+            self.wake_thread();
+            return Ok(None);
+        };
+        if self.level.fetch_sub(1, Ordering::Relaxed) - 1 <= DtStream::LO_THRES {
+            // Queue fill level is low. Wake thread.
+            self.wake_thread();
+        }
+        // We got a chunk.
+        Ok(Some(chunk))
     }
 }
 
@@ -285,6 +310,7 @@ impl Drop for DtStream {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     impl DtStream {
         pub fn wait_chunk(&mut self) -> DtStreamChunk {
