@@ -25,8 +25,7 @@ use crate::stream::{DtStream, DtStreamChunk};
 use crate::util::prettybytes;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub use crate::stream::DtStreamType;
 
@@ -53,11 +52,11 @@ impl Drop for DtStreamAggChunk {
 }
 
 pub struct DtStreamAgg {
-    num_threads:    usize,
-    streams:        Vec<DtStream>,
-    cache:          Rc<RefCell<BufCache>>,
-    current_index:  usize,
-    is_active:      bool,
+    num_threads:        usize,
+    streams:            Vec<DtStream>,
+    cache:              Rc<RefCell<BufCache>>,
+    current_index:      usize,
+    is_active:          bool,
 }
 
 impl DtStreamAgg {
@@ -72,11 +71,14 @@ impl DtStreamAgg {
         let cache = Rc::new(RefCell::new(BufCache::new()));
         let mut streams = Vec::with_capacity(num_threads);
         for i in 0..num_threads {
-            streams.push(DtStream::new(stype,
-                                       seed.to_vec(),
-                                       invert_pattern,
-                                       i as u32,
-                                       Rc::clone(&cache)));
+            let stream = DtStream::new(
+                stype,
+                seed.to_vec(),
+                invert_pattern,
+                i as u32,
+                Rc::clone(&cache),
+            );
+            streams.push(stream);
         }
 
         DtStreamAgg {
@@ -137,32 +139,45 @@ impl DtStreamAgg {
 
     #[inline]
     fn get_chunk(&mut self) -> ah::Result<Option<DtStreamAggChunk>> {
-        if self.is_active() {
-            if let Some(chunk) = self.streams[self.current_index].get_chunk()? {
-                self.current_index = (self.current_index + 1) % self.num_threads;
-                Ok(Some(DtStreamAggChunk {
-                    chunk,
-                    thread_id: self.current_index,
-                    cache: Rc::clone(&self.cache),
-                } ))
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
+        if !self.is_active() {
+            return Ok(None);
         }
+
+        // Try to get a chunk.
+        let Some(chunk) = self.streams[self.current_index].get_chunk()? else {
+            return Ok(None);
+        };
+        // Got one. Switch to next stream.
+        self.current_index = (self.current_index + 1) % self.num_threads;
+
+        Ok(Some(DtStreamAggChunk {
+            chunk,
+            thread_id: self.current_index,
+            cache: Rc::clone(&self.cache),
+        }))
     }
 
     pub fn wait_chunk(&mut self) -> ah::Result<DtStreamAggChunk> {
-        if self.is_active() {
-            loop {
-                if let Some(chunk) = self.get_chunk()? {
-                    break Ok(chunk);
-                }
-                thread::sleep(Duration::from_millis(1));
-            }
-        } else {
+        if !self.is_active() {
             panic!("wait_chunk() called, but stream aggregator is stopped.");
+        }
+
+        // Fast path: Check if a chunk is available.
+        if let Some(chunk) = self.get_chunk()? {
+            return Ok(chunk);
+        }
+
+        // Slow path: Wait until a chunk is available.
+        let begin = Instant::now();
+        let mut do_yield = false;
+        loop {
+            if let Some(chunk) = self.get_chunk()? {
+                break Ok(chunk);
+            }
+            if do_yield || (Instant::now() - begin) > Duration::from_micros(50) {
+                do_yield = true;
+                std::thread::yield_now();
+            }
         }
     }
 }

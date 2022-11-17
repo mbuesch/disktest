@@ -25,9 +25,9 @@ use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, G
 use crate::kdf::kdf;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
 /// Stream algorithm type.
@@ -47,18 +47,20 @@ pub struct DtStreamChunk {
 
 /// Thread worker function, that computes the chunks.
 #[allow(clippy::too_many_arguments)]
-fn thread_worker(stype:             DtStreamType,
-                 chunk_factor:      usize,
-                 seed:              Vec<u8>,
-                 thread_id:         u32,
-                 mut cache_cons:    BufCacheCons,
-                 byte_offset:       u64,
-                 invert_pattern:    bool,
-                 abort:             Arc<AtomicBool>,
-                 error:             Arc<AtomicBool>,
-                 level:             Arc<AtomicIsize>,
-                 wait:              Arc<(Mutex<bool>, Condvar)>,
-                 tx:                Sender<DtStreamChunk>) {
+fn thread_worker(
+    stype:          DtStreamType,
+    chunk_factor:   usize,
+    seed:           Vec<u8>,
+    thread_id:      u32,
+    mut cache_cons: BufCacheCons,
+    byte_offset:    u64,
+    invert_pattern: bool,
+    abort:          Arc<AtomicBool>,
+    error:          Arc<AtomicBool>,
+    level:          Arc<AtomicIsize>,
+    sleep:          Arc<(Mutex<bool>, Condvar)>,
+    tx:             Sender<DtStreamChunk>,
+) {
     // Calculate the per-thread-seed from the global seed.
     let thread_seed = kdf(&seed, thread_id);
     drop(seed);
@@ -82,7 +84,7 @@ fn thread_worker(stype:             DtStreamType,
     let mut index = 0;
     let mut cur_level = level.load(Ordering::Relaxed);
     while !abort.load(Ordering::SeqCst) {
-        if cur_level < DtStream::HI_THRES {
+        if cur_level < DtStream::MAX_THRES {
             // Get the next chunk from the generator.
             let size = generator.get_base_size() * chunk_factor;
             let mut data = cache_cons.pull(size);
@@ -105,12 +107,14 @@ fn thread_worker(stype:             DtStreamType,
             // Send the chunk to the main thread.
             tx.send(chunk).expect("Worker thread: Send failed.");
             cur_level = level.fetch_add(1, Ordering::Relaxed) + 1;
+
         } else {
             // The chunk buffer is full. Wait...
-            let mut sleeping = wait.0.lock().expect("Thread Condvar lock poison");
-            *sleeping = true;
+            let mut sleeping = sleep.0.lock()
+                .expect("Thread Condvar lock poison");
             while *sleeping {
-                sleeping = wait.1.wait(sleeping).expect("Thread Condvar wait poison");
+                sleeping = sleep.1.wait(sleeping)
+                    .expect("Thread Condvar wait poison");
             }
             cur_level = level.load(Ordering::Relaxed);
         }
@@ -130,26 +134,26 @@ pub struct DtStream {
     abort:          Arc<AtomicBool>,
     error:          Arc<AtomicBool>,
     level:          Arc<AtomicIsize>,
-    wait:           Arc<(Mutex<bool>, Condvar)>,
+    sleep:          Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl DtStream {
     /// Maximum number of chunks that the thread will compute in advance.
-    const HI_THRES: isize = 8;
+    const MAX_THRES: isize = 8;
     /// Low watermark for thread wakeup.
     const LO_THRES: isize = 4;
 
-    pub fn new(stype:           DtStreamType,
-               seed:            Vec<u8>,
-               invert_pattern:  bool,
-               thread_id:       u32,
-               cache:           Rc<RefCell<BufCache>>) -> DtStream {
-
+    pub fn new(
+        stype:          DtStreamType,
+        seed:           Vec<u8>,
+        invert_pattern: bool,
+        thread_id:      u32,
+        cache:          Rc<RefCell<BufCache>>,
+    ) -> DtStream {
         let abort = Arc::new(AtomicBool::new(false));
         let error = Arc::new(AtomicBool::new(false));
         let level = Arc::new(AtomicIsize::new(0));
-        let wait = Arc::new((Mutex::new(false), Condvar::new()));
-
+        let sleep = Arc::new((Mutex::new(false), Condvar::new()));
         DtStream {
             stype,
             seed,
@@ -162,16 +166,16 @@ impl DtStream {
             abort,
             error,
             level,
-            wait,
+            sleep,
         }
     }
 
     /// Wake up the worker thread, if it is currently sleeping.
     fn wake_thread(&self) {
-        let mut sleeping = self.wait.0.lock().expect("Wake Condvar lock poison");
+        let mut sleeping = self.sleep.0.lock().expect("Wake Condvar lock poison");
         if *sleeping {
             *sleeping = false;
-            self.wait.1.notify_one();
+            self.sleep.1.notify_one();
         }
     }
 
@@ -211,7 +215,7 @@ impl DtStream {
         let thread_abort = Arc::clone(&self.abort);
         let thread_error = Arc::clone(&self.error);
         let thread_level = Arc::clone(&self.level);
-        let thread_wait = Arc::clone(&self.wait);
+        let thread_sleep = Arc::clone(&self.sleep);
         self.thread_join = Some(thread::spawn(move || {
             thread_worker(thread_stype,
                           thread_chunk_factor,
@@ -223,7 +227,7 @@ impl DtStream {
                           thread_abort,
                           thread_error,
                           thread_level,
-                          thread_wait,
+                          thread_sleep,
                           tx);
         }));
         self.is_active = true;
