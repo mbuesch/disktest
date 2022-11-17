@@ -139,9 +139,7 @@ impl DtStreamAgg {
 
     #[inline]
     fn get_chunk(&mut self) -> ah::Result<Option<DtStreamAggChunk>> {
-        if !self.is_active() {
-            return Ok(None);
-        }
+        debug_assert!(self.is_active());
 
         // Try to get a chunk.
         let Some(chunk) = self.streams[self.current_index].get_chunk()? else {
