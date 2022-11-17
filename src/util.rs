@@ -53,62 +53,61 @@ const MBM1: u64 = MB - 1;
 pub fn prettybytes(count: u64, binary: bool, decimal: bool) -> String {
     let mut ret = String::new();
 
-    if binary || decimal {
-        if count < KIB {
-            write!(ret, "{} bytes", count).ok();
-        } else {
-            if binary {
-                match count {
-                    EIB..=u64::MAX => write!(ret, "{:.4} EiB", ((count / TIB) as f64) / (MIB as f64)),
-                    PIB..=EIBM1    => write!(ret, "{:.4} PiB", ((count / GIB) as f64) / (MIB as f64)),
-                    TIB..=PIBM1    => write!(ret, "{:.4} TiB", ((count / MIB) as f64) / (MIB as f64)),
-                    GIB..=TIBM1    => write!(ret, "{:.2} GiB", ((count / MIB) as f64) / (KIB as f64)),
-                    MIB..=GIBM1    => write!(ret, "{:.1} MiB", (count as f64) / (MIB as f64)),
-                    0..=MIBM1      => write!(ret, "{:.1} kiB", (count as f64) / (KIB as f64)),
-                }.ok();
-            }
-            if decimal {
-                let len = ret.len();
-                if len > 0 { ret.push_str(" ("); }
-                match count {
-                    EB..=u64::MAX => write!(ret, "{:.4} EB", ((count / TB) as f64) / (MB as f64)),
-                    PB..=EBM1     => write!(ret, "{:.4} PB", ((count / GB) as f64) / (MB as f64)),
-                    TB..=PBM1     => write!(ret, "{:.4} TB", ((count / MB) as f64) / (MB as f64)),
-                    GB..=TBM1     => write!(ret, "{:.2} GB", ((count / MB) as f64) / (KB as f64)),
-                    MB..=GBM1     => write!(ret, "{:.1} MB", (count as f64) / (MB as f64)),
-                    0..=MBM1      => write!(ret, "{:.1} kB", (count as f64) / (KB as f64)),
-                }.ok();
-                if len > 0 { ret.push(')'); }
-            }
-        }
+    if !binary && !decimal {
+        return ret;
     }
 
+    if count < KIB {
+        let _ = write!(ret, "{} bytes", count);
+        return ret;
+    }
+
+    if binary {
+        let _ = match count {
+            EIB..=u64::MAX => write!(ret, "{:.4} EiB", ((count / TIB) as f64) / (MIB as f64)),
+            PIB..=EIBM1    => write!(ret, "{:.4} PiB", ((count / GIB) as f64) / (MIB as f64)),
+            TIB..=PIBM1    => write!(ret, "{:.4} TiB", ((count / MIB) as f64) / (MIB as f64)),
+            GIB..=TIBM1    => write!(ret, "{:.2} GiB", ((count / MIB) as f64) / (KIB as f64)),
+            MIB..=GIBM1    => write!(ret, "{:.1} MiB", (count as f64) / (MIB as f64)),
+            0..=MIBM1      => write!(ret, "{:.1} kiB", (count as f64) / (KIB as f64)),
+        };
+    }
+    if decimal {
+        let len = ret.len();
+        if len > 0 { ret.push_str(" ("); }
+        let _ = match count {
+            EB..=u64::MAX => write!(ret, "{:.4} EB", ((count / TB) as f64) / (MB as f64)),
+            PB..=EBM1     => write!(ret, "{:.4} PB", ((count / GB) as f64) / (MB as f64)),
+            TB..=PBM1     => write!(ret, "{:.4} TB", ((count / MB) as f64) / (MB as f64)),
+            GB..=TBM1     => write!(ret, "{:.2} GB", ((count / MB) as f64) / (KB as f64)),
+            MB..=GBM1     => write!(ret, "{:.1} MB", (count as f64) / (MB as f64)),
+            0..=MBM1      => write!(ret, "{:.1} kB", (count as f64) / (KB as f64)),
+        };
+        if len > 0 { ret.push(')'); }
+    }
     ret
 }
 
 fn try_one_parsebytes(s: &str, suffix: &str, factor: u64) -> ah::Result<u64> {
-    if let Some(s) = s.strip_suffix(suffix) {
-        let s = s.trim();
-        if let Ok(value) = s.parse::<u64>() {
-            // Integer value.
-            if let Some(prod) = value.checked_mul(factor) {
-                Ok(prod)
-            } else {
-                Err(ah::format_err!("Value integer overflow."))
-            }
-        } else if let Ok(value) = s.parse::<f64>() {
-            // Floating point value.
-            let factor = factor as f64;
-            if value.log2() + factor.log2() < 61.0 {
-                Ok((value * factor).round() as u64)
-            } else {
-                Err(ah::format_err!("Value float overflow."))
-            }
-        } else {
-            Err(ah::format_err!("Value is neither integer nor float."))
+    let Some(s) = s.strip_suffix(suffix) else {
+        return Err(ah::format_err!("Value suffix does not match."))
+    };
+    let s = s.trim();
+    if let Ok(value) = s.parse::<u64>() {
+        // Integer value.
+        let Some(prod) = value.checked_mul(factor) else {
+            return Err(ah::format_err!("Value integer overflow."))
+        };
+        Ok(prod)
+    } else if let Ok(value) = s.parse::<f64>() {
+        // Floating point value.
+        let factor = factor as f64;
+        if value.log2() + factor.log2() >= 61.0 {
+            return Err(ah::format_err!("Value float overflow."))
         }
+        Ok((value * factor).round() as u64)
     } else {
-        Err(ah::format_err!("Value suffix does not match."))
+        Err(ah::format_err!("Value is neither integer nor float."))
     }
 }
 
