@@ -30,7 +30,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 /// Length of the generated seed.
-const DEFAULT_GEN_SEED_LEN: usize = 70;
+const DEFAULT_GEN_SEED_LEN: usize = 40;
 
 const ABOUT: &str = "\
 Hard Disk (HDD), Solid State Disk (SSD), USB Stick, Memory Card (e.g. SD-Card) tester.\n\n\
