@@ -42,10 +42,11 @@ impl BufCache {
     }
 
     pub fn push(&mut self, cons_id: u32, buf: Vec<u8>) {
-        if let Some(snd) = self.snd.get(&cons_id) {
-            snd.send(buf).ok();
-        } else {
+        let Some(snd) = self.snd.get(&cons_id) else {
             panic!("BufCache: Consumer {} does not exist.", cons_id);
+        };
+        if let Err(e) = snd.send(buf) {
+            eprintln!("BufCache: Failed to send: {}", e);
         }
     }
 }
