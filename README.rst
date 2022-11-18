@@ -130,18 +130,18 @@ These speed tests don't write to an actual disk, but only to the `/dev/null` dev
 	=====================================  =========  ===============================  =================
 	Command                                Algorithm  Hardware                         Data rate written
 	=====================================  =========  ===============================  =================
-	disktest -j12 -ACHACHA20 -w /dev/null  ChaCha20   AMD Ryzen 5 5500U; 6x2 cores     7.1 GiB/s
+	disktest -j12 -ACHACHA20 -w /dev/null  ChaCha20   AMD Ryzen 5 5500U; 6x2 cores     7.2 GiB/s
 	disktest -j12 -ACHACHA12 -w /dev/null  ChaCha12   AMD Ryzen 5 5500U; 6x2 cores     7.3 GiB/s
 	disktest -j12 -ACHACHA8 -w /dev/null   ChaCha8    AMD Ryzen 5 5500U; 6x2 cores     7.3 GiB/s
-	disktest -j12 -ACRC -w /dev/null       CRC        AMD Ryzen 5 5500U; 6x2 cores     7.5 GiB/s
+	disktest -j12 -ACRC -w /dev/null       CRC        AMD Ryzen 5 5500U; 6x2 cores     7.4 GiB/s
 	disktest -j4 -ACHACHA20 -w /dev/null   ChaCha20   Intel i5-3320M; 2x2 cores        2.0 GiB/s
 	disktest -j4 -ACHACHA12 -w /dev/null   ChaCha12   Intel i5-3320M; 2x2 cores        3.1 GiB/s
-	disktest -j4 -ACHACHA8 -w /dev/null    ChaCha8    Intel i5-3320M; 2x2 cores        4.2 GiB/s
-	disktest -j4 -ACRC -w /dev/null        CRC        Intel i5-3320M; 2x2 cores        4.6 GiB/s
-	disktest -j4 -ACHACHA20 -w /dev/null   ChaCha20   Raspberry Pi 4; 4 cores 1.5 GHz  300 MiB/s
-	disktest -j4 -ACHACHA12 -w /dev/null   ChaCha12   Raspberry Pi 4; 4 cores 1.5 GHz  400 MiB/s
-	disktest -j4 -ACHACHA8 -w /dev/null    ChaCha8    Raspberry Pi 4; 4 cores 1.5 GHz  500 MiB/s
-	disktest -j4 -ACRC -w /dev/null        CRC        Raspberry Pi 4; 4 cores 1.5 GHz  680 MiB/s
+	disktest -j4 -ACHACHA8 -w /dev/null    ChaCha8    Intel i5-3320M; 2x2 cores        4.3 GiB/s
+	disktest -j4 -ACRC -w /dev/null        CRC        Intel i5-3320M; 2x2 cores        7.3 GiB/s
+	disktest -j4 -ACHACHA20 -w /dev/null   ChaCha20   Raspberry Pi 4; 4 cores 1.5 GHz  420 MiB/s
+	disktest -j4 -ACHACHA12 -w /dev/null   ChaCha12   Raspberry Pi 4; 4 cores 1.5 GHz  670 MiB/s
+	disktest -j4 -ACHACHA8 -w /dev/null    ChaCha8    Raspberry Pi 4; 4 cores 1.5 GHz  920 MiB/s
+	disktest -j4 -ACRC -w /dev/null        CRC        Raspberry Pi 4; 4 cores 1.5 GHz  2.8 GiB/s
 	=====================================  =========  ===============================  =================
 
 The read data rates are similar, because the algorithm used is exactly the same.
