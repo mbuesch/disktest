@@ -7,6 +7,8 @@ disktest - Solid State Disk (SSD), Hard Disk (HDD), USB Stick, SD-Card tester
 
 `Github repository <https://github.com/mbuesch/disktest>`_
 
+`crates.io site <https://crates.io/crates/disktest>`_
+
 Disktest is a tool to check Solid State Disks, Hard Disks, USB sticks, SD cards or other storage media for errors.
 
 It does so by writing a pseudo random sequence to the device and then reading it back and verifying it to the same pseudo random sequence.
