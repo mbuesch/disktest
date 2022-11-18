@@ -1,9 +1,11 @@
 disktest - Hard Disk (HDD), Solid State Disk (SSD), USB Stick, SD-Card tester
 =============================================================================
 
-`https://bues.ch/h/disktest <https://bues.ch/h/disktest>`_
+`Homepage <https://bues.ch/h/disktest>`_
 
-`https://bues.ch/cgit/disktest.git <https://bues.ch/cgit/disktest.git>`_
+`Git repository <https://bues.ch/cgit/disktest.git>`_
+
+`Github repository <https://github.com/mbuesch/disktest>`_
 
 Disktest is a tool to check Hard Disks, Solid State Disks, USB sticks, SD cards or similar storage media for errors.
 
