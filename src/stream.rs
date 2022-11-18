@@ -139,9 +139,9 @@ pub struct DtStream {
 
 impl DtStream {
     /// Maximum number of chunks that the thread will compute in advance.
-    const MAX_THRES: isize = 8;
+    const MAX_THRES: isize = 10;
     /// Low watermark for thread wakeup.
-    const LO_THRES: isize = 4;
+    const LO_THRES: isize = 6;
 
     pub fn new(
         stype:          DtStreamType,
