@@ -1,12 +1,12 @@
 [package]
 name            = "disktest"
-description     = "Hard Disk and Solid State Disk tester"
-version         = "1.9.0"
+description     = "Solid State Disk, Hard Disk and other storage media tester"
+version         = "1.10.0"
 homepage        = "https://bues.ch/h/disktest"
-repository      = "https://bues.ch/cgit/disktest.git"
+repository      = "https://github.com/mbuesch/disktest"
 license         = "GPL-2.0-or-later"
 readme          = "README.md"
-authors         = ["Michael Buesch <m@bues.ch>"]
+authors         = ["Michael Büsch <m@bues.ch>"]
 
 categories      = ["command-line-utilities", "filesystem", "hardware-support"]
 keywords        = ["disk", "HDD", "SSD", "flash", "SD-card"]
