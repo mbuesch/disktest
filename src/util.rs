@@ -48,7 +48,6 @@ const PBM1: u64 = PB - 1;
 const TBM1: u64 = TB - 1;
 const GBM1: u64 = GB - 1;
 const MBM1: u64 = MB - 1;
-//const KBM1: u64 = KB - 1;
 
 pub fn prettybytes(count: u64, binary: bool, decimal: bool) -> String {
     let mut ret = String::new();
