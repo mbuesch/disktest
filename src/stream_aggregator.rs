@@ -25,7 +25,7 @@ use crate::stream::{DtStream, DtStreamChunk};
 use crate::util::prettybytes;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub use crate::stream::DtStreamType;
 
@@ -159,23 +159,11 @@ impl DtStreamAgg {
         if !self.is_active() {
             panic!("wait_chunk() called, but stream aggregator is stopped.");
         }
-
-        // Fast path: Check if a chunk is available.
-        if let Some(chunk) = self.get_chunk()? {
-            return Ok(chunk);
-        }
-
-        // Slow path: Wait until a chunk is available.
-        let begin = Instant::now();
-        let mut do_yield = false;
         loop {
             if let Some(chunk) = self.get_chunk()? {
                 break Ok(chunk);
             }
-            if do_yield || (Instant::now() - begin) > Duration::from_micros(50) {
-                do_yield = true;
-                std::thread::yield_now();
-            }
+            std::thread::sleep(Duration::from_millis(1));
         }
     }
 }
