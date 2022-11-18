@@ -369,7 +369,7 @@ impl Disktest {
                         break; // End of device. -> Success.
                     }
                 }
-                self.write_finalize(&mut file, false, bytes_written).ok();
+                let _ = self.write_finalize(&mut file, false, bytes_written);
                 return Err(ah::format_err!("Write error: {}", e));
             }
 
@@ -383,7 +383,7 @@ impl Disktest {
             self.log("Wrote ", write_len, bytes_written, false);
 
             if self.abort_requested() {
-                self.write_finalize(&mut file, false, bytes_written).ok();
+                let _ = self.write_finalize(&mut file, false, bytes_written);
                 return Err(ah::format_err!("Aborted by signal!"));
             }
         }
@@ -478,14 +478,14 @@ impl Disktest {
                     }
                 },
                 Err(e) => {
-                    self.verify_finalize(&mut file, false, bytes_read).ok();
+                    let _ = self.verify_finalize(&mut file, false, bytes_read);
                     return Err(ah::format_err!("Read error at {}: {}",
                                                prettybytes(bytes_read, true, true), e));
                 },
             };
 
             if self.abort_requested() {
-                self.verify_finalize(&mut file, false, bytes_read).ok();
+                let _ = self.verify_finalize(&mut file, false, bytes_read);
                 return Err(ah::format_err!("Aborted by signal!"));
             }
         }
