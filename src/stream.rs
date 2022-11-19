@@ -112,6 +112,7 @@ fn thread_worker(
             // The chunk buffer is full. Wait...
             let mut sleeping = sleep.0.lock()
                 .expect("Thread Condvar lock poison");
+            *sleeping = true;
             while *sleeping {
                 sleeping = sleep.1.wait(sleeping)
                     .expect("Thread Condvar wait poison");
