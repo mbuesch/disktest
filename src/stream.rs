@@ -41,8 +41,8 @@ pub enum DtStreamType {
 
 /// Data chunk that contains the computed PRNG data.
 pub struct DtStreamChunk {
-    pub index:  u64,
     pub data:   Option<Vec<u8>>,
+    pub index:  u8,
 }
 
 /// Thread worker function, that computes the chunks.
@@ -99,10 +99,10 @@ fn thread_worker(
             };
 
             let chunk = DtStreamChunk {
-                index,
                 data: Some(data),
+                index,
             };
-            index += 1;
+            index = index.wrapping_add(1);
 
             // Send the chunk to the main thread.
             tx.send(chunk).expect("Worker thread: Send failed.");
