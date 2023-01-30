@@ -30,7 +30,7 @@ use libc::ENOSPC;
 use winapi::shared::winerror::ERROR_DISK_FULL as ENOSPC;
 
 pub enum RawIoResult {
-    Ok(u64),
+    Ok(usize),
     Enospc,
 }
 
@@ -78,7 +78,7 @@ impl RawIo {
     
     pub fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
         match self.file.read(buffer) {
-            Ok(count) => Ok(RawIoResult::Ok(count as u64)),
+            Ok(count) => Ok(RawIoResult::Ok(count)),
             Err(e) => Err(ah::format_err!("Read error: {}", e)),
         }
     }
@@ -92,7 +92,7 @@ impl RawIo {
             }
             return Err(ah::format_err!("Write error: {}", e));
         }
-        Ok(RawIoResult::Ok(buffer.len() as u64))
+        Ok(RawIoResult::Ok(buffer.len()))
     }
 }
 

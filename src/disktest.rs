@@ -438,7 +438,7 @@ impl Disktest {
             // Read the next chunk from disk.
             match file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
                 Ok(RawIoResult::Ok(n)) => {
-                    read_count += n as usize;
+                    read_count += n;
 
                     // Check if the read buffer is full, or if we are the the end of the disk.
                     assert!(read_count <= read_len);
