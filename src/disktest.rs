@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2022 Michael Buesch <m@bues.ch>
+// Copyright 2020-2023 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,23 +21,16 @@
 
 use anyhow as ah;
 use crate::drop_caches::drop_file_caches;
+use crate::rawio::{RawIo, RawIoResult};
 use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
 use crate::util::prettybytes;
 use hhmmss::Hhmmss;
 use std::cmp::min;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write, Seek, SeekFrom};
-use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::available_parallelism;
 use std::time::Instant;
-
-#[cfg(not(target_os="windows"))]
-use libc::ENOSPC;
-#[cfg(target_os="windows")]
-use winapi::shared::winerror::ERROR_DISK_FULL as ENOSPC;
 
 pub use crate::stream_aggregator::DtStreamType;
 
@@ -48,7 +41,7 @@ pub struct DisktestFile {
     path:           PathBuf,
     read:           bool,
     write:          bool,
-    file:           Option<File>,
+    io:             Option<RawIo>,
     drop_offset:    u64,
     drop_count:     u64,
 }
@@ -62,24 +55,18 @@ impl DisktestFile {
             path:           path.to_path_buf(),
             read,
             write,
-            file:           None,
+            io:             None,
             drop_offset:    0,
             drop_count:     0,
         })
     }
 
-    fn do_open(&mut self) -> io::Result<()> {
-        if self.file.is_none() {
-            self.file = match OpenOptions::new().read(self.read)
-                                                .write(self.write)
-                                                .create(self.write)
-                                                .open(self.path.as_path()) {
-                Ok(f) => Some(f),
-                Err(e) => {
-                    let msg = format!("Failed to open file {:?}: {}", self.path, e);
-                    return Err(io::Error::new(io::ErrorKind::Other, msg));
-                },
-            };
+    fn do_open(&mut self) -> ah::Result<()> {
+        if self.io.is_none() {
+            self.io = Some(RawIo::new(&self.path,
+                                      self.write,
+                                      self.read,
+                                      self.write)?);
             self.drop_offset = 0;
             self.drop_count = 0;
         }
@@ -87,24 +74,24 @@ impl DisktestFile {
     }
 
     /// Close the file and try to drop all write caches.
-    fn close(&mut self) -> io::Result<()> {
+    fn close(&mut self) -> ah::Result<()> {
         let drop_offset = self.drop_offset;
         let drop_count = self.drop_count;
 
         self.drop_offset += drop_count;
         self.drop_count = 0;
 
-        // Take and destruct the File object.
-        if let Some(file) = self.file.take() {
+        // Take and destruct the RawIo object.
+        if let Some(io) = self.io.take() {
             // If bytes have been written, try to drop the operating system caches.
             if drop_count > 0 {
                 // Pass the File object to the dropper.
                 // It will destruct the File object.
-                if let Err(e) = drop_file_caches(file,
+                if let Err(e) = drop_file_caches(io.into_file(),
                                                  self.path.as_path(),
                                                  drop_offset,
                                                  drop_count) {
-                    return Err(io::Error::new(io::ErrorKind::Other, e));
+                    return Err(ah::format_err!("Cache drop error: {}", e));
                 }
             }
         }
@@ -112,7 +99,7 @@ impl DisktestFile {
     }
 
     /// Flush written data and seek to a position in the file.
-    fn seek(&mut self, offset: u64) -> io::Result<u64> {
+    fn seek(&mut self, offset: u64) -> ah::Result<u64> {
         self.close()?;
         self.do_open()?;
         match self.seek_noflush(offset) {
@@ -126,41 +113,41 @@ impl DisktestFile {
     }
 
     /// Seek to a position in the file.
-    fn seek_noflush(&mut self, offset: u64) -> io::Result<u64> {
-        if let Some(f) = self.file.as_mut() {
-            f.seek(SeekFrom::Start(offset))
+    fn seek_noflush(&mut self, offset: u64) -> ah::Result<u64> {
+        if let Some(io) = self.io.as_mut() {
+            io.seek(offset)
         } else {
             panic!("seek: No file.");
         }
     }
 
     /// Sync all written data to disk.
-    fn sync(&mut self) -> io::Result<()> {
-        if let Some(f) = self.file.as_mut() {
-            f.sync_all()
+    fn sync(&mut self) -> ah::Result<()> {
+        if let Some(io) = self.io.as_mut() {
+            io.sync()
         } else {
             Ok(())
         }
     }
 
     /// Read data from the file.
-    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
         self.do_open()?;
-        if let Some(f) = self.file.as_mut() {
-            f.read(buffer)
+        if let Some(io) = self.io.as_mut() {
+            io.read(buffer)
         } else {
             panic!("read: No file.");
         }
     }
 
     /// Write data to the file.
-    fn write(&mut self, buffer: &[u8]) -> io::Result<()> {
+    fn write(&mut self, buffer: &[u8]) -> ah::Result<RawIoResult> {
         self.do_open()?;
-        if let Some(f) = self.file.as_mut() {
-            match f.write_all(buffer) {
-                Ok(()) => {
+        if let Some(io) = self.io.as_mut() {
+            match io.write(buffer) {
+                Ok(res) => {
                     self.drop_count += buffer.len() as u64;
-                    Ok(())
+                    Ok(res)
                 },
                 Err(e) => Err(e),
             }
@@ -177,7 +164,7 @@ impl DisktestFile {
 
 impl Drop for DisktestFile {
     fn drop(&mut self) {
-        if self.file.is_some() {
+        if self.io.is_some() {
             eprintln!("WARNING: File not closed. Closing now...");
             if let Err(e) = self.close() {
                 panic!("Failed to drop operating system caches: {}", e);
@@ -361,16 +348,20 @@ impl Disktest {
             let write_len = min(chunk_size, bytes_left) as usize;
 
             // Write the chunk to disk.
-            if let Err(e) = file.write(&chunk.get_data()[0..write_len]) {
-                if let Some(err_code) = e.raw_os_error() {
-                    if max_bytes == Disktest::UNLIMITED &&
-                       err_code == ENOSPC as i32 {
+            match file.write(&chunk.get_data()[0..write_len]) {
+                Ok(RawIoResult::Ok(_)) => (),
+                Ok(RawIoResult::Enospc) => {
+                    if max_bytes == Disktest::UNLIMITED {
                         self.write_finalize(&mut file, true, bytes_written)?;
                         break; // End of device. -> Success.
                     }
+                    let _ = self.write_finalize(&mut file, false, bytes_written);
+                    return Err(ah::format_err!("Write error: Out of disk space."));
                 }
-                let _ = self.write_finalize(&mut file, false, bytes_written);
-                return Err(ah::format_err!("Write error: {}", e));
+                Err(e) => {
+                    let _ = self.write_finalize(&mut file, false, bytes_written);
+                    return Err(e);
+                }
             }
 
             // Account for the written bytes.
@@ -446,8 +437,8 @@ impl Disktest {
         loop {
             // Read the next chunk from disk.
             match file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {
-                Ok(n) => {
-                    read_count += n;
+                Ok(RawIoResult::Ok(n)) => {
+                    read_count += n as usize;
 
                     // Check if the read buffer is full, or if we are the the end of the disk.
                     assert!(read_count <= read_len);
@@ -477,6 +468,7 @@ impl Disktest {
                         break;
                     }
                 },
+                Ok(_) => unreachable!(),
                 Err(e) => {
                     let _ = self.verify_finalize(&mut file, false, bytes_read);
                     return Err(ah::format_err!("Read error at {}: {}",
@@ -498,6 +490,7 @@ impl Disktest {
 mod tests {
     use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc};
     use std::path::PathBuf;
+    use std::io::Write;
     use super::*;
     use tempfile::tempdir;
 
@@ -513,17 +506,12 @@ mod tests {
         let mk_file = |num, create| {
             let mut path = PathBuf::from(tdir_path);
             path.push(format!("tmp-{}.img", num));
-            let file = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(create)
-                .open(&path)
-                .unwrap();
+            let io = RawIo::new(&path, create, true, true).unwrap();
             DisktestFile {
                 path: path.to_path_buf(),
                 read: true,
                 write: true,
-                file: Some(file),
+                io: Some(io),
                 drop_offset: 0,
                 drop_count: 0,
             }
@@ -558,8 +546,8 @@ mod tests {
             let nr_bytes = 1000;
             {
                 let mut f = mk_file(serial, true);
-                f.file.as_mut().unwrap().set_len(100).unwrap();
-                f.file.as_mut().unwrap().seek(SeekFrom::Start(10)).unwrap();
+                f.io.as_mut().unwrap().set_len(100).unwrap();
+                f.io.as_mut().unwrap().seek(10).unwrap();
                 assert_eq!(dt.write(f, 0, nr_bytes).unwrap(), nr_bytes);
             }
             assert_eq!(dt.verify(mk_file(serial, false), 0, u64::MAX).unwrap(), nr_bytes);
@@ -572,8 +560,8 @@ mod tests {
             assert_eq!(dt.write(mk_file(serial, true), 0, nr_bytes).unwrap(), nr_bytes);
             {
                 let mut f = mk_file(serial, false);
-                f.file.as_mut().unwrap().seek(SeekFrom::Start(10)).unwrap();
-                writeln!(f.file.as_mut().unwrap(), "X").unwrap();
+                f.io.as_mut().unwrap().seek(10).unwrap();
+                writeln!(f.io.take().unwrap().into_file(), "X").unwrap();
             }
             match dt.verify(mk_file(serial, false), 0, nr_bytes) {
                 Ok(_) => panic!("Verify of modified data did not fail!"),

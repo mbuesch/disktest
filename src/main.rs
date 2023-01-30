@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2022 Michael Buesch <m@bues.ch>
+// Copyright 2020-2023 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ mod disktest;
 mod drop_caches;
 mod generator;
 mod kdf;
+mod rawio;
 mod seed;
 mod stream;
 mod stream_aggregator;
