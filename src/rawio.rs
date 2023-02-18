@@ -29,6 +29,40 @@ const ENOSPC: i32 = libc::ENOSPC;
 #[cfg(target_os="windows")]
 const ENOSPC: i32 = winapi::shared::winerror::ERROR_DISK_FULL as i32;
 
+fn is_raw_device(path: &Path) -> bool {
+    let mut is_raw = false;
+
+    #[cfg(not(target_os="windows"))]
+    {
+        use libc::{S_IFMT, S_IFBLK, S_IFCHR};
+        use std::fs::metadata;
+        use std::os::unix::fs::MetadataExt;
+
+        if let Ok(meta) = metadata(path) {
+            let mode_ifmt = meta.mode() & S_IFMT;
+            if mode_ifmt == S_IFBLK || mode_ifmt == S_IFCHR {
+                is_raw = true;
+            }
+        }
+    }
+
+    #[cfg(target_os="windows")]
+    {
+        use regex::Regex;
+
+        if let Some(path) = path.to_str() {
+            let re_drvphy = Regex::new(r"^\\\\\.\\[a-zA-Z]:$").unwrap();
+            let re_phy = Regex::new(r"^\\\\\.PhysicalDrive\d+$").unwrap();
+
+            if re_drvphy.is_match(path) || re_phy.is_match(path) {
+                is_raw = true;
+            }
+        }
+    }
+
+    is_raw
+}
+
 pub enum RawIoResult {
     Ok(usize),
     Enospc,
@@ -36,6 +70,8 @@ pub enum RawIoResult {
 
 pub struct RawIo {
     file: File,
+    #[allow(dead_code)]
+    is_raw: bool,
 }
 
 impl RawIo {
@@ -45,6 +81,8 @@ impl RawIo {
         read: bool,
         write: bool,
     ) -> ah::Result<Self> {
+        let is_raw = is_raw_device(path);
+
         let file = match OpenOptions::new()
             .create(create)
             .read(read)
@@ -56,7 +94,7 @@ impl RawIo {
                 return Err(ah::format_err!("Failed to open file {:?}: {}", path, e));
             }
         };
-        Ok(Self { file })
+        Ok(Self { file, is_raw })
     }
     
     pub fn into_file(self) -> File {
