@@ -25,9 +25,9 @@ use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::Path;
 
 #[cfg(not(target_os="windows"))]
-use libc::ENOSPC;
+const ENOSPC: i32 = libc::ENOSPC;
 #[cfg(target_os="windows")]
-use winapi::shared::winerror::ERROR_DISK_FULL as ENOSPC;
+const ENOSPC: i32 = winapi::shared::winerror::ERROR_DISK_FULL as i32;
 
 pub enum RawIoResult {
     Ok(usize),
@@ -86,7 +86,7 @@ impl RawIo {
     pub fn write(&mut self, buffer: &[u8]) -> ah::Result<RawIoResult> {
         if let Err(e) = self.file.write_all(buffer) {
             if let Some(err_code) = e.raw_os_error() {
-                if err_code == ENOSPC as i32 {
+                if err_code == ENOSPC {
                     return Ok(RawIoResult::Enospc);
                 }
             }

@@ -133,7 +133,7 @@ where I: IntoIterator<Item = T>,
 {
     let about = ABOUT.to_string() + EXAMPLE;
     let args = Command::new("disktest")
-        .about(&about)
+        .about(about)
         .arg(Arg::new("device")
              .index(1)
              .required(true)
