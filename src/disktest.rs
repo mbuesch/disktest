@@ -20,8 +20,7 @@
 //
 
 use anyhow as ah;
-use crate::drop_caches::drop_file_caches;
-use crate::rawio::{RawIo, RawIoResult};
+use crate::rawio::{DEFAULT_SECTOR_SIZE, RawIo, RawIoResult};
 use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
 use crate::util::prettybytes;
 use hhmmss::Hhmmss;
@@ -95,17 +94,19 @@ impl DisktestFile {
         if let Some(io) = self.io.take() {
             // If bytes have been written, try to drop the operating system caches.
             if drop_count > 0 {
-                // Pass the File object to the dropper.
-                // It will destruct the File object.
-                if let Err(e) = drop_file_caches(io.into_file(),
-                                                 self.path.as_path(),
-                                                 drop_offset,
-                                                 drop_count) {
+                if let Err(e) = io.drop_file_caches(drop_offset, drop_count) {
                     return Err(ah::format_err!("Cache drop error: {}", e));
                 }
             }
         }
         Ok(())
+    }
+
+    /// Get the device's physical sector size.
+    fn get_sector_size(&mut self) -> ah::Result<u32> {
+        self.do_open()?;
+        let io = self.io.as_ref().expect("get_sector_size: No file.");
+        io.get_sector_size()
     }
 
     /// Flush written data and seek to a position in the file.
@@ -124,11 +125,9 @@ impl DisktestFile {
 
     /// Seek to a position in the file.
     fn seek_noflush(&mut self, offset: u64) -> ah::Result<u64> {
-        if let Some(io) = self.io.as_mut() {
-            io.seek(offset)
-        } else {
-            panic!("seek: No file.");
-        }
+        self.do_open()?;
+        let io = self.io.as_mut().expect("seek: No file.");
+        io.seek(offset)
     }
 
     /// Sync all written data to disk.
@@ -143,26 +142,20 @@ impl DisktestFile {
     /// Read data from the file.
     fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
         self.do_open()?;
-        if let Some(io) = self.io.as_mut() {
-            io.read(buffer)
-        } else {
-            panic!("read: No file.");
-        }
+        let io = self.io.as_mut().expect("read: No file.");
+        io.read(buffer)
     }
 
     /// Write data to the file.
     fn write(&mut self, buffer: &[u8]) -> ah::Result<RawIoResult> {
         self.do_open()?;
-        if let Some(io) = self.io.as_mut() {
-            match io.write(buffer) {
-                Ok(res) => {
-                    self.drop_count += buffer.len() as u64;
-                    Ok(res)
-                },
-                Err(e) => Err(e),
-            }
-        } else {
-            panic!("write: No file.");
+        let io = self.io.as_mut().expect("write: No file.");
+        match io.write(buffer) {
+            Ok(res) => {
+                self.drop_count += buffer.len() as u64;
+                Ok(res)
+            },
+            Err(e) => Err(e),
         }
     }
 
@@ -292,6 +285,22 @@ impl Disktest {
                 }
                 self.log_count = 0;
             }
+        }
+    }
+
+    /// Get the physical sector size.
+    fn get_sector_size(&self, file: &mut DisktestFile) -> u32 {
+        if let Ok(sector_size) = file.get_sector_size() {
+            sector_size
+        } else {
+            if self.quiet_level < DisktestQuiet::NoWarn {
+                eprintln!(
+                    "Failed to get physical block size of '{}'. Falling back to {} bytes.",
+                    file.get_path().display(),
+                    DEFAULT_SECTOR_SIZE,
+                );
+            }
+            DEFAULT_SECTOR_SIZE
         }
     }
 
@@ -453,6 +462,8 @@ impl Disktest {
         let mut read_count = 0;
         let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
 
+        println!("BLK SECT SZ {}", self.get_sector_size(&mut file)); //TODO
+
         self.init(&mut file, "Verifying", seek)?;
         loop {
             // Read the next chunk from disk.
@@ -509,8 +520,9 @@ impl Disktest {
 #[cfg(test)]
 mod tests {
     use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc};
+    use std::fs::OpenOptions;
+    use std::io::{Seek, SeekFrom, Write};
     use std::path::PathBuf;
-    use std::io::Write;
     use super::*;
     use tempfile::tempdir;
 
@@ -523,12 +535,17 @@ mod tests {
         let nr_threads = 2;
         let mut dt = Disktest::new(algorithm, seed, false, nr_threads, DisktestQuiet::Normal, None);
 
-        let mk_file = |num, create| {
+        let mk_filepath = |num| {
             let mut path = PathBuf::from(tdir_path);
             path.push(format!("tmp-{}.img", num));
+            path
+        };
+
+        let mk_file = |num, create| {
+            let path = mk_filepath(num);
             let io = RawIo::new(&path, create, true, true).unwrap();
             DisktestFile {
-                path: path.to_path_buf(),
+                path,
                 read: true,
                 write: true,
                 io: Some(io),
@@ -580,9 +597,10 @@ mod tests {
             let nr_bytes = 1000;
             assert_eq!(dt.write(mk_file(serial, true), 0, nr_bytes).unwrap(), nr_bytes);
             {
-                let mut f = mk_file(serial, false);
-                f.io.as_mut().unwrap().seek(10).unwrap();
-                writeln!(f.io.take().unwrap().into_file(), "X").unwrap();
+                let path = mk_filepath(serial);
+                let mut file = OpenOptions::new().read(true).write(true).open(&path).unwrap();
+                file.seek(SeekFrom::Start(10)).unwrap();
+                writeln!(&file, "X").unwrap();
             }
             match dt.verify(mk_file(serial, false), 0, nr_bytes) {
                 Ok(_) => panic!("Verify of modified data did not fail!"),

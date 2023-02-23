@@ -22,7 +22,6 @@
 mod args;
 mod bufcache;
 mod disktest;
-mod drop_caches;
 mod generator;
 mod kdf;
 mod rawio;
