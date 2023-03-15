@@ -109,6 +109,7 @@ Quiet level:
 0: Normal verboseness.
 1: Reduced verboseness.
 2: No informational output.
+3: No warnings.
 ";
 
 /// All command line arguments.
