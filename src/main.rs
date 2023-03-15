@@ -34,7 +34,7 @@ mod util;
 use anyhow as ah;
 use args::{Args, parse_args};
 use crate::seed::print_generated_seed;
-use disktest::{Disktest, DisktestFile};
+use disktest::{Disktest, DisktestFile, DisktestQuiet};
 use std::env::args_os;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -76,7 +76,7 @@ fn main() -> ah::Result<()> {
     let args = parse_args(args_os())?;
     let abort = install_abort_handlers()?;
 
-    if !args.user_seed && args.quiet < 2 {
+    if !args.user_seed && args.quiet < DisktestQuiet::NoInfo {
         print_generated_seed(&args.seed, true);
     }
 
@@ -99,10 +99,10 @@ fn main() -> ah::Result<()> {
         };
     }
 
-    if !args.user_seed && args.quiet < 2 {
+    if !args.user_seed && args.quiet < DisktestQuiet::NoInfo {
         print_generated_seed(&args.seed, false);
     }
-    if result.is_ok() && args.quiet < 1 {
+    if result.is_ok() && args.quiet == DisktestQuiet::Normal {
         println!("Success!");
     }
 

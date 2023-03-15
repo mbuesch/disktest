@@ -37,6 +37,14 @@ pub use crate::stream_aggregator::DtStreamType;
 const LOG_BYTE_THRES: u64   = 1024 * 1024;
 const LOG_SEC_THRES: u64    = 10;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DisktestQuiet {
+    Normal = 0,
+    Reduced = 1,
+    NoInfo = 2,
+    NoWarn = 3,
+}
+
 pub struct DisktestFile {
     path:           PathBuf,
     read:           bool,
@@ -179,7 +187,7 @@ pub struct Disktest {
     log_count:      u64,
     log_time:       Instant,
     begin_time:     Instant,
-    quiet_level:    u8,
+    quiet_level:    DisktestQuiet,
 }
 
 impl Disktest {
@@ -191,7 +199,7 @@ impl Disktest {
                seed:            Vec<u8>,
                invert_pattern:  bool,
                nr_threads:      usize,
-               quiet_level:     u8,
+               quiet_level:     DisktestQuiet,
                abort:           Option<Arc<AtomicBool>>) -> Disktest {
 
         let nr_threads = if nr_threads == 0 {
@@ -240,20 +248,22 @@ impl Disktest {
            abs_processed: u64,
            final_step: bool) {
 
-        // Logging is enabled?
-        if self.quiet_level < 2 {
+        // Info logging is enabled?
+        if self.quiet_level < DisktestQuiet::NoInfo {
 
             // Increment byte count.
             // Only if byte count is bigger than threshold, then check time.
             // This reduces the number of calls to Instant::now.
             self.log_count += inc_processed as u64;
-            if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == 0) || final_step {
+            if (self.log_count >= LOG_BYTE_THRES &&
+                self.quiet_level == DisktestQuiet::Normal) ||
+               final_step {
 
                 // Check if it's time to write the next log entry.
                 let now = Instant::now();
                 let expired = now.duration_since(self.log_time).as_secs() >= LOG_SEC_THRES;
 
-                if (expired && self.quiet_level == 0) || final_step {
+                if (expired && self.quiet_level == DisktestQuiet::Normal) || final_step {
 
                     let dur_elapsed = now - self.begin_time;
                     let sec_elapsed = dur_elapsed.as_secs();
@@ -286,7 +296,7 @@ impl Disktest {
 
         self.log_reset();
 
-        if self.quiet_level < 2 {
+        if self.quiet_level < DisktestQuiet::NoInfo {
             println!("{} {:?}, starting at position {}...",
                      prefix,
                      file.get_path(),
@@ -311,7 +321,7 @@ impl Disktest {
                       file: &mut DisktestFile,
                       success: bool,
                       bytes_written: u64) -> ah::Result<()> {
-        if self.quiet_level < 2 {
+        if self.quiet_level < DisktestQuiet::NoInfo {
             println!("Writing stopped. Syncing...");
         }
         if let Err(e) = file.sync() {
@@ -324,7 +334,7 @@ impl Disktest {
         if let Err(e) = file.close() {
             return Err(ah::format_err!("Failed to drop operating system caches: {}", e));
         }
-        if success && self.quiet_level < 2 {
+        if success && self.quiet_level < DisktestQuiet::NoInfo {
             println!("Successfully dropped file caches.");
         }
 
@@ -501,7 +511,7 @@ mod tests {
 
         let seed = vec![42, 43, 44, 45];
         let nr_threads = 2;
-        let mut dt = Disktest::new(algorithm, seed, false, nr_threads, 0, None);
+        let mut dt = Disktest::new(algorithm, seed, false, nr_threads, DisktestQuiet::Normal, None);
 
         let mk_file = |num, create| {
             let mut path = PathBuf::from(tdir_path);

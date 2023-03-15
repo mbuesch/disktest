@@ -23,7 +23,7 @@ use anyhow as ah;
 use clap::error::ErrorKind::{DisplayHelp, DisplayVersion};
 use clap::builder::ValueParser;
 use clap::{Command, Arg, ArgAction, value_parser};
-use crate::disktest::DtStreamType;
+use crate::disktest::{DtStreamType, DisktestQuiet};
 use crate::seed::gen_seed_string;
 use crate::util::parsebytes;
 use std::ffi::OsString;
@@ -123,7 +123,7 @@ pub struct Args {
     pub user_seed:      bool,
     pub invert_pattern: bool,
     pub threads:        usize,
-    pub quiet:          u8,
+    pub quiet:          DisktestQuiet,
 }
 
 /// Parse all command line arguments and put them into a structure.
@@ -212,6 +212,17 @@ where I: IntoIterator<Item = T>,
     };
 
     let quiet = *args.get_one::<u8>("quiet").unwrap();
+    let quiet = if quiet == DisktestQuiet::Normal as u8 {
+        DisktestQuiet::Normal
+    } else if quiet == DisktestQuiet::Reduced as u8 {
+        DisktestQuiet::Reduced
+    } else if quiet == DisktestQuiet::NoInfo as u8 {
+        DisktestQuiet::NoInfo
+    } else if quiet == DisktestQuiet::NoWarn as u8 {
+        DisktestQuiet::NoWarn
+    } else {
+        DisktestQuiet::NoWarn
+    };
 
     let device = args.get_one::<PathBuf>("device").unwrap().clone();
 
@@ -282,7 +293,7 @@ mod tests {
         assert!(a.user_seed);
         assert!(!a.invert_pattern);
         assert_eq!(a.threads, 1);
-        assert_eq!(a.quiet, 0);
+        assert_eq!(a.quiet, DisktestQuiet::Normal);
 
         let a = parse_args(vec!["disktest", "--write", "/dev/foobar"]).unwrap();
         assert_eq!(a.device, PathBuf::from("/dev/foobar"));
@@ -351,9 +362,9 @@ mod tests {
         assert!(parse_args(vec!["disktest", "-w", "-j65537", "/dev/foobar"]).is_err());
 
         let a = parse_args(vec!["disktest", "-w", "--quiet", "2", "/dev/foobar"]).unwrap();
-        assert_eq!(a.quiet, 2);
+        assert_eq!(a.quiet, DisktestQuiet::NoInfo);
         let a = parse_args(vec!["disktest", "-w", "-q2", "/dev/foobar"]).unwrap();
-        assert_eq!(a.quiet, 2);
+        assert_eq!(a.quiet, DisktestQuiet::NoInfo);
 
         let a = parse_args(vec!["disktest", "-w", "--invert-pattern", "/dev/foobar"]).unwrap();
         assert!(a.invert_pattern);
