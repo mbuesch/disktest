@@ -20,7 +20,6 @@
 //
 
 use anyhow as ah;
-use crate::disktest::DisktestQuiet;
 use crate::bufcache::{BufCache, BufCacheCons};
 use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc, NextRandom};
 use crate::kdf::kdf;
@@ -317,6 +316,7 @@ impl Drop for DtStream {
 mod tests {
     use super::*;
     use std::time::Duration;
+    use crate::disktest::DisktestQuiet;
 
     impl DtStream {
         pub fn wait_chunk(&mut self) -> DtStreamChunk {
