@@ -52,6 +52,7 @@ pub struct DisktestFile {
     io:             Option<RawIo>,
     drop_offset:    u64,
     drop_count:     u64,
+    quiet_level:    DisktestQuiet,
 }
 
 impl DisktestFile {
@@ -66,6 +67,7 @@ impl DisktestFile {
             io:             None,
             drop_offset:    0,
             drop_count:     0,
+            quiet_level:    DisktestQuiet::Normal,
         })
     }
 
@@ -173,7 +175,9 @@ impl DisktestFile {
 impl Drop for DisktestFile {
     fn drop(&mut self) {
         if self.io.is_some() {
-            eprintln!("WARNING: File not closed. Closing now...");
+            if self.quiet_level < DisktestQuiet::NoWarn {
+                eprintln!("WARNING: File not closed. Closing now...");
+            }
             if let Err(e) = self.close() {
                 panic!("Failed to drop operating system caches: {}", e);
             }
@@ -213,10 +217,13 @@ impl Disktest {
         };
 
         Disktest {
-            stream_agg: DtStreamAgg::new(algorithm,
-                                         seed,
-                                         invert_pattern,
-                                         nr_threads),
+            stream_agg: DtStreamAgg::new(
+                algorithm,
+                seed,
+                invert_pattern,
+                nr_threads,
+                quiet_level,
+            ),
             abort,
             log_count: 0,
             log_time: Instant::now(),
@@ -294,6 +301,7 @@ impl Disktest {
             prefix: &str,
             seek: u64) -> ah::Result<()> {
 
+        file.quiet_level = self.quiet_level;
         self.log_reset();
 
         if self.quiet_level < DisktestQuiet::NoInfo {
@@ -413,7 +421,9 @@ impl Disktest {
                      buffer: &[u8],
                      chunk: &DtStreamAggChunk) -> ah::Error {
         if let Err(e) = self.verify_finalize(file, false, bytes_read) {
-            eprintln!("{}", e);
+            if self.quiet_level < DisktestQuiet::NoWarn {
+                eprintln!("{}", e);
+            }
         }
         for (i, buffer_byte) in buffer.iter().enumerate().take(read_count) {
             if *buffer_byte != chunk.get_data()[i] {
@@ -524,6 +534,7 @@ mod tests {
                 io: Some(io),
                 drop_offset: 0,
                 drop_count: 0,
+                quiet_level: DisktestQuiet::Normal,
             }
         };
 

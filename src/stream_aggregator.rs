@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2022 Michael Buesch <m@bues.ch>
+// Copyright 2020-2023 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 
 use anyhow as ah;
 use crate::bufcache::BufCache;
+use crate::disktest::DisktestQuiet;
 use crate::stream::{DtStream, DtStreamChunk};
 use crate::util::prettybytes;
 use std::cell::RefCell;
@@ -57,18 +58,22 @@ pub struct DtStreamAgg {
     cache:              Rc<RefCell<BufCache>>,
     current_index:      usize,
     is_active:          bool,
+    quiet_level:        DisktestQuiet,
 }
 
 impl DtStreamAgg {
-    pub fn new(stype:           DtStreamType,
-               seed:            Vec<u8>,
-               invert_pattern:  bool,
-               num_threads:     usize) -> DtStreamAgg {
+    pub fn new(
+        stype: DtStreamType,
+        seed: Vec<u8>,
+        invert_pattern: bool,
+        num_threads: usize,
+        quiet_level: DisktestQuiet,
+    ) -> DtStreamAgg {
 
         assert!(num_threads > 0);
         assert!(num_threads <= std::u16::MAX as usize + 1);
 
-        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut streams = Vec::with_capacity(num_threads);
         for i in 0..num_threads {
             let stream = DtStream::new(
@@ -87,6 +92,7 @@ impl DtStreamAgg {
             cache,
             current_index: 0,
             is_active: false,
+            quiet_level,
         }
     }
 
@@ -97,15 +103,17 @@ impl DtStreamAgg {
         // Calculate the stream index from the byte_offset.
         if byte_offset % chunk_size != 0 {
             let good_offset = byte_offset - (byte_offset % chunk_size);
-            eprintln!("WARNING: The seek offset {} (= {}) is not a multiple \
-                of the chunk size {} bytes (= {}). \n\
-                The seek offset will be adjusted to {} bytes (= {}).",
-                byte_offset,
-                prettybytes(byte_offset, true, true),
-                chunk_size,
-                prettybytes(chunk_size, true, true),
-                good_offset,
-                prettybytes(good_offset, true, true));
+            if self.quiet_level < DisktestQuiet::NoWarn {
+                eprintln!("WARNING: The seek offset {} (= {}) is not a multiple \
+                    of the chunk size {} bytes (= {}). \n\
+                    The seek offset will be adjusted to {} bytes (= {}).",
+                    byte_offset,
+                    prettybytes(byte_offset, true, true),
+                    chunk_size,
+                    prettybytes(chunk_size, true, true),
+                    good_offset,
+                    prettybytes(good_offset, true, true));
+            }
             byte_offset = good_offset;
         }
         let chunk_index = byte_offset / chunk_size;
@@ -176,7 +184,7 @@ mod tests {
     fn run_base_test(algorithm: DtStreamType, gen_base_size: usize, chunk_factor: usize) {
         println!("stream aggregator base test");
         let num_threads = 2;
-        let mut agg = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads);
+        let mut agg = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
         agg.activate(0).unwrap();
         assert!(agg.is_active());
 
@@ -244,10 +252,10 @@ mod tests {
         let num_threads = 2;
 
         for offset in 0..5 {
-            let mut a = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads);
+            let mut a = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
             a.activate(0).unwrap();
 
-            let mut b = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads);
+            let mut b = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
             b.activate(a.get_chunk_size() as u64 * offset).unwrap();
 
             // Until offset the chunks must not be equal.

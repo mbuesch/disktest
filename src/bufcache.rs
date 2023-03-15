@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2022 Michael Buesch <m@bues.ch>
+// Copyright 2020-2023 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,17 +19,20 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
+use crate::disktest::DisktestQuiet;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::HashMap;
 
 pub struct BufCache {
-    snd:    HashMap<u32, Sender<Vec<u8>>>,
+    snd: HashMap<u32, Sender<Vec<u8>>>,
+    quiet_level: DisktestQuiet,
 }
 
 impl BufCache {
-    pub fn new() -> BufCache {
+    pub fn new(quiet_level: DisktestQuiet) -> BufCache {
         BufCache {
             snd: HashMap::new(),
+            quiet_level,
         }
     }
 
@@ -46,7 +49,9 @@ impl BufCache {
             panic!("BufCache: Consumer {} does not exist.", cons_id);
         };
         if let Err(e) = snd.send(buf) {
-            eprintln!("BufCache: Failed to send: {}", e);
+            if self.quiet_level < DisktestQuiet::NoWarn {
+                eprintln!("BufCache: Failed to send: {}", e);
+            }
         }
     }
 }
@@ -74,7 +79,7 @@ mod tests {
 
     #[test]
     fn test_bufcache() {
-        let mut cache = BufCache::new();
+        let mut cache = BufCache::new(DisktestQuiet::Normal);
         let mut cons0 = cache.new_consumer(42);
         let mut cons1 = cache.new_consumer(43);
 
@@ -103,7 +108,7 @@ mod tests {
     #[test]
     #[should_panic(expected="Consumer 42 does not exist")]
     fn test_bufcache_cons_invalid() {
-        let mut cache = BufCache::new();
+        let mut cache = BufCache::new(DisktestQuiet::Normal);
         cache.push(42, vec![]);
     }
 }

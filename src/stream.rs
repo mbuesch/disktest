@@ -20,6 +20,7 @@
 //
 
 use anyhow as ah;
+use crate::disktest::DisktestQuiet;
 use crate::bufcache::{BufCache, BufCacheCons};
 use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc, NextRandom};
 use crate::kdf::kdf;
@@ -330,7 +331,7 @@ mod tests {
 
     fn run_base_test(algorithm: DtStreamType) {
         println!("stream base test");
-        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut s = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
         s.activate(0).unwrap();
         assert!(s.is_active());
@@ -367,12 +368,12 @@ mod tests {
     fn run_offset_test(algorithm: DtStreamType) {
         println!("stream offset test");
         // a: start at chunk offset 0
-        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
         a.activate(0).unwrap();
 
         // b: start at chunk offset 1
-        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut b = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
         b.activate(a.get_chunk_size() as u64).unwrap();
 
@@ -385,10 +386,10 @@ mod tests {
 
     fn run_invert_test(algorithm: DtStreamType) {
         println!("stream invert test");
-        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
         a.activate(0).unwrap();
-        let cache = Rc::new(RefCell::new(BufCache::new()));
+        let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut b = DtStream::new(algorithm, vec![1,2,3], true, 0, cache);
         b.activate(0).unwrap();
 
