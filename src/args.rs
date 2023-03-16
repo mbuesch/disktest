@@ -219,8 +219,6 @@ where I: IntoIterator<Item = T>,
         DisktestQuiet::Reduced
     } else if quiet == DisktestQuiet::NoInfo as u8 {
         DisktestQuiet::NoInfo
-    } else if quiet == DisktestQuiet::NoWarn as u8 {
-        DisktestQuiet::NoWarn
     } else {
         DisktestQuiet::NoWarn
     };
