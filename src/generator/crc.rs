@@ -33,8 +33,8 @@ pub struct GeneratorCrc {
 impl GeneratorCrc {
     /// Size of the algorithm base output data.
     pub const BASE_SIZE: usize = 256 * GeneratorCrc::CRC_SIZE;
-    /// Chunk size. Multiple of the generator base size.
-    pub const CHUNK_FACTOR: usize = 1536;
+    /// Default chunk size multiplicator.
+    pub const DEFAULT_CHUNK_FACTOR: usize = 1536;
 
     const CRC_SIZE: usize = 64 / 8;
     const FOLDED_SEED_SIZE: usize = 64 / 8;

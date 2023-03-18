@@ -98,7 +98,7 @@ impl DtStreamAgg {
 
     pub fn activate(&mut self, byte_offset: u64) -> ah::Result<u64> {
         let mut byte_offset = byte_offset;
-        let chunk_size = self.get_chunk_size() as u64;
+        let chunk_size = self.get_chunk_size() as u64 * self.get_default_chunk_factor() as u64;
 
         // Calculate the stream index from the byte_offset.
         if byte_offset % chunk_size != 0 {
@@ -129,7 +129,7 @@ impl DtStreamAgg {
                 iteration * chunk_size
             };
 
-            stream.activate(thread_offset)?;
+            stream.activate(thread_offset, stream.get_default_chunk_factor())?;
         }
 
         self.is_active = true;
@@ -143,6 +143,10 @@ impl DtStreamAgg {
 
     pub fn get_chunk_size(&self) -> usize {
         self.streams[0].get_chunk_size()
+    }
+
+    pub fn get_default_chunk_factor(&self) -> usize {
+        self.streams[0].get_default_chunk_factor()
     }
 
     #[inline]
@@ -189,7 +193,7 @@ mod tests {
         assert!(agg.is_active());
 
         let onestream_chunksize = chunk_factor * gen_base_size;
-        assert_eq!(agg.get_chunk_size(), onestream_chunksize);
+        assert_eq!(agg.get_chunk_size() * agg.get_default_chunk_factor(), onestream_chunksize);
 
         let mut prev_chunks: Option<Vec<DtStreamAggChunk>> = None;
 
@@ -256,7 +260,7 @@ mod tests {
             a.activate(0).unwrap();
 
             let mut b = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
-            b.activate(a.get_chunk_size() as u64 * offset).unwrap();
+            b.activate((a.get_chunk_size() as u64 * a.get_default_chunk_factor() as u64) * offset).unwrap();
 
             // Until offset the chunks must not be equal.
             let mut bchunk = b.wait_chunk().unwrap();
@@ -276,7 +280,7 @@ mod tests {
         let alg = DtStreamType::ChaCha8;
         run_base_test(alg,
                       GeneratorChaCha8::BASE_SIZE,
-                      GeneratorChaCha8::CHUNK_FACTOR);
+                      GeneratorChaCha8::DEFAULT_CHUNK_FACTOR);
         run_offset_test(alg);
     }
 
@@ -285,7 +289,7 @@ mod tests {
         let alg = DtStreamType::ChaCha12;
         run_base_test(alg,
                       GeneratorChaCha12::BASE_SIZE,
-                      GeneratorChaCha12::CHUNK_FACTOR);
+                      GeneratorChaCha12::DEFAULT_CHUNK_FACTOR);
         run_offset_test(alg);
     }
 
@@ -294,7 +298,7 @@ mod tests {
         let alg = DtStreamType::ChaCha20;
         run_base_test(alg,
                       GeneratorChaCha20::BASE_SIZE,
-                      GeneratorChaCha20::CHUNK_FACTOR);
+                      GeneratorChaCha20::DEFAULT_CHUNK_FACTOR);
         run_offset_test(alg);
     }
 
@@ -303,7 +307,7 @@ mod tests {
         let alg = DtStreamType::Crc;
         run_base_test(alg,
                       GeneratorCrc::BASE_SIZE,
-                      GeneratorCrc::CHUNK_FACTOR);
+                      GeneratorCrc::DEFAULT_CHUNK_FACTOR);
         run_offset_test(alg);
     }
 }

@@ -43,8 +43,8 @@ macro_rules! GeneratorChaCha {
         impl $Generator {
             /// Size of the algorithm base output data.
             pub const BASE_SIZE: usize = 1024 * 1024 * 3;
-            /// Chunk size. Multiple of the generator base size.
-            pub const CHUNK_FACTOR: usize = 1;
+            /// Default chunk size multiplicator.
+            pub const DEFAULT_CHUNK_FACTOR: usize = 1;
 
             pub fn new(seed: &[u8]) -> $Generator {
                 assert!(!seed.is_empty());

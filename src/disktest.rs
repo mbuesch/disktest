@@ -366,7 +366,9 @@ impl Disktest {
         let mut file = file;
         let mut bytes_left = max_bytes;
         let mut bytes_written = 0u64;
-        let chunk_size = self.stream_agg.get_chunk_size() as u64;
+        //TODO
+        let chunk_size = self.stream_agg.get_chunk_size() as u64 *
+                         self.stream_agg.get_default_chunk_factor() as u64;
 
         self.init(&mut file, "Writing", seek)?;
         loop {
@@ -457,7 +459,9 @@ impl Disktest {
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0u64;
 
-        let readbuf_len = self.stream_agg.get_chunk_size();
+        //TODO
+        let readbuf_len = self.stream_agg.get_chunk_size() *
+                          self.stream_agg.get_default_chunk_factor();
         let mut buffer = vec![0; readbuf_len];
         let mut read_count = 0;
         let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
@@ -637,28 +641,28 @@ mod tests {
     fn test_chacha8() {
         run_test(DtStreamType::ChaCha8,
                  GeneratorChaCha8::BASE_SIZE,
-                 GeneratorChaCha8::CHUNK_FACTOR);
+                 GeneratorChaCha8::DEFAULT_CHUNK_FACTOR);
     }
 
     #[test]
     fn test_chacha12() {
         run_test(DtStreamType::ChaCha12,
                  GeneratorChaCha12::BASE_SIZE,
-                 GeneratorChaCha12::CHUNK_FACTOR);
+                 GeneratorChaCha12::DEFAULT_CHUNK_FACTOR);
     }
 
     #[test]
     fn test_chacha20() {
         run_test(DtStreamType::ChaCha20,
                  GeneratorChaCha20::BASE_SIZE,
-                 GeneratorChaCha20::CHUNK_FACTOR);
+                 GeneratorChaCha20::DEFAULT_CHUNK_FACTOR);
     }
 
     #[test]
     fn test_crc() {
         run_test(DtStreamType::Crc,
                  GeneratorCrc::BASE_SIZE,
-                 GeneratorCrc::CHUNK_FACTOR);
+                 GeneratorCrc::DEFAULT_CHUNK_FACTOR);
     }
 }
 

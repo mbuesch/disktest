@@ -194,7 +194,7 @@ impl DtStream {
 
     /// Spawn the worker thread.
     /// Panics, if the thread is already running.
-    fn start(&mut self, byte_offset: u64) {
+    fn start(&mut self, byte_offset: u64, chunk_factor: usize) {
         assert!(!self.is_active);
         assert!(self.thread_join.is_none());
 
@@ -207,7 +207,7 @@ impl DtStream {
 
         // Spawn the worker thread.
         let thread_stype = self.stype;
-        let thread_chunk_factor = self.get_chunk_factor();
+        let thread_chunk_factor = chunk_factor;
         let thread_seed = self.seed.to_vec();
         let thread_id = self.thread_id;
         let thread_cache_cons = self.cache.borrow_mut().new_consumer(self.thread_id);
@@ -241,9 +241,13 @@ impl DtStream {
     }
 
     /// Activate the worker thread.
-    pub fn activate(&mut self, byte_offset: u64) -> ah::Result<()> {
+    pub fn activate(
+        &mut self,
+        byte_offset: u64,
+        chunk_factor: usize,
+    ) -> ah::Result<()> {
         self.stop();
-        self.start(byte_offset);
+        self.start(byte_offset, chunk_factor);
 
         Ok(())
     }
@@ -254,8 +258,8 @@ impl DtStream {
         self.is_active
     }
 
-    /// Get the size of the selected generator output, in bytes.
-    fn get_generator_outsize(&self) -> usize {
+    /// Get the chunk base size.
+    pub fn get_chunk_size(&self) -> usize {
         match self.stype {
             DtStreamType::ChaCha8 => GeneratorChaCha8::BASE_SIZE,
             DtStreamType::ChaCha12 => GeneratorChaCha12::BASE_SIZE,
@@ -264,19 +268,14 @@ impl DtStream {
         }
     }
 
-    /// Get the chunk factor of the selected generator.
-    fn get_chunk_factor(&self) -> usize {
+    /// Get the default chunk factor of the selected generator.
+    pub fn get_default_chunk_factor(&self) -> usize {
         match self.stype {
-            DtStreamType::ChaCha8 => GeneratorChaCha8::CHUNK_FACTOR,
-            DtStreamType::ChaCha12 => GeneratorChaCha12::CHUNK_FACTOR,
-            DtStreamType::ChaCha20 => GeneratorChaCha20::CHUNK_FACTOR,
-            DtStreamType::Crc => GeneratorCrc::CHUNK_FACTOR,
+            DtStreamType::ChaCha8 => GeneratorChaCha8::DEFAULT_CHUNK_FACTOR,
+            DtStreamType::ChaCha12 => GeneratorChaCha12::DEFAULT_CHUNK_FACTOR,
+            DtStreamType::ChaCha20 => GeneratorChaCha20::DEFAULT_CHUNK_FACTOR,
+            DtStreamType::Crc => GeneratorCrc::DEFAULT_CHUNK_FACTOR,
         }
-    }
-
-    /// Get the size of the chunk returned by get_chunk(), in bytes.
-    pub fn get_chunk_size(&self) -> usize {
-        self.get_generator_outsize() * self.get_chunk_factor()
     }
 
     /// Get the next chunk from the thread.
@@ -333,13 +332,11 @@ mod tests {
         println!("stream base test");
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut s = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
-        s.activate(0).unwrap();
+        s.activate(0, s.get_default_chunk_factor()).unwrap();
         assert!(s.is_active());
 
-        assert_eq!(s.get_chunk_size(), s.get_generator_outsize() * s.get_chunk_factor());
         assert!(s.get_chunk_size() > 0);
-        assert!(s.get_generator_outsize() > 0);
-        assert!(s.get_chunk_factor() > 0);
+        assert!(s.get_default_chunk_factor() > 0);
 
         let mut results_first = vec![];
         for count in 0..5 {
@@ -370,12 +367,13 @@ mod tests {
         // a: start at chunk offset 0
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
-        a.activate(0).unwrap();
+        a.activate(0, a.get_default_chunk_factor()).unwrap();
 
         // b: start at chunk offset 1
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut b = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
-        b.activate(a.get_chunk_size() as u64).unwrap();
+        b.activate(a.get_chunk_size() as u64 * a.get_default_chunk_factor() as u64,
+                   a.get_default_chunk_factor()).unwrap();
 
         let achunk = a.wait_chunk();
         let bchunk = b.wait_chunk();
@@ -388,10 +386,10 @@ mod tests {
         println!("stream invert test");
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
-        a.activate(0).unwrap();
+        a.activate(0, a.get_default_chunk_factor()).unwrap();
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut b = DtStream::new(algorithm, vec![1,2,3], true, 0, cache);
-        b.activate(0).unwrap();
+        b.activate(0, a.get_default_chunk_factor()).unwrap();
 
         let achunk = a.wait_chunk();
         let bchunk = b.wait_chunk();
