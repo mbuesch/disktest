@@ -308,7 +308,7 @@ impl Disktest {
     fn init(&mut self,
             file: &mut DisktestFile,
             prefix: &str,
-            seek: u64) -> ah::Result<()> {
+            seek: u64) -> ah::Result<u64> {
 
         file.quiet_level = self.quiet_level;
         self.log_reset();
@@ -320,17 +320,18 @@ impl Disktest {
                      prettybytes(seek, true, true));
         }
 
-        let seek = match self.stream_agg.activate(seek) {
-            Ok(s) => s,
+        let sector_size = self.get_sector_size(file);
+        let res = match self.stream_agg.activate(seek, sector_size) {
+            Ok(res) => res,
             Err(e) => return Err(e),
         };
 
-        if let Err(e) = file.seek(seek) {
+        if let Err(e) = file.seek(res.byte_offset) {
             return Err(ah::format_err!("File seek to {} failed: {}",
                                        seek, e.to_string()));
         }
 
-        Ok(())
+        Ok(res.chunk_size)
     }
 
     /// Finalize and flush writing.
@@ -366,15 +367,12 @@ impl Disktest {
         let mut file = file;
         let mut bytes_left = max_bytes;
         let mut bytes_written = 0u64;
-        //TODO
-        let chunk_size = self.stream_agg.get_chunk_size() as u64 *
-                         self.stream_agg.get_default_chunk_factor() as u64;
 
-        self.init(&mut file, "Writing", seek)?;
+        let write_chunk_size = self.init(&mut file, "Writing", seek)?;
         loop {
             // Get the next data chunk.
             let chunk = self.stream_agg.wait_chunk()?;
-            let write_len = min(chunk_size, bytes_left) as usize;
+            let write_len = min(write_chunk_size, bytes_left) as usize;
 
             // Write the chunk to disk.
             match file.write(&chunk.get_data()[0..write_len]) {
@@ -459,16 +457,11 @@ impl Disktest {
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0u64;
 
-        //TODO
-        let readbuf_len = self.stream_agg.get_chunk_size() *
-                          self.stream_agg.get_default_chunk_factor();
+        let readbuf_len = self.init(&mut file, "Verifying", seek)? as usize;
         let mut buffer = vec![0; readbuf_len];
         let mut read_count = 0;
         let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
 
-        println!("BLK SECT SZ {}", self.get_sector_size(&mut file)); //TODO
-
-        self.init(&mut file, "Verifying", seek)?;
         loop {
             // Read the next chunk from disk.
             match file.read(&mut buffer[read_count..read_count+(read_len-read_count)]) {

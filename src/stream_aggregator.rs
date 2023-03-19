@@ -52,6 +52,11 @@ impl Drop for DtStreamAggChunk {
     }
 }
 
+pub struct DtStreamAggActivateResult {
+    pub byte_offset: u64,
+    pub chunk_size: u64,
+}
+
 pub struct DtStreamAgg {
     num_threads:        usize,
     streams:            Vec<DtStream>,
@@ -96,7 +101,11 @@ impl DtStreamAgg {
         }
     }
 
-    pub fn activate(&mut self, byte_offset: u64) -> ah::Result<u64> {
+    pub fn activate(
+        &mut self,
+        byte_offset: u64,
+        sector_size: u32,
+    ) -> ah::Result<DtStreamAggActivateResult> {
         let mut byte_offset = byte_offset;
         let chunk_size = self.get_chunk_size() as u64 * self.get_default_chunk_factor() as u64;
 
@@ -133,7 +142,10 @@ impl DtStreamAgg {
         }
 
         self.is_active = true;
-        Ok(byte_offset)
+        Ok(DtStreamAggActivateResult {
+            byte_offset,
+            chunk_size,
+        })
     }
 
     #[inline]
@@ -141,11 +153,11 @@ impl DtStreamAgg {
         self.is_active
     }
 
-    pub fn get_chunk_size(&self) -> usize {
+    fn get_chunk_size(&self) -> usize {
         self.streams[0].get_chunk_size()
     }
 
-    pub fn get_default_chunk_factor(&self) -> usize {
+    fn get_default_chunk_factor(&self) -> usize {
         self.streams[0].get_default_chunk_factor()
     }
 
@@ -189,7 +201,7 @@ mod tests {
         println!("stream aggregator base test");
         let num_threads = 2;
         let mut agg = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
-        agg.activate(0).unwrap();
+        agg.activate(0, 512).unwrap();
         assert!(agg.is_active());
 
         let onestream_chunksize = chunk_factor * gen_base_size;
@@ -257,10 +269,11 @@ mod tests {
 
         for offset in 0..5 {
             let mut a = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
-            a.activate(0).unwrap();
+            a.activate(0, 512).unwrap();
 
             let mut b = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
-            b.activate((a.get_chunk_size() as u64 * a.get_default_chunk_factor() as u64) * offset).unwrap();
+            b.activate((a.get_chunk_size() as u64 * a.get_default_chunk_factor() as u64) * offset,
+                       512).unwrap();
 
             // Until offset the chunks must not be equal.
             let mut bchunk = b.wait_chunk().unwrap();
