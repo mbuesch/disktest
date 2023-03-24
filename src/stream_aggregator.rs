@@ -101,13 +101,21 @@ impl DtStreamAgg {
         }
     }
 
+    fn calc_chunk_size(&self, sector_size: u32) -> (u64, u64) {
+        let chunk_factor = self.get_default_chunk_factor() as u64;
+        let base_chunk_size = self.get_chunk_size() as u64;
+
+        //TODO
+
+        (base_chunk_size * chunk_factor, chunk_factor)
+    }
+
     pub fn activate(
         &mut self,
-        byte_offset: u64,
+        mut byte_offset: u64,
         sector_size: u32,
     ) -> ah::Result<DtStreamAggActivateResult> {
-        let mut byte_offset = byte_offset;
-        let chunk_size = self.get_chunk_size() as u64 * self.get_default_chunk_factor() as u64;
+        let (chunk_size, chunk_factor) = self.calc_chunk_size(sector_size);
 
         // Calculate the stream index from the byte_offset.
         if byte_offset % chunk_size != 0 {
@@ -138,7 +146,7 @@ impl DtStreamAgg {
                 iteration * chunk_size
             };
 
-            stream.activate(thread_offset, stream.get_default_chunk_factor())?;
+            stream.activate(thread_offset, chunk_factor as _)?;
         }
 
         self.is_active = true;
@@ -205,7 +213,8 @@ mod tests {
         assert!(agg.is_active());
 
         let onestream_chunksize = chunk_factor * gen_base_size;
-        assert_eq!(agg.get_chunk_size() * agg.get_default_chunk_factor(), onestream_chunksize);
+        assert_eq!(gen_base_size, agg.get_chunk_size());
+        assert_eq!(chunk_factor, agg.get_default_chunk_factor());
 
         let mut prev_chunks: Option<Vec<DtStreamAggChunk>> = None;
 

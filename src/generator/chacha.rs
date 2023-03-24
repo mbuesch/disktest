@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2022 Michael Buesch <m@bues.ch>
+// Copyright 2020-2023 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -42,9 +42,9 @@ macro_rules! GeneratorChaCha {
 
         impl $Generator {
             /// Size of the algorithm base output data.
-            pub const BASE_SIZE: usize = 1024 * 1024 * 3;
+            pub const BASE_SIZE: usize = 1024 * 2;
             /// Default chunk size multiplicator.
-            pub const DEFAULT_CHUNK_FACTOR: usize = 1;
+            pub const DEFAULT_CHUNK_FACTOR: usize = 1024 + 512;
 
             pub fn new(seed: &[u8]) -> $Generator {
                 assert!(!seed.is_empty());
@@ -97,14 +97,21 @@ macro_rules! GeneratorChaCha {
                 fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
                     acc.rotate_left(i as u32) ^ (*x as u32)
                 }
-                let mut buf = vec![0u8; $Generator::BASE_SIZE * 3];
-                a.next(&mut buf[0..$Generator::BASE_SIZE], 1);
+
+                let mut buf = vec![0u8; $Generator::BASE_SIZE * (1024 + 512)];
+                a.next(&mut buf, 1024 + 512);
                 assert_eq!(buf.iter().enumerate().fold(0, reduce), $testresult0);
-                a.next(&mut buf[0..$Generator::BASE_SIZE], 1);
+
+                let mut buf = vec![0u8; $Generator::BASE_SIZE * (1024 + 512)];
+                a.next(&mut buf, 1024 + 512);
                 assert_eq!(buf.iter().enumerate().fold(0, reduce), $testresult1);
-                a.next(&mut buf[0..$Generator::BASE_SIZE*2], 2);
+
+                let mut buf = vec![0u8; $Generator::BASE_SIZE * (1024 + 512) * 2];
+                a.next(&mut buf, (1024 + 512) * 2);
                 assert_eq!(buf.iter().enumerate().fold(0, reduce), $testresult2);
-                a.next(&mut buf[0..$Generator::BASE_SIZE*3], 3);
+
+                let mut buf = vec![0u8; $Generator::BASE_SIZE * (1024 + 512) * 3];
+                a.next(&mut buf, (1024 + 512) * 3);
                 assert_eq!(buf.iter().enumerate().fold(0, reduce), $testresult3);
             }
 
