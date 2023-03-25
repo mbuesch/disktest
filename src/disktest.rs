@@ -108,7 +108,7 @@ impl DisktestFile {
     fn get_sector_size(&mut self) -> ah::Result<u32> {
         self.do_open()?;
         let io = self.io.as_ref().expect("get_sector_size: No file.");
-        io.get_sector_size()
+        Ok(io.get_sector_size())
     }
 
     /// Flush written data and seek to a position in the file.

@@ -46,6 +46,7 @@ struct RawIoOs {
     read_mode: bool,
     write_mode: bool,
     is_raw: bool,
+    sector_size: u32,
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -71,13 +72,21 @@ impl RawIoOs {
             }
         };
 
-        Ok(Self {
+        let mut self_ = Self {
             path: path.into(),
             file: Some(file),
             read_mode: read,
             write_mode: write,
             is_raw,
-        })
+            sector_size: 0,
+        };
+
+        if let Err(e) = self_.read_disk_geometry() {
+            let _ = self_.close();
+            return Err(e);
+        }
+
+        Ok(self_)
     }
 
     fn is_raw_dev(path: &Path) -> bool {
@@ -93,34 +102,40 @@ impl RawIoOs {
         is_raw
     }
 
-    fn get_sector_size(&self) -> ah::Result<u32> {
-        if !Self::is_raw_dev(&self.path) {
-            return Ok(DEFAULT_SECTOR_SIZE);
-        }
-        let Some(file) = self.file.as_ref() else {
-            return Err(ah::format_err!("No file object"));
-        };
+    fn read_disk_geometry(&mut self) -> ah::Result<()> {
+        if self.is_raw {
+            let Some(file) = self.file.as_ref() else {
+                return Err(ah::format_err!("No file object"));
+            };
 
-        let mut sector_size: c_int = 0;
-        let res = unsafe {
-            libc::ioctl(
-                file.as_raw_fd(),
-                libc::BLKPBSZGET, // get physical sector size.
-                &mut sector_size as *mut c_int,
-            )
-        };
-        if res < 0 {
-            return Err(ah::format_err!(
-                "Get device block size: ioctl(BLKPBSZGET) failed."
-            ));
-        }
-        if sector_size <= 0 {
-            return Err(ah::format_err!(
-                "Get device block size: ioctl(BLKPBSZGET) invalid size."
-            ));
-        }
+            let mut sector_size: c_int = 0;
+            let res = unsafe {
+                libc::ioctl(
+                    file.as_raw_fd(),
+                    libc::BLKPBSZGET, // get physical sector size.
+                    &mut sector_size as *mut c_int,
+                )
+            };
+            if res < 0 {
+                return Err(ah::format_err!(
+                    "Get device block size: ioctl(BLKPBSZGET) failed."
+                ));
+            }
+            if sector_size <= 0 {
+                return Err(ah::format_err!(
+                    "Get device block size: ioctl(BLKPBSZGET) invalid size."
+                ));
+            }
 
-        Ok(sector_size as u32)
+            self.sector_size = sector_size as u32;
+        } else {
+            self.sector_size = DEFAULT_SECTOR_SIZE;
+        }
+        Ok(())
+    }
+
+    fn get_sector_size(&self) -> u32 {
+        self.sector_size
     }
 
     fn drop_file_caches(mut self, offset: u64, size: u64) -> ah::Result<()> {
@@ -305,6 +320,8 @@ struct RawIoOs {
     write_mode: bool,
     is_raw: bool,
     volume_locked: bool,
+    sector_size: u32,
+    disk_size: u64,
 }
 
 #[cfg(target_os = "windows")]
@@ -378,7 +395,7 @@ impl RawIoOs {
             false
         };
 
-        Ok(Self {
+        let mut self_ = Self {
             path: path.into(),
             cpath,
             handle,
@@ -386,7 +403,16 @@ impl RawIoOs {
             write_mode: write,
             is_raw,
             volume_locked,
-        })
+            sector_size: 0,
+            disk_size: 0,
+        };
+
+        if let Err(e) = self_.read_disk_geometry() {
+            let _ = self_.close();
+            return Err(e);
+        }
+
+        Ok(self_)
     }
 
     fn is_raw_dev(path: &Path) -> bool {
@@ -435,37 +461,48 @@ impl RawIoOs {
         msg.to_string_lossy().to_string()
     }
 
-    fn get_sector_size(&self) -> ah::Result<u32> {
-        if !self.is_raw {
-            return Ok(DEFAULT_SECTOR_SIZE);
-        }
-        if self.handle == INVALID_HANDLE_VALUE {
-            return Err(ah::format_err!("File handle is invalid."));
-        }
+    fn read_disk_geometry(&mut self) -> ah::Result<()> {
+        if self.is_raw {
+            if self.handle == INVALID_HANDLE_VALUE {
+                return Err(ah::format_err!("File handle is invalid."));
+            }
 
-        let mut dg: DISK_GEOMETRY = Default::default();
-        let mut result: DWORD = Default::default();
-        let ok = unsafe {
-            DeviceIoControl(
-                self.handle,
-                IOCTL_DISK_GET_DRIVE_GEOMETRY,
-                null_mut(),
-                0,
-                &mut dg as *mut _ as *mut c_void,
-                size_of::<DISK_GEOMETRY>() as _,
-                &mut result as _,
-                null_mut(),
-            )
-        };
+            let mut dg: DISK_GEOMETRY = Default::default();
+            let mut result: DWORD = Default::default();
+            let ok = unsafe {
+                DeviceIoControl(
+                    self.handle,
+                    IOCTL_DISK_GET_DRIVE_GEOMETRY,
+                    null_mut(),
+                    0,
+                    &mut dg as *mut _ as *mut c_void,
+                    size_of::<DISK_GEOMETRY>() as _,
+                    &mut result as _,
+                    null_mut(),
+                )
+            };
 
-        if ok == 0 {
-            Err(ah::format_err!(
-                "Failed to get drive geometry: {}",
-                Self::get_last_error_string()
-            ))
+            if ok == 0 {
+                return Err(ah::format_err!(
+                    "Failed to get drive geometry: {}",
+                    Self::get_last_error_string()
+                ));
+            }
+            self.disk_size =
+                dg.BytesPerSector as u64 *
+                dg.SectorsPerTrack as u64 *
+                dg.TracksPerCylinder as u64 *
+                unsafe { *dg.Cylinders.QuadPart() as u64 };
+            self.sector_size = dg.BytesPerSector as u32;
         } else {
-            Ok(dg.BytesPerSector as _)
+            self.disk_size = u64::MAX;
+            self.sector_size = DEFAULT_SECTOR_SIZE;
         }
+        Ok(())
+    }
+
+    fn get_sector_size(&self) -> u32 {
+        self.sector_size
     }
 
     fn drop_file_caches(mut self, _offset: u64, _size: u64) -> ah::Result<()> {
@@ -647,6 +684,7 @@ impl RawIoOs {
         }
     }
 
+//TODO get the device size and adhere to that.
     fn write(&mut self, buffer: &[u8]) -> ah::Result<RawIoResult> {
         if !self.write_mode {
             return Err(ah::format_err!("File is opened without write permission."));
@@ -716,7 +754,7 @@ impl RawIo {
 
     /// Get the physical sector size of the file or device.
     /// May return a default substitution value.
-    pub fn get_sector_size(&self) -> ah::Result<u32> {
+    pub fn get_sector_size(&self) -> u32 {
         self.os.get_sector_size()
     }
 
