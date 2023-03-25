@@ -111,7 +111,9 @@ impl DisktestFile {
 
     /// Flush written data and seek to a position in the file.
     fn seek(&mut self, offset: u64) -> ah::Result<u64> {
-        self.close()?;
+        if self.drop_count > 0 {
+            self.close()?;
+        }
         self.do_open()?;
         match self.seek_noflush(offset) {
             Ok(x) => {
