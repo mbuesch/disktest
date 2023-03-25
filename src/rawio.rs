@@ -488,11 +488,10 @@ impl RawIoOs {
                     Self::get_last_error_string()
                 ));
             }
-            self.disk_size =
-                dg.BytesPerSector as u64 *
-                dg.SectorsPerTrack as u64 *
-                dg.TracksPerCylinder as u64 *
-                unsafe { *dg.Cylinders.QuadPart() as u64 };
+            self.disk_size = dg.BytesPerSector as u64
+                * dg.SectorsPerTrack as u64
+                * dg.TracksPerCylinder as u64
+                * unsafe { *dg.Cylinders.QuadPart() as u64 };
             self.sector_size = dg.BytesPerSector as u32;
         } else {
             self.disk_size = u64::MAX;
@@ -594,7 +593,7 @@ impl RawIoOs {
             return Err(ah::format_err!("File handle is invalid."));
         }
         if !self.write_mode {
-            return Ok(())
+            return Ok(());
         }
 
         let ok = unsafe { FlushFileBuffers(self.handle) };
@@ -654,7 +653,7 @@ impl RawIoOs {
         }
     }
 
-//TODO read/write in chunks of sector size?
+    //TODO read/write in chunks of sector size?
     fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
         if !self.read_mode {
             return Err(ah::format_err!("File is opened without read permission."));
@@ -684,7 +683,7 @@ impl RawIoOs {
         }
     }
 
-//TODO get the device size and adhere to that.
+    //TODO get the device size and adhere to that.
     fn write(&mut self, buffer: &[u8]) -> ah::Result<RawIoResult> {
         if !self.write_mode {
             return Err(ah::format_err!("File is opened without write permission."));
@@ -728,7 +727,7 @@ impl Drop for RawIoOs {
         if let Err(e) = self.close() {
             eprintln!("Warning: Failed to close device: {}", e);
         }
-    }    
+    }
 }
 
 /// Raw I/O operation result code.
