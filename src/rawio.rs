@@ -42,6 +42,7 @@ use std::{
 struct RawIoOs {
     path: PathBuf,
     file: Option<File>,
+    write_mode: bool,
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -69,6 +70,7 @@ impl RawIoOs {
         Ok(Self {
             path: path.into(),
             file: Some(file),
+            write_mode: write,
         })
     }
 
@@ -115,6 +117,23 @@ impl RawIoOs {
         Ok(sector_size as u32)
     }
 
+    fn close(&mut self) -> ah::Result<()> {
+        let Some(file) = self.file.take() else {
+            return Ok(());
+        };
+        if self.write_mode {
+            if let Ok(meta) = metadata(&self.path) {
+                if meta.mode() & S_IFMT != S_IFCHR {
+                    // fsync()
+                    if let Err(e) = file.sync_all() {
+                        return Err(ah::format_err!("Failed to flush: {}", e));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn drop_file_caches(mut self, offset: u64, size: u64) -> ah::Result<()> {
         let Some(file) = self.file.take() else {
             return Ok(());
@@ -128,9 +147,11 @@ impl RawIoOs {
             }
         }
 
-        // fsync()
-        if let Err(e) = file.sync_all() {
-            return Err(ah::format_err!("Failed to flush: {}", e));
+        if self.write_mode {
+            // fsync()
+            if let Err(e) = file.sync_all() {
+                return Err(ah::format_err!("Failed to flush: {}", e));
+            }
         }
 
         // Try FADV_DONTNEED to drop caches.
@@ -258,6 +279,7 @@ struct RawIoOs {
     path: PathBuf,
     cpath: CString,
     handle: HANDLE,
+    write_mode: bool,
     is_raw: bool,
     volume_locked: bool,
 }
@@ -292,7 +314,7 @@ impl RawIoOs {
             CreateFileA(
                 cpath.as_ptr(),
                 access_flags,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
                 null_mut(),
                 create_mode,
                 0,
@@ -337,6 +359,7 @@ impl RawIoOs {
             path: path.into(),
             cpath,
             handle,
+            write_mode: write,
             is_raw,
             volume_locked,
         })
@@ -347,7 +370,7 @@ impl RawIoOs {
 
         if let Some(path) = path.to_str() {
             let re_drvphy = regex::Regex::new(r"^\\\\\.\\[a-zA-Z]:$").unwrap();
-            let re_phy = regex::Regex::new(r"^\\\\\.PhysicalDrive\d+$").unwrap();
+            let re_phy = regex::Regex::new(r"^\\\\\.\\(?i:PhysicalDrive)\d+$").unwrap();
 
             if re_drvphy.is_match(path) || re_phy.is_match(path) {
                 is_raw = true;
@@ -421,7 +444,7 @@ impl RawIoOs {
         }
     }
 
-    fn drop_file_caches(mut self, _offset: u64, _size: u64) -> ah::Result<()> {
+    fn close(&mut self) -> ah::Result<()> {
         if self.handle == INVALID_HANDLE_VALUE {
             return Ok(());
         }
@@ -453,7 +476,7 @@ impl RawIoOs {
             self.volume_locked = false;
         }
 
-        // Close the file before re-opening it.
+        // Close the file.
         let ok = unsafe { CloseHandle(self.handle) };
         if ok == 0 {
             return Err(ah::format_err!(
@@ -462,6 +485,16 @@ impl RawIoOs {
             ));
         }
         self.handle = INVALID_HANDLE_VALUE;
+
+        Ok(())
+    }
+
+    fn drop_file_caches(mut self, _offset: u64, _size: u64) -> ah::Result<()> {
+        if self.handle == INVALID_HANDLE_VALUE {
+            return Ok(());
+        }
+
+        self.close()?;
 
         // Open the file with FILE_FLAG_NO_BUFFERING.
         // That drops all caches.
@@ -538,6 +571,9 @@ impl RawIoOs {
         if self.handle == INVALID_HANDLE_VALUE {
             return Err(ah::format_err!("File handle is invalid."));
         }
+        if !self.write_mode {
+            return Ok(())
+        }
 
         let ok = unsafe { FlushFileBuffers(self.handle) };
 
@@ -611,6 +647,14 @@ impl RawIoOs {
 // ====================
 // === Generic part ===
 // ====================
+
+impl Drop for RawIoOs {
+    fn drop(&mut self) {
+        if let Err(e) = self.close() {
+            eprintln!("Warning: Failed to close device: {}", e);
+        }
+    }    
+}
 
 pub enum RawIoResult {
     Ok(usize),
