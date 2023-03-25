@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2022 Michael Buesch <m@bues.ch>
+// Copyright 2020-2023 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@ impl GeneratorCrc {
     /// Size of the algorithm base output data.
     pub const BASE_SIZE: usize = 256 * GeneratorCrc::CRC_SIZE;
     /// Default chunk size multiplicator.
-    pub const DEFAULT_CHUNK_FACTOR: usize = 1536;
+    pub const DEFAULT_CHUNK_FACTOR: usize = 1024 + 512;
 
     const CRC_SIZE: usize = 64 / 8;
     const FOLDED_SEED_SIZE: usize = 64 / 8;

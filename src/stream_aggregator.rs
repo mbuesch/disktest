@@ -101,13 +101,19 @@ impl DtStreamAgg {
         }
     }
 
-    fn calc_chunk_size(&self, sector_size: u32) -> (u64, u64) {
+    fn calc_chunk_size(&self, sector_size: u32) -> ah::Result<(u64, u64)> {
         let chunk_factor = self.get_default_chunk_factor() as u64;
         let base_chunk_size = self.get_chunk_size() as u64;
 
-        //TODO
+        let chunk_size = base_chunk_size * chunk_factor;
 
-        (base_chunk_size * chunk_factor, chunk_factor)
+        if chunk_size % sector_size as u64 != 0 {
+            return Err(ah::format_err!("The random number generator chunk size {} \
+                                        is not a multiple of the disk sector size {}.",
+                                        chunk_size, sector_size));
+        }
+
+        Ok((chunk_size, chunk_factor))
     }
 
     pub fn activate(
@@ -115,7 +121,7 @@ impl DtStreamAgg {
         mut byte_offset: u64,
         sector_size: u32,
     ) -> ah::Result<DtStreamAggActivateResult> {
-        let (chunk_size, chunk_factor) = self.calc_chunk_size(sector_size);
+        let (chunk_size, chunk_factor) = self.calc_chunk_size(sector_size)?;
 
         // Calculate the stream index from the byte_offset.
         if byte_offset % chunk_size != 0 {
