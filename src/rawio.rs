@@ -45,15 +45,15 @@ struct RawIoOs {
     file: Option<File>,
     read_mode: bool,
     write_mode: bool,
-    is_raw: bool,
+    is_blk: bool,
+    is_chr: bool,
     sector_size: u32,
 }
 
 #[cfg(not(target_os = "windows"))]
 impl RawIoOs {
     pub fn new(path: &Path, mut create: bool, read: bool, write: bool) -> ah::Result<Self> {
-        let is_raw = Self::is_raw_dev(path);
-        if is_raw || path.starts_with("/dev/") {
+        if path.starts_with("/dev/") {
             // Do not create dev nodes by accident.
             // This check is not meant to catch all possible cases,
             // but only the common ones.
@@ -77,7 +77,8 @@ impl RawIoOs {
             file: Some(file),
             read_mode: read,
             write_mode: write,
-            is_raw,
+            is_blk: false,
+            is_chr: false,
             sector_size: 0,
         };
 
@@ -89,21 +90,18 @@ impl RawIoOs {
         Ok(self_)
     }
 
-    fn is_raw_dev(path: &Path) -> bool {
-        let mut is_raw = false;
-
-        if let Ok(meta) = metadata(path) {
+    fn read_disk_geometry(&mut self) -> ah::Result<()> {
+        if let Ok(meta) = metadata(&self.path) {
             let mode_ifmt = meta.mode() & S_IFMT;
-            if mode_ifmt == S_IFBLK || mode_ifmt == S_IFCHR {
-                is_raw = true;
+            if mode_ifmt == S_IFBLK {
+                self.is_blk = true;
+            }
+            if mode_ifmt == S_IFCHR {
+                self.is_chr = true;
             }
         }
 
-        is_raw
-    }
-
-    fn read_disk_geometry(&mut self) -> ah::Result<()> {
-        if self.is_raw {
+        if self.is_blk {
             let Some(file) = self.file.as_ref() else {
                 return Err(ah::format_err!("No file object"));
             };
@@ -143,12 +141,10 @@ impl RawIoOs {
             return Ok(());
         };
 
-        if let Ok(meta) = metadata(&self.path) {
-            if meta.mode() & S_IFMT == S_IFCHR {
-                // This is a character device.
-                // We're done. Don't flush.
-                return Ok(());
-            }
+        if self.is_chr {
+            // This is a character device.
+            // We're done. Don't flush.
+            return Ok(());
         }
 
         if self.write_mode {
@@ -193,21 +189,16 @@ impl RawIoOs {
         let Some(file) = self.file.take() else {
             return Ok(());
         };
-        if self.write_mode {
-            if let Ok(meta) = metadata(&self.path) {
-                if meta.mode() & S_IFMT != S_IFCHR {
-                    // fsync()
-                    if let Err(e) = file.sync_all() {
-                        return Err(ah::format_err!("Failed to flush: {}", e));
-                    }
-                }
+        if self.write_mode && !self.is_chr {
+            if let Err(e) = file.sync_all() {
+                return Err(ah::format_err!("Failed to flush: {}", e));
             }
         }
         Ok(())
     }
 
     fn sync(&mut self) -> ah::Result<()> {
-        if self.write_mode {
+        if self.write_mode && !self.is_chr {
             let Some(file) = self.file.as_mut() else {
                 return Err(ah::format_err!("No file object"));
             };
@@ -220,7 +211,7 @@ impl RawIoOs {
         if !self.write_mode {
             return Err(ah::format_err!("File is opened without write permission."));
         }
-        if self.is_raw {
+        if self.is_chr || self.is_blk {
             return Err(ah::format_err!("Cannot set length of raw device."));
         }
         let Some(file) = self.file.as_mut() else {
