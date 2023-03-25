@@ -42,6 +42,7 @@ use std::{
 struct RawIoOs {
     path: PathBuf,
     file: Option<File>,
+    read_mode: bool,
     write_mode: bool,
 }
 
@@ -70,6 +71,7 @@ impl RawIoOs {
         Ok(Self {
             path: path.into(),
             file: Some(file),
+            read_mode: read,
             write_mode: write,
         })
     }
@@ -186,6 +188,9 @@ impl RawIoOs {
     }
 
     fn set_len(&mut self, size: u64) -> ah::Result<()> {
+        if !self.write_mode {
+            return Err(ah::format_err!("File is opened without write permission."));
+        }
         let Some(file) = self.file.as_mut() else {
             return Err(ah::format_err!("No file object"));
         };
@@ -200,13 +205,19 @@ impl RawIoOs {
     }
 
     fn sync(&mut self) -> ah::Result<()> {
-        let Some(file) = self.file.as_mut() else {
-            return Err(ah::format_err!("No file object"));
-        };
-        Ok(file.sync_all()?)
+        if self.write_mode {
+            let Some(file) = self.file.as_mut() else {
+                return Err(ah::format_err!("No file object"));
+            };
+            file.sync_all()?;
+        }
+        Ok(())
     }
 
     fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
+        if !self.read_mode {
+            return Err(ah::format_err!("File is opened without read permission."));
+        }
         let Some(file) = self.file.as_mut() else {
             return Err(ah::format_err!("No file object"));
         };
@@ -217,6 +228,9 @@ impl RawIoOs {
     }
 
     fn write(&mut self, buffer: &[u8]) -> ah::Result<RawIoResult> {
+        if !self.write_mode {
+            return Err(ah::format_err!("File is opened without write permission."));
+        }
         let Some(file) = self.file.as_mut() else {
             return Err(ah::format_err!("No file object"));
         };
@@ -279,6 +293,7 @@ struct RawIoOs {
     path: PathBuf,
     cpath: CString,
     handle: HANDLE,
+    read_mode: bool,
     write_mode: bool,
     is_raw: bool,
     volume_locked: bool,
@@ -359,6 +374,7 @@ impl RawIoOs {
             path: path.into(),
             cpath,
             handle,
+            read_mode: read,
             write_mode: write,
             is_raw,
             volume_locked,
@@ -529,6 +545,9 @@ impl RawIoOs {
     }
 
     fn set_len(&mut self, size: u64) -> ah::Result<()> {
+        if !self.write_mode {
+            return Err(ah::format_err!("File is opened without write permission."));
+        }
         if self.handle == INVALID_HANDLE_VALUE {
             return Err(ah::format_err!("File handle is invalid."));
         }
@@ -588,6 +607,9 @@ impl RawIoOs {
     }
 
     fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
+        if !self.read_mode {
+            return Err(ah::format_err!("File is opened without read permission."));
+        }
         if self.handle == INVALID_HANDLE_VALUE {
             return Err(ah::format_err!("File handle is invalid."));
         }
@@ -614,6 +636,9 @@ impl RawIoOs {
     }
 
     fn write(&mut self, buffer: &[u8]) -> ah::Result<RawIoResult> {
+        if !self.write_mode {
+            return Err(ah::format_err!("File is opened without write permission."));
+        }
         if self.handle == INVALID_HANDLE_VALUE {
             return Err(ah::format_err!("File handle is invalid."));
         }
