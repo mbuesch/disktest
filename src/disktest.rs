@@ -91,12 +91,14 @@ impl DisktestFile {
         self.drop_count = 0;
 
         // Take and destruct the RawIo object.
-        if let Some(io) = self.io.take() {
+        if let Some(mut io) = self.io.take() {
             // If bytes have been written, try to drop the operating system caches.
             if drop_count > 0 {
                 if let Err(e) = io.drop_file_caches(drop_offset, drop_count) {
                     return Err(ah::format_err!("Cache drop error: {}", e));
                 }
+            } else {
+                io.close()?;
             }
         }
         Ok(())

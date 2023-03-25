@@ -38,18 +38,21 @@ use std::{
     os::unix::{fs::MetadataExt as _, io::AsRawFd as _},
 };
 
+/// Raw device I/O for Linux OS.
 #[cfg(not(target_os = "windows"))]
 struct RawIoOs {
     path: PathBuf,
     file: Option<File>,
     read_mode: bool,
     write_mode: bool,
+    is_raw: bool,
 }
 
 #[cfg(not(target_os = "windows"))]
 impl RawIoOs {
     pub fn new(path: &Path, mut create: bool, read: bool, write: bool) -> ah::Result<Self> {
-        if Self::is_raw_dev(path) || path.starts_with("/dev/") {
+        let is_raw = Self::is_raw_dev(path);
+        if is_raw || path.starts_with("/dev/") {
             // Do not create dev nodes by accident.
             // This check is not meant to catch all possible cases,
             // but only the common ones.
@@ -73,6 +76,7 @@ impl RawIoOs {
             file: Some(file),
             read_mode: read,
             write_mode: write,
+            is_raw,
         })
     }
 
@@ -117,23 +121,6 @@ impl RawIoOs {
         }
 
         Ok(sector_size as u32)
-    }
-
-    fn close(&mut self) -> ah::Result<()> {
-        let Some(file) = self.file.take() else {
-            return Ok(());
-        };
-        if self.write_mode {
-            if let Ok(meta) = metadata(&self.path) {
-                if meta.mode() & S_IFMT != S_IFCHR {
-                    // fsync()
-                    if let Err(e) = file.sync_all() {
-                        return Err(ah::format_err!("Failed to flush: {}", e));
-                    }
-                }
-            }
-        }
-        Ok(())
     }
 
     fn drop_file_caches(mut self, offset: u64, size: u64) -> ah::Result<()> {
@@ -187,9 +174,39 @@ impl RawIoOs {
         }
     }
 
+    fn close(&mut self) -> ah::Result<()> {
+        let Some(file) = self.file.take() else {
+            return Ok(());
+        };
+        if self.write_mode {
+            if let Ok(meta) = metadata(&self.path) {
+                if meta.mode() & S_IFMT != S_IFCHR {
+                    // fsync()
+                    if let Err(e) = file.sync_all() {
+                        return Err(ah::format_err!("Failed to flush: {}", e));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn sync(&mut self) -> ah::Result<()> {
+        if self.write_mode {
+            let Some(file) = self.file.as_mut() else {
+                return Err(ah::format_err!("No file object"));
+            };
+            file.sync_all()?;
+        }
+        Ok(())
+    }
+
     fn set_len(&mut self, size: u64) -> ah::Result<()> {
         if !self.write_mode {
             return Err(ah::format_err!("File is opened without write permission."));
+        }
+        if self.is_raw {
+            return Err(ah::format_err!("Cannot set length of raw device."));
         }
         let Some(file) = self.file.as_mut() else {
             return Err(ah::format_err!("No file object"));
@@ -202,16 +219,6 @@ impl RawIoOs {
             return Err(ah::format_err!("No file object"));
         };
         Ok(file.seek(SeekFrom::Start(offset))?)
-    }
-
-    fn sync(&mut self) -> ah::Result<()> {
-        if self.write_mode {
-            let Some(file) = self.file.as_mut() else {
-                return Err(ah::format_err!("No file object"));
-            };
-            file.sync_all()?;
-        }
-        Ok(())
     }
 
     fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
@@ -288,6 +295,7 @@ use winapi::{
     },
 };
 
+/// Raw device I/O for Windows OS.
 #[cfg(target_os = "windows")]
 struct RawIoOs {
     path: PathBuf,
@@ -460,6 +468,45 @@ impl RawIoOs {
         }
     }
 
+    fn drop_file_caches(mut self, _offset: u64, _size: u64) -> ah::Result<()> {
+        if self.handle == INVALID_HANDLE_VALUE {
+            return Ok(());
+        }
+
+        self.close()?;
+
+        // Open the file with FILE_FLAG_NO_BUFFERING.
+        // That drops all caches.
+        let handle = unsafe {
+            CreateFileA(
+                self.cpath.as_ptr(),
+                GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                null_mut(),
+                OPEN_EXISTING,
+                FILE_FLAG_NO_BUFFERING,
+                null_mut(),
+            )
+        };
+
+        if handle == INVALID_HANDLE_VALUE {
+            Err(ah::format_err!(
+                "Failed to acquire file handle: {}",
+                Self::get_last_error_string()
+            ))
+        } else {
+            let ok = unsafe { CloseHandle(handle) };
+            if ok == 0 {
+                Err(ah::format_err!(
+                    "Failed to close file handle: {}",
+                    Self::get_last_error_string()
+                ))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
     fn close(&mut self) -> ah::Result<()> {
         if self.handle == INVALID_HANDLE_VALUE {
             return Ok(());
@@ -505,48 +552,32 @@ impl RawIoOs {
         Ok(())
     }
 
-    fn drop_file_caches(mut self, _offset: u64, _size: u64) -> ah::Result<()> {
+    fn sync(&mut self) -> ah::Result<()> {
         if self.handle == INVALID_HANDLE_VALUE {
-            return Ok(());
+            return Err(ah::format_err!("File handle is invalid."));
+        }
+        if !self.write_mode {
+            return Ok(())
         }
 
-        self.close()?;
+        let ok = unsafe { FlushFileBuffers(self.handle) };
 
-        // Open the file with FILE_FLAG_NO_BUFFERING.
-        // That drops all caches.
-        let handle = unsafe {
-            CreateFileA(
-                self.cpath.as_ptr(),
-                GENERIC_READ,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                null_mut(),
-                OPEN_EXISTING,
-                FILE_FLAG_NO_BUFFERING,
-                null_mut(),
-            )
-        };
-
-        if handle == INVALID_HANDLE_VALUE {
+        if ok == 0 {
             Err(ah::format_err!(
-                "Failed to acquire file handle: {}",
+                "Failed to flush file buffers: {}",
                 Self::get_last_error_string()
             ))
         } else {
-            let ok = unsafe { CloseHandle(handle) };
-            if ok == 0 {
-                Err(ah::format_err!(
-                    "Failed to close file handle: {}",
-                    Self::get_last_error_string()
-                ))
-            } else {
-                Ok(())
-            }
+            Ok(())
         }
     }
 
     fn set_len(&mut self, size: u64) -> ah::Result<()> {
         if !self.write_mode {
             return Err(ah::format_err!("File is opened without write permission."));
+        }
+        if self.is_raw {
+            return Err(ah::format_err!("Cannot set length of raw device."));
         }
         if self.handle == INVALID_HANDLE_VALUE {
             return Err(ah::format_err!("File handle is invalid."));
@@ -586,26 +617,7 @@ impl RawIoOs {
         }
     }
 
-    fn sync(&mut self) -> ah::Result<()> {
-        if self.handle == INVALID_HANDLE_VALUE {
-            return Err(ah::format_err!("File handle is invalid."));
-        }
-        if !self.write_mode {
-            return Ok(())
-        }
-
-        let ok = unsafe { FlushFileBuffers(self.handle) };
-
-        if ok == 0 {
-            Err(ah::format_err!(
-                "Failed to flush file buffers: {}",
-                Self::get_last_error_string()
-            ))
-        } else {
-            Ok(())
-        }
-    }
-
+//TODO read/write in chunks of sector size?
     fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
         if !self.read_mode {
             return Err(ah::format_err!("File is opened without read permission."));
@@ -681,28 +693,49 @@ impl Drop for RawIoOs {
     }    
 }
 
+/// Raw I/O operation result code.
 pub enum RawIoResult {
+    /// Ok, number of processed bytes.
     Ok(usize),
+    /// Out of disk space.
     Enospc,
 }
 
+/// Raw device I/O abstraction.
 pub struct RawIo {
     os: RawIoOs,
 }
 
 impl RawIo {
+    /// Open a file or device.
     pub fn new(path: &Path, create: bool, read: bool, write: bool) -> ah::Result<Self> {
         Ok(Self {
             os: RawIoOs::new(path, create, read, write)?,
         })
     }
 
+    /// Get the physical sector size of the file or device.
+    /// May return a default substitution value.
     pub fn get_sector_size(&self) -> ah::Result<u32> {
         self.os.get_sector_size()
     }
 
+    /// Close the file, flush all buffers and drop all caches.
+    /// This function ensures that subsequent reads are not read from RAM cache.
     pub fn drop_file_caches(self, offset: u64, size: u64) -> ah::Result<()> {
         self.os.drop_file_caches(offset, size)
+    }
+
+    /// Close the file and flush all buffers.
+    /// (This does not affect the caches).
+    pub fn close(&mut self) -> ah::Result<()> {
+        self.os.close()
+    }
+
+    /// Flush all buffers.
+    /// (This does not affect the caches).
+    pub fn sync(&mut self) -> ah::Result<()> {
+        self.os.sync()
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -710,18 +743,17 @@ impl RawIo {
         self.os.set_len(size)
     }
 
+    /// Seek to a file offset.
     pub fn seek(&mut self, offset: u64) -> ah::Result<u64> {
         self.os.seek(offset)
     }
 
-    pub fn sync(&mut self) -> ah::Result<()> {
-        self.os.sync()
-    }
-
+    /// Read a chunk of data.
     pub fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
         self.os.read(buffer)
     }
 
+    /// Write a chunk of data.
     pub fn write(&mut self, buffer: &[u8]) -> ah::Result<RawIoResult> {
         self.os.write(buffer)
     }
