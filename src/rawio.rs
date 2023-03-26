@@ -173,10 +173,10 @@ impl RawIoOs {
             drop(file);
 
             let proc_file = "/proc/sys/vm/drop_caches";
-            let proc_value = "3\n";
+            let proc_value = b"3\n";
 
             match OpenOptions::new().write(true).open(proc_file) {
-                Ok(mut file) => match file.write_all(proc_value.as_bytes()) {
+                Ok(mut file) => match file.write_all(proc_value) {
                     Ok(_) => Ok(()),
                     Err(e) => Err(ah::format_err!("{}", e)),
                 },
@@ -345,7 +345,7 @@ impl RawIoOs {
             CreateFileA(
                 cpath.as_ptr(),
                 access_flags,
-                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                 null_mut(),
                 create_mode,
                 0,
@@ -443,7 +443,7 @@ impl RawIoOs {
                 null_mut(),
             )
         };
-        if count == 0 || count as usize > msg.len() {
+        if count == 0 || count as usize >= msg.len() {
             return "FormatMessageW() failed.".to_string();
         }
 
@@ -482,7 +482,7 @@ impl RawIoOs {
             self.disk_size = dg.BytesPerSector as u64
                 * dg.SectorsPerTrack as u64
                 * dg.TracksPerCylinder as u64
-                * unsafe { *dg.Cylinders.QuadPart() as u64 };
+                * unsafe { *dg.Cylinders.QuadPart() } as u64;
             self.sector_size = dg.BytesPerSector as u32;
         } else {
             self.disk_size = u64::MAX;
@@ -500,6 +500,7 @@ impl RawIoOs {
             return Ok(());
         }
 
+        // Flush file buffers and close file.
         self.close()?;
 
         // Open the file with FILE_FLAG_NO_BUFFERING.
@@ -630,9 +631,10 @@ impl RawIoOs {
 
         let mut off_li: LARGE_INTEGER = Default::default();
         assert!(offset <= i64::MAX as u64);
-        unsafe { *off_li.QuadPart_mut() = offset as i64 };
-        let ok = unsafe { SetFilePointerEx(self.handle, off_li, null_mut(), FILE_BEGIN) };
-
+        let ok = unsafe {
+            *off_li.QuadPart_mut() = offset as i64;
+            SetFilePointerEx(self.handle, off_li, null_mut(), FILE_BEGIN)
+        };
         if ok == 0 {
             Err(ah::format_err!(
                 "SetFilePointerEx({:?}) seek failed: {}",
