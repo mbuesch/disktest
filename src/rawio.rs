@@ -313,6 +313,7 @@ struct RawIoOs {
     volume_locked: bool,
     sector_size: u32,
     disk_size: u64,
+    cur_offset: u64,
 }
 
 #[cfg(target_os = "windows")]
@@ -396,6 +397,7 @@ impl RawIoOs {
             volume_locked,
             sector_size: 0,
             disk_size: 0,
+            cur_offset: 0,
         };
 
         if let Err(e) = self_.read_disk_geometry() {
@@ -642,6 +644,7 @@ impl RawIoOs {
                 Self::get_last_error_string(),
             ))
         } else {
+            self.cur_offset = offset;
             Ok(offset)
         }
     }
@@ -672,11 +675,11 @@ impl RawIoOs {
                 Self::get_last_error_string()
             ))
         } else {
+            self.cur_offset += read_count as u64;
             Ok(RawIoResult::Ok(read_count as usize))
         }
     }
 
-    //TODO get the device size and adhere to that.
     fn write(&mut self, buffer: &[u8]) -> ah::Result<RawIoResult> {
         if !self.write_mode {
             return Err(ah::format_err!("File is opened without write permission."));
@@ -685,19 +688,27 @@ impl RawIoOs {
             return Err(ah::format_err!("File handle is invalid."));
         }
 
+        let mut len = buffer.len() as u64;
+        if self.cur_offset + len > self.disk_size {
+            len = self.disk_size - self.cur_offset;
+        }
+
         let mut write_count: DWORD = Default::default();
         let ok = unsafe {
             WriteFile(
                 self.handle,
                 buffer.as_ptr() as _,
-                buffer.len() as _,
+                len as _,
                 &mut write_count as _,
                 null_mut(),
             )
         };
 
         if ok == 0 {
-            if Self::get_last_error() == ERROR_DISK_FULL {
+            let err = Self::get_last_error();
+            if err == ERROR_SUCCESS && (self.cur_offset + len >= self.disk_size)
+                || err == ERROR_DISK_FULL
+            {
                 Ok(RawIoResult::Enospc)
             } else {
                 Err(ah::format_err!(
@@ -706,6 +717,7 @@ impl RawIoOs {
                 ))
             }
         } else {
+            self.cur_offset += write_count as u64;
             Ok(RawIoResult::Ok(write_count as usize))
         }
     }
