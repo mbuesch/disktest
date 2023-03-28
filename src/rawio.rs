@@ -649,7 +649,15 @@ impl RawIoOs {
         }
     }
 
-    //TODO read/write in chunks of sector size?
+    fn disk_limit(&self, size: usize) -> (bool, usize) {
+        if self.cur_offset + size as u64 > self.disk_size {
+            let lim_size = self.disk_size - self.cur_offset;
+            (true, lim_size as usize)
+        } else {
+            (false, size)
+        }
+    }
+
     fn read(&mut self, buffer: &mut [u8]) -> ah::Result<RawIoResult> {
         if !self.read_mode {
             return Err(ah::format_err!("File is opened without read permission."));
@@ -657,13 +665,18 @@ impl RawIoOs {
         if self.handle == INVALID_HANDLE_VALUE {
             return Err(ah::format_err!("File handle is invalid."));
         }
+        if buffer.is_empty() {
+            return Ok(RawIoResult::Ok(0));
+        }
+
+        let (_limited, read_len) = self.disk_limit(buffer.len());
 
         let mut read_count: DWORD = Default::default();
         let ok = unsafe {
             ReadFile(
                 self.handle,
                 buffer.as_mut_ptr() as _,
-                buffer.len() as _,
+                read_len as _,
                 &mut read_count as _,
                 null_mut(),
             )
@@ -687,10 +700,13 @@ impl RawIoOs {
         if self.handle == INVALID_HANDLE_VALUE {
             return Err(ah::format_err!("File handle is invalid."));
         }
+        if buffer.is_empty() {
+            return Ok(RawIoResult::Ok(0));
+        }
 
-        let mut len = buffer.len() as u64;
-        if self.cur_offset + len > self.disk_size {
-            len = self.disk_size - self.cur_offset;
+        let (limited, write_len) = self.disk_limit(buffer.len());
+        if limited && write_len == 0 {
+            return Ok(RawIoResult::Enospc);
         }
 
         let mut write_count: DWORD = Default::default();
@@ -698,17 +714,14 @@ impl RawIoOs {
             WriteFile(
                 self.handle,
                 buffer.as_ptr() as _,
-                len as _,
+                write_len as _,
                 &mut write_count as _,
                 null_mut(),
             )
         };
 
         if ok == 0 {
-            let err = Self::get_last_error();
-            if err == ERROR_SUCCESS && (self.cur_offset + len >= self.disk_size)
-                || err == ERROR_DISK_FULL
-            {
+            if Self::get_last_error() == ERROR_DISK_FULL {
                 Ok(RawIoResult::Enospc)
             } else {
                 Err(ah::format_err!(
@@ -718,7 +731,11 @@ impl RawIoOs {
             }
         } else {
             self.cur_offset += write_count as u64;
-            Ok(RawIoResult::Ok(write_count as usize))
+            if limited && self.cur_offset >= self.disk_size {
+                Ok(RawIoResult::Enospc)
+            } else {
+                Ok(RawIoResult::Ok(write_count as usize))
+            }
         }
     }
 }
