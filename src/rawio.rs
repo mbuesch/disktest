@@ -32,7 +32,7 @@ pub const DEFAULT_SECTOR_SIZE: u32 = 512;
 
 /// OS interface for raw I/O.
 trait RawIoOsIntf {
-    fn get_sector_size(&self) -> u32;
+    fn get_sector_size(&self) -> Option<u32>;
     fn drop_file_caches(&mut self, offset: u64, size: u64) -> ah::Result<()>;
     fn close(&mut self) -> ah::Result<()>;
     fn sync(&mut self) -> ah::Result<()>;
@@ -68,8 +68,8 @@ impl RawIo {
     }
 
     /// Get the physical sector size of the file or device.
-    /// May return a default substitution value.
-    pub fn get_sector_size(&self) -> u32 {
+    /// Returns None, if this is not a raw device.
+    pub fn get_sector_size(&self) -> Option<u32> {
         self.os.get_sector_size()
     }
 

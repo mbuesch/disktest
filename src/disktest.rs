@@ -105,7 +105,7 @@ impl DisktestFile {
     }
 
     /// Get the device's physical sector size.
-    fn get_sector_size(&mut self) -> ah::Result<u32> {
+    fn get_sector_size(&mut self) -> ah::Result<Option<u32>> {
         self.do_open()?;
         let io = self.io.as_ref().expect("get_sector_size: No file.");
         Ok(io.get_sector_size())
@@ -292,22 +292,6 @@ impl Disktest {
         }
     }
 
-    /// Get the physical sector size.
-    fn get_sector_size(&self, file: &mut DisktestFile) -> u32 {
-        if let Ok(sector_size) = file.get_sector_size() {
-            sector_size
-        } else {
-            if self.quiet_level < DisktestQuiet::NoWarn {
-                eprintln!(
-                    "Failed to get physical block size of '{}'. Falling back to {} bytes.",
-                    file.get_path().display(),
-                    DEFAULT_SECTOR_SIZE,
-                );
-            }
-            DEFAULT_SECTOR_SIZE
-        }
-    }
-
     /// Initialize disktest.
     fn init(&mut self,
             file: &mut DisktestFile,
@@ -317,15 +301,28 @@ impl Disktest {
         file.quiet_level = self.quiet_level;
         self.log_reset();
 
+        let sector_size = file.get_sector_size().unwrap_or(None);
+
         if self.quiet_level < DisktestQuiet::NoInfo {
-            println!("{} {:?}, starting at position {}...",
+            let sector_str = if let Some(sector_size) = sector_size.as_ref() {
+                format!(
+                    " ({} sectors)",
+                    prettybytes(*sector_size as _, true, false),
+                )
+            } else {
+                "".to_string()
+            };
+            println!("{} {}{}, starting at position {}...",
                      prefix,
-                     file.get_path(),
+                     file.get_path().display(),
+                     sector_str,
                      prettybytes(seek, true, true));
         }
 
-        let sector_size = self.get_sector_size(file);
-        let res = match self.stream_agg.activate(seek, sector_size) {
+        let res = match self.stream_agg.activate(
+            seek,
+            sector_size.unwrap_or(DEFAULT_SECTOR_SIZE),
+        ) {
             Ok(res) => res,
             Err(e) => return Err(e),
         };

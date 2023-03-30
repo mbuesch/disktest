@@ -19,7 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use super::{RawIoOsIntf, RawIoResult, DEFAULT_SECTOR_SIZE};
+use super::{RawIoOsIntf, RawIoResult};
 use anyhow as ah;
 use std::{
     ffi::{CString, OsString},
@@ -66,7 +66,7 @@ pub struct RawIoWindows {
     write_mode: bool,
     is_raw: bool,
     volume_locked: bool,
-    sector_size: u32,
+    sector_size: Option<u32>,
     disk_size: u64,
     cur_offset: u64,
 }
@@ -149,7 +149,7 @@ impl RawIoWindows {
             write_mode: write,
             is_raw,
             volume_locked,
-            sector_size: 0,
+            sector_size: None,
             disk_size: 0,
             cur_offset: 0,
         };
@@ -239,10 +239,10 @@ impl RawIoWindows {
                 * dg.SectorsPerTrack as u64
                 * dg.TracksPerCylinder as u64
                 * unsafe { *dg.Cylinders.QuadPart() } as u64;
-            self.sector_size = dg.BytesPerSector as u32;
+            self.sector_size = Some(dg.BytesPerSector as u32);
         } else {
             self.disk_size = u64::MAX;
-            self.sector_size = DEFAULT_SECTOR_SIZE;
+            self.sector_size = None;
         }
         Ok(())
     }
@@ -258,7 +258,7 @@ impl RawIoWindows {
 }
 
 impl RawIoOsIntf for RawIoWindows {
-    fn get_sector_size(&self) -> u32 {
+    fn get_sector_size(&self) -> Option<u32> {
         self.sector_size
     }
 

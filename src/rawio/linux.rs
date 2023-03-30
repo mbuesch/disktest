@@ -19,7 +19,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use super::{RawIoOsIntf, RawIoResult, DEFAULT_SECTOR_SIZE};
+use super::{RawIoOsIntf, RawIoResult};
 use anyhow as ah;
 use libc::{c_int, off_t, posix_fadvise, POSIX_FADV_DONTNEED, S_IFBLK, S_IFCHR, S_IFMT};
 use std::{
@@ -37,7 +37,7 @@ pub struct RawIoLinux {
     write_mode: bool,
     is_blk: bool,
     is_chr: bool,
-    sector_size: u32,
+    sector_size: Option<u32>,
 }
 
 impl RawIoLinux {
@@ -68,7 +68,7 @@ impl RawIoLinux {
             write_mode: write,
             is_blk: false,
             is_chr: false,
-            sector_size: 0,
+            sector_size: None,
         };
 
         if let Err(e) = self_.read_disk_geometry() {
@@ -114,16 +114,16 @@ impl RawIoLinux {
                 ));
             }
 
-            self.sector_size = sector_size as u32;
+            self.sector_size = Some(sector_size as u32);
         } else {
-            self.sector_size = DEFAULT_SECTOR_SIZE;
+            self.sector_size = None;
         }
         Ok(())
     }
 }
 
 impl RawIoOsIntf for RawIoLinux {
-    fn get_sector_size(&self) -> u32 {
+    fn get_sector_size(&self) -> Option<u32> {
         self.sector_size
     }
 
