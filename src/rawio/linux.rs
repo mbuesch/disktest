@@ -19,8 +19,8 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use anyhow as ah;
 use super::{RawIoOsIntf, RawIoResult, DEFAULT_SECTOR_SIZE};
+use anyhow as ah;
 use libc::{c_int, off_t, posix_fadvise, POSIX_FADV_DONTNEED, S_IFBLK, S_IFCHR, S_IFMT};
 use std::{
     fs::{metadata, File, OpenOptions},
