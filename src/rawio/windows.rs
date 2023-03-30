@@ -111,7 +111,7 @@ impl RawIoWindows {
             return Err(ah::format_err!(
                 "Failed to open file {:?}: {}",
                 path,
-                Self::get_last_error_string()
+                Self::get_last_error_string(None)
             ));
         };
 
@@ -132,7 +132,7 @@ impl RawIoWindows {
             if ok == 0 {
                 return Err(ah::format_err!(
                     "Failed to lock the raw volume: {}",
-                    Self::get_last_error_string()
+                    Self::get_last_error_string(None)
                 ));
             }
 
@@ -181,8 +181,9 @@ impl RawIoWindows {
         unsafe { GetLastError() as _ }
     }
 
-    fn get_last_error_string() -> String {
-        let code = Self::get_last_error();
+    fn get_last_error_string(code: Option<u32>) -> String {
+        let code = code.unwrap_or_else(|| Self::get_last_error());
+
         if code == ERROR_SUCCESS {
             return "Success".to_string();
         }
@@ -232,7 +233,7 @@ impl RawIoWindows {
             if ok == 0 {
                 return Err(ah::format_err!(
                     "Failed to get drive geometry: {}",
-                    Self::get_last_error_string()
+                    Self::get_last_error_string(None)
                 ));
             }
             self.disk_size = dg.BytesPerSector as u64
@@ -287,14 +288,14 @@ impl RawIoOsIntf for RawIoWindows {
         if handle == INVALID_HANDLE_VALUE {
             Err(ah::format_err!(
                 "Failed to acquire file handle: {}",
-                Self::get_last_error_string()
+                Self::get_last_error_string(None)
             ))
         } else {
             let ok = unsafe { CloseHandle(handle) };
             if ok == 0 {
                 Err(ah::format_err!(
                     "Failed to close file handle: {}",
-                    Self::get_last_error_string()
+                    Self::get_last_error_string(None)
                 ))
             } else {
                 Ok(())
@@ -328,7 +329,7 @@ impl RawIoOsIntf for RawIoWindows {
             if ok == 0 {
                 eprintln!(
                     "Warning: Failed to unlock the raw volume: {}",
-                    Self::get_last_error_string()
+                    Self::get_last_error_string(None)
                 );
             }
             self.volume_locked = false;
@@ -339,7 +340,7 @@ impl RawIoOsIntf for RawIoWindows {
         if ok == 0 {
             return Err(ah::format_err!(
                 "Failed to close file handle: {}",
-                Self::get_last_error_string()
+                Self::get_last_error_string(None)
             ));
         }
         self.handle = INVALID_HANDLE_VALUE;
@@ -360,7 +361,7 @@ impl RawIoOsIntf for RawIoWindows {
         if ok == 0 {
             Err(ah::format_err!(
                 "Failed to flush file buffers: {}",
-                Self::get_last_error_string()
+                Self::get_last_error_string(None)
             ))
         } else {
             Ok(())
@@ -384,7 +385,7 @@ impl RawIoOsIntf for RawIoWindows {
         if ok == 0 {
             Err(ah::format_err!(
                 "Failed to truncate file: {}",
-                Self::get_last_error_string()
+                Self::get_last_error_string(None)
             ))
         } else {
             Ok(())
@@ -406,7 +407,7 @@ impl RawIoOsIntf for RawIoWindows {
             Err(ah::format_err!(
                 "SetFilePointerEx({:?}) seek failed: {}",
                 self.path,
-                Self::get_last_error_string(),
+                Self::get_last_error_string(None),
             ))
         } else {
             self.cur_offset = offset;
@@ -441,7 +442,7 @@ impl RawIoOsIntf for RawIoWindows {
         if ok == 0 {
             Err(ah::format_err!(
                 "Failed to read to file: {}",
-                Self::get_last_error_string()
+                Self::get_last_error_string(None)
             ))
         } else {
             self.cur_offset += read_count as u64;
@@ -477,12 +478,13 @@ impl RawIoOsIntf for RawIoWindows {
         };
 
         if ok == 0 {
-            if Self::get_last_error() == ERROR_DISK_FULL {
+            let code = Self::get_last_error();
+            if code == ERROR_DISK_FULL {
                 Ok(RawIoResult::Enospc)
             } else {
                 Err(ah::format_err!(
                     "Failed to write to file: {}",
-                    Self::get_last_error_string()
+                    Self::get_last_error_string(Some(code))
                 ))
             }
         } else {
