@@ -21,7 +21,7 @@
 
 use super::{RawIoOsIntf, RawIoResult};
 use anyhow as ah;
-use libc::{c_int, off_t, posix_fadvise, POSIX_FADV_DONTNEED, S_IFBLK, S_IFCHR, S_IFMT};
+use libc::{c_int, off_t, POSIX_FADV_DONTNEED, S_IFBLK, S_IFCHR, S_IFMT};
 use std::{
     fs::{metadata, File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
@@ -147,7 +147,7 @@ impl RawIoOsIntf for RawIoLinux {
 
         // Try FADV_DONTNEED to drop caches.
         let ret = unsafe {
-            posix_fadvise(
+            libc::posix_fadvise(
                 file.as_raw_fd(),
                 offset as off_t,
                 size as off_t,
