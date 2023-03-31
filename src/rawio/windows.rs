@@ -247,15 +247,6 @@ impl RawIoWindows {
         }
         Ok(())
     }
-
-    fn disk_limit(&self, size: usize) -> (bool, usize) {
-        if self.cur_offset + size as u64 > self.disk_size {
-            let lim_size = self.disk_size - self.cur_offset;
-            (true, lim_size as usize)
-        } else {
-            (false, size)
-        }
-    }
 }
 
 impl RawIoOsIntf for RawIoWindows {
@@ -426,26 +417,23 @@ impl RawIoOsIntf for RawIoWindows {
             return Ok(RawIoResult::Ok(0));
         }
 
-        let (_limited, read_len) = self.disk_limit(buffer.len());
-
         let mut read_count: DWORD = Default::default();
         let ok = unsafe {
             ReadFile(
                 self.handle,
                 buffer.as_mut_ptr() as _,
-                read_len as _,
+                buffer.len() as _,
                 &mut read_count as _,
                 null_mut(),
             )
         };
-
+        self.cur_offset += read_count as u64;
         if ok == 0 {
             Err(ah::format_err!(
                 "Failed to read to file: {}",
                 Self::get_last_error_string(None)
             ))
         } else {
-            self.cur_offset += read_count as u64;
             Ok(RawIoResult::Ok(read_count as usize))
         }
     }
@@ -461,39 +449,33 @@ impl RawIoOsIntf for RawIoWindows {
             return Ok(RawIoResult::Ok(0));
         }
 
-        let (limited, write_len) = self.disk_limit(buffer.len());
-        if limited && write_len == 0 {
-            return Ok(RawIoResult::Enospc);
-        }
-
         let mut write_count: DWORD = Default::default();
         let ok = unsafe {
             WriteFile(
                 self.handle,
                 buffer.as_ptr() as _,
-                write_len as _,
+                buffer.len() as _,
                 &mut write_count as _,
                 null_mut(),
             )
         };
-
+        self.cur_offset += write_count as u64;
         if ok == 0 {
-            let code = Self::get_last_error();
-            if code == ERROR_DISK_FULL {
+            if self.cur_offset >= self.disk_size {
                 Ok(RawIoResult::Enospc)
             } else {
-                Err(ah::format_err!(
-                    "Failed to write to file: {}",
-                    Self::get_last_error_string(Some(code))
-                ))
+                let code = Self::get_last_error();
+                if code == ERROR_DISK_FULL {
+                    Ok(RawIoResult::Enospc)
+                } else {
+                    Err(ah::format_err!(
+                        "Failed to write to file: {}",
+                        Self::get_last_error_string(Some(code))
+                    ))
+                }
             }
         } else {
-            self.cur_offset += write_count as u64;
-            if limited && self.cur_offset >= self.disk_size {
-                Ok(RawIoResult::Enospc)
-            } else {
-                Ok(RawIoResult::Ok(write_count as usize))
-            }
+            Ok(RawIoResult::Ok(write_count as usize))
         }
     }
 }
