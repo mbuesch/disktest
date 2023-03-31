@@ -272,7 +272,7 @@ impl Disktest {
                     let dur_elapsed = now - self.begin_time;
                     let sec_elapsed = dur_elapsed.as_secs();
                     let rate = if sec_elapsed > 0 {
-                        format!(" @ {}/s", prettybytes(abs_processed / sec_elapsed, true, false))
+                        format!(" @ {}/s", prettybytes(abs_processed / sec_elapsed, true, false, false))
                     } else {
                         "".to_string()
                     };
@@ -281,7 +281,7 @@ impl Disktest {
 
                     println!("{}{}{} ({}){}",
                              prefix,
-                             prettybytes(abs_processed, true, true),
+                             prettybytes(abs_processed, true, true, final_step),
                              rate,
                              dur_elapsed.hhmmss(),
                              suffix);
@@ -307,7 +307,7 @@ impl Disktest {
             let sector_str = if let Some(sector_size) = sector_size.as_ref() {
                 format!(
                     " ({} sectors)",
-                    prettybytes(*sector_size as _, true, false),
+                    prettybytes(*sector_size as _, true, false, false),
                 )
             } else {
                 "".to_string()
@@ -316,7 +316,7 @@ impl Disktest {
                      prefix,
                      file.get_path().display(),
                      sector_str,
-                     prettybytes(seek, true, true));
+                     prettybytes(seek, true, true, false));
         }
 
         let res = match self.stream_agg.activate(
@@ -439,8 +439,8 @@ impl Disktest {
             if *buffer_byte != chunk.get_data()[i] {
                 let pos = bytes_read + i as u64;
                 if pos >= 1024 {
-                    return ah::format_err!("Data MISMATCH at byte {} = {}!",
-                                           pos, prettybytes(pos, true, true))
+                    return ah::format_err!("Data MISMATCH at {}!",
+                                           prettybytes(pos, true, true, true))
                 } else {
                     return ah::format_err!("Data MISMATCH at byte {}!", pos)
                 }
@@ -501,7 +501,7 @@ impl Disktest {
                 Err(e) => {
                     let _ = self.verify_finalize(&mut file, false, bytes_read);
                     return Err(ah::format_err!("Read error at {}: {}",
-                                               prettybytes(bytes_read, true, true), e));
+                                               prettybytes(bytes_read, true, true, true), e));
                 },
             };
 

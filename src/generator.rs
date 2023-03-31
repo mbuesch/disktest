@@ -47,7 +47,7 @@ pub trait NextRandom {
         } else {
             Err(ah::format_err!("The selected random number generator \
                                 does not support seeking to byte offset {}.",
-                                prettybytes(byte_offset, true, true)))
+                                prettybytes(byte_offset, true, true, true)))
         }
     }
 }

@@ -127,15 +127,12 @@ impl DtStreamAgg {
         if byte_offset % chunk_size != 0 {
             let good_offset = byte_offset - (byte_offset % chunk_size);
             if self.quiet_level < DisktestQuiet::NoWarn {
-                eprintln!("WARNING: The seek offset {} (= {}) is not a multiple \
-                    of the chunk size {} bytes (= {}). \n\
-                    The seek offset will be adjusted to {} bytes (= {}).",
-                    byte_offset,
-                    prettybytes(byte_offset, true, true),
-                    chunk_size,
-                    prettybytes(chunk_size, true, true),
-                    good_offset,
-                    prettybytes(good_offset, true, true));
+                eprintln!("WARNING: The seek offset {} is not a multiple \
+                    of the chunk size {}. \n\
+                    The seek offset will be adjusted to {}.",
+                    prettybytes(byte_offset, true, true, true),
+                    prettybytes(chunk_size, true, true, true),
+                    prettybytes(good_offset, true, true, true));
             }
             byte_offset = good_offset;
         }
