@@ -416,9 +416,6 @@ impl RawIoOsIntf for RawIoWindows {
         if buffer.is_empty() {
             return Ok(RawIoResult::Ok(0));
         }
-        if self.cur_offset >= self.disk_size {
-            return Ok(RawIoResult::Ok(0));
-        }
 
         let mut read_count: DWORD = Default::default();
         let ok = unsafe {
@@ -455,9 +452,6 @@ impl RawIoOsIntf for RawIoWindows {
         if buffer.is_empty() {
             return Ok(RawIoResult::Ok(0));
         }
-        if self.cur_offset >= self.disk_size {
-            return Ok(RawIoResult::Enospc);
-        }
 
         let mut write_count: DWORD = Default::default();
         let ok = unsafe {
@@ -472,7 +466,11 @@ impl RawIoOsIntf for RawIoWindows {
         self.cur_offset += write_count as u64;
         if ok == 0 {
             if self.cur_offset >= self.disk_size {
-                Ok(RawIoResult::Enospc)
+                if write_count == 0 {
+                    Ok(RawIoResult::Enospc)
+                } else {
+                    Ok(RawIoResult::Ok(write_count as usize))
+                }
             } else {
                 let code = Self::get_last_error();
                 if code == ERROR_DISK_FULL {
