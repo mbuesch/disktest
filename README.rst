@@ -56,13 +56,33 @@ The target `device` does not have to be an actual hardware device node. It can b
 Windows
 =======
 
-On Windows disktest can write to any file on any mounted storage media.
+On Windows disktest can write to any file on any mounted storage media or raw disks.
 
-If your storage media under test is drive D, then the following command would run a write + verify test on that device:
+If your storage media under test is drive D, then the following command would write a test file on drive D and verify it:
 
 .. code:: sh
 
 	disktest --write --verify -j0 D:\testfile.img
+
+But note that testing on filesystem level like above does not test the full device.
+It will omit the disk areas the filesystem uses internally.
+Therefore, you may want to write to the raw disk D with the Windows raw drive notation as follows:
+
+.. code:: sh
+
+	disktest --write --verify -j0 \\.\D:
+
+or
+
+.. code:: sh
+
+	disktest --write --verify -j0 \\.\PhysicalDrive1
+
+Doing so will completely wipe all data (including the filesystem) on this disk.
+
+Always make sure that you selected the correct drive.
+Especially in the `\\\\.\PhysicalDriveX` notation it is extremely easy to overwrite the wrong drive by accident.
+Therefore, the `\\\\.\X:` (where X is the drive letter) notation is preferred.
 
 
 Dependencies
