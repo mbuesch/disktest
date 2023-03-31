@@ -416,6 +416,9 @@ impl RawIoOsIntf for RawIoWindows {
         if buffer.is_empty() {
             return Ok(RawIoResult::Ok(0));
         }
+        if self.cur_offset >= self.disk_size {
+            return Ok(RawIoResult::Ok(0));
+        }
 
         let mut read_count: DWORD = Default::default();
         let ok = unsafe {
@@ -429,10 +432,14 @@ impl RawIoOsIntf for RawIoWindows {
         };
         self.cur_offset += read_count as u64;
         if ok == 0 {
-            Err(ah::format_err!(
-                "Failed to read to file: {}",
-                Self::get_last_error_string(None)
-            ))
+            if self.cur_offset >= self.disk_size {
+                Ok(RawIoResult::Ok(read_count as usize))
+            } else {
+                Err(ah::format_err!(
+                    "Failed to read to file: {}",
+                    Self::get_last_error_string(None)
+                ))
+            }
         } else {
             Ok(RawIoResult::Ok(read_count as usize))
         }
@@ -447,6 +454,9 @@ impl RawIoOsIntf for RawIoWindows {
         }
         if buffer.is_empty() {
             return Ok(RawIoResult::Ok(0));
+        }
+        if self.cur_offset >= self.disk_size {
+            return Ok(RawIoResult::Enospc);
         }
 
         let mut write_count: DWORD = Default::default();
