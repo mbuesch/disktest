@@ -37,8 +37,8 @@ The default algorithm `ChaCha20 <https://en.wikipedia.org/wiki/Salsa20>`_ is a c
 See option `--seed` under `--help` for more details.
 
 
-Example
-=======
+Linux example
+=============
 
 The following disktest invocation will write a secure sequence to the disk device `/dev/sdc` and subsequently read back and verify the sequence from the disk device.
 
@@ -53,8 +53,8 @@ You probably need `root` permissions to write to raw disk devices (`/dev/sdX` or
 The target `device` does not have to be an actual hardware device node. It can be any file path on any file system. For example you can mount an USB stick file system and write to a file on that file system. However, please note that this leaves a couple minor untested spots in the USB stick's memory, which are reserved to the file system. Also see the `Windows` section below.
 
 
-Windows
-=======
+Windows example
+===============
 
 On Windows disktest can write to any file on any mounted storage media or raw disks.
 
@@ -134,9 +134,7 @@ Please run either of the following commands to show more information about the a
 .. code:: sh
 
 	cargo run --release -- --help
-	cargo run --release -- -h
 	disktest --help
-	disktest -h
 
 Speed
 =====
@@ -170,6 +168,6 @@ The read data rates are similar, because the algorithm used is exactly the same.
 License
 =======
 
-Copyright (c) 2020-2022 Michael Büsch <m@bues.ch>
+Copyright (c) 2020-2023 Michael Büsch <m@bues.ch>
 
 Licensed under the terms of the GNU General Public License version 2, or (at your option) any later version.
