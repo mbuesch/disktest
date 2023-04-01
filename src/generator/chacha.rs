@@ -19,9 +19,9 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use anyhow as ah;
 use crate::generator::NextRandom;
 use crate::util::fold;
+use anyhow as ah;
 use rand::prelude::*;
 
 macro_rules! GeneratorChaCha {
@@ -33,11 +33,10 @@ macro_rules! GeneratorChaCha {
       $testresult2:literal,
       $testresult3:literal
     ) => {
-
         use rand_chacha::$ChaChaRng;
 
         pub struct $Generator {
-            rng:    $ChaChaRng,
+            rng: $ChaChaRng,
         }
 
         impl $Generator {
@@ -53,9 +52,7 @@ macro_rules! GeneratorChaCha {
 
                 let rng = $ChaChaRng::from_seed(folded_seed);
 
-                $Generator {
-                    rng,
-                }
+                $Generator { rng }
             }
         }
 
@@ -71,13 +68,17 @@ macro_rules! GeneratorChaCha {
 
             fn seek(&mut self, byte_offset: u64) -> ah::Result<()> {
                 if byte_offset % $Generator::BASE_SIZE as u64 != 0 {
-                    return Err(ah::format_err!("ChaCha seek: Byte offset is not a \
-                                               multiple of the base size ({} bytes).",
-                                               $Generator::BASE_SIZE));
+                    return Err(ah::format_err!(
+                        "ChaCha seek: Byte offset is not a \
+                         multiple of the base size ({} bytes).",
+                        $Generator::BASE_SIZE
+                    ));
                 }
                 if byte_offset % 4 != 0 {
-                    return Err(ah::format_err!("ChaCha seek: Byte offset is not a \
-                                               multiple of the word size (4 bytes)."));
+                    return Err(ah::format_err!(
+                        "ChaCha seek: Byte offset is not a \
+                         multiple of the word size (4 bytes)."
+                    ));
                 }
 
                 let word_offset = byte_offset / 4;
@@ -93,7 +94,7 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_cmp_result() {
-                let mut a = $Generator::new(&[1,2,3]);
+                let mut a = $Generator::new(&[1, 2, 3]);
                 fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
                     acc.rotate_left(i as u32) ^ (*x as u32)
                 }
@@ -117,8 +118,8 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_seed_equal() {
-                let mut a = $Generator::new(&[1,2,3]);
-                let mut b = $Generator::new(&[1,2,3]);
+                let mut a = $Generator::new(&[1, 2, 3]);
+                let mut b = $Generator::new(&[1, 2, 3]);
                 let mut res_a: Vec<Vec<u8>> = vec![];
                 let mut res_b: Vec<Vec<u8>> = vec![];
                 for _ in 0..2 {
@@ -137,8 +138,8 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_seed_diff() {
-                let mut a = $Generator::new(&[1,2,3]);
-                let mut b = $Generator::new(&[1,2,4]);
+                let mut a = $Generator::new(&[1, 2, 3]);
+                let mut b = $Generator::new(&[1, 2, 4]);
                 let mut res_a: Vec<Vec<u8>> = vec![];
                 let mut res_b: Vec<Vec<u8>> = vec![];
                 for _ in 0..2 {
@@ -157,11 +158,14 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_concat_equal() {
-                let mut a = $Generator::new(&[1,2,3]);
-                let mut b = $Generator::new(&[1,2,3]);
+                let mut a = $Generator::new(&[1, 2, 3]);
+                let mut b = $Generator::new(&[1, 2, 3]);
                 let mut buf_a = vec![0u8; $Generator::BASE_SIZE * 2];
                 a.next(&mut buf_a[0..$Generator::BASE_SIZE], 1);
-                a.next(&mut buf_a[$Generator::BASE_SIZE..$Generator::BASE_SIZE*2], 1);
+                a.next(
+                    &mut buf_a[$Generator::BASE_SIZE..$Generator::BASE_SIZE * 2],
+                    1,
+                );
                 let mut buf_b = vec![0u8; $Generator::BASE_SIZE * 2];
                 b.next(&mut buf_b, 2);
                 assert_eq!(buf_a, buf_b);
@@ -169,8 +173,8 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_seek() {
-                let mut a = $Generator::new(&[1,2,3]);
-                let mut b = $Generator::new(&[1,2,3]);
+                let mut a = $Generator::new(&[1, 2, 3]);
+                let mut b = $Generator::new(&[1, 2, 3]);
                 b.seek($Generator::BASE_SIZE as u64 * 2).unwrap();
                 let mut bdata = vec![0u8; $Generator::BASE_SIZE];
                 b.next(&mut bdata, 1);
@@ -188,28 +192,34 @@ macro_rules! GeneratorChaCha {
     };
 }
 
-GeneratorChaCha!(GeneratorChaCha20,
-                 ChaCha20Rng,
-                 tests_chacha20,
-                 331195744,
-                 1401252284,
-                 1567136089,
-                 3153433807);
+GeneratorChaCha!(
+    GeneratorChaCha20,
+    ChaCha20Rng,
+    tests_chacha20,
+    331195744,
+    1401252284,
+    1567136089,
+    3153433807
+);
 
-GeneratorChaCha!(GeneratorChaCha12,
-                 ChaCha12Rng,
-                 tests_chacha12,
-                 477482776,
-                 774733417,
-                 473700519,
-                 3620480628);
+GeneratorChaCha!(
+    GeneratorChaCha12,
+    ChaCha12Rng,
+    tests_chacha12,
+    477482776,
+    774733417,
+    473700519,
+    3620480628
+);
 
-GeneratorChaCha!(GeneratorChaCha8,
-                 ChaCha8Rng,
-                 tests_chacha8,
-                 3691419247,
-                 1996469034,
-                 1245532037,
-                 1660157839);
+GeneratorChaCha!(
+    GeneratorChaCha8,
+    ChaCha8Rng,
+    tests_chacha8,
+    3691419247,
+    1996469034,
+    1245532037,
+    1660157839
+);
 
 // vim: ts=4 sw=4 expandtab

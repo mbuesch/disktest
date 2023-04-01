@@ -19,11 +19,11 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use anyhow as ah;
 use crate::bufcache::BufCache;
 use crate::disktest::DisktestQuiet;
 use crate::stream::{DtStream, DtStreamChunk};
 use crate::util::prettybytes;
+use anyhow as ah;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -31,14 +31,16 @@ use std::time::Duration;
 pub use crate::stream::DtStreamType;
 
 pub struct DtStreamAggChunk {
-    chunk:      DtStreamChunk,
-    thread_id:  usize,
-    cache:      Rc<RefCell<BufCache>>,
+    chunk: DtStreamChunk,
+    thread_id: usize,
+    cache: Rc<RefCell<BufCache>>,
 }
 
 impl DtStreamAggChunk {
     pub fn get_data(&self) -> &[u8] {
-        self.chunk.data.as_ref()
+        self.chunk
+            .data
+            .as_ref()
             .expect("DtStreamChunk data was None before drop!")
     }
 }
@@ -46,7 +48,10 @@ impl DtStreamAggChunk {
 impl Drop for DtStreamAggChunk {
     fn drop(&mut self) {
         // Recycle the buffer.
-        let buf = self.chunk.data.take()
+        let buf = self
+            .chunk
+            .data
+            .take()
             .expect("DtStreamChunk data was None during drop!");
         self.cache.borrow_mut().push(self.thread_id as u32, buf);
     }
@@ -58,12 +63,12 @@ pub struct DtStreamAggActivateResult {
 }
 
 pub struct DtStreamAgg {
-    num_threads:        usize,
-    streams:            Vec<DtStream>,
-    cache:              Rc<RefCell<BufCache>>,
-    current_index:      usize,
-    is_active:          bool,
-    quiet_level:        DisktestQuiet,
+    num_threads: usize,
+    streams: Vec<DtStream>,
+    cache: Rc<RefCell<BufCache>>,
+    current_index: usize,
+    is_active: bool,
+    quiet_level: DisktestQuiet,
 }
 
 impl DtStreamAgg {
@@ -74,7 +79,6 @@ impl DtStreamAgg {
         num_threads: usize,
         quiet_level: DisktestQuiet,
     ) -> DtStreamAgg {
-
         assert!(num_threads > 0);
         assert!(num_threads <= std::u16::MAX as usize + 1);
 
@@ -108,9 +112,12 @@ impl DtStreamAgg {
         let chunk_size = base_chunk_size * chunk_factor;
 
         if chunk_size % sector_size as u64 != 0 {
-            return Err(ah::format_err!("The random number generator chunk size {} \
+            return Err(ah::format_err!(
+                "The random number generator chunk size {} \
                                         is not a multiple of the disk sector size {}.",
-                                        chunk_size, sector_size));
+                chunk_size,
+                sector_size
+            ));
         }
 
         Ok((chunk_size, chunk_factor))
@@ -127,12 +134,14 @@ impl DtStreamAgg {
         if byte_offset % chunk_size != 0 {
             let good_offset = byte_offset - (byte_offset % chunk_size);
             if self.quiet_level < DisktestQuiet::NoWarn {
-                eprintln!("WARNING: The seek offset {} is not a multiple \
+                eprintln!(
+                    "WARNING: The seek offset {} is not a multiple \
                     of the chunk size {}. \n\
                     The seek offset will be adjusted to {}.",
                     prettybytes(byte_offset, true, true, true),
                     prettybytes(chunk_size, true, true, true),
-                    prettybytes(good_offset, true, true, true));
+                    prettybytes(good_offset, true, true, true)
+                );
             }
             byte_offset = good_offset;
         }
@@ -205,13 +214,19 @@ impl DtStreamAgg {
 
 #[cfg(test)]
 mod tests {
-    use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc};
     use super::*;
+    use crate::generator::{GeneratorChaCha12, GeneratorChaCha20, GeneratorChaCha8, GeneratorCrc};
 
     fn run_base_test(algorithm: DtStreamType, gen_base_size: usize, chunk_factor: usize) {
         println!("stream aggregator base test");
         let num_threads = 2;
-        let mut agg = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
+        let mut agg = DtStreamAgg::new(
+            algorithm,
+            vec![1, 2, 3],
+            false,
+            num_threads,
+            DisktestQuiet::Normal,
+        );
         agg.activate(0, 512).unwrap();
         assert!(agg.is_active());
 
@@ -224,7 +239,7 @@ mod tests {
         for _ in 0..4 {
             // Generate the next chunk.
             let mut chunks = vec![];
-            
+
             for _ in 0..num_threads {
                 let chunk = agg.wait_chunk().unwrap();
                 assert_eq!(chunk.get_data().len(), onestream_chunksize);
@@ -280,12 +295,27 @@ mod tests {
         let num_threads = 2;
 
         for offset in 0..5 {
-            let mut a = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
+            let mut a = DtStreamAgg::new(
+                algorithm,
+                vec![1, 2, 3],
+                false,
+                num_threads,
+                DisktestQuiet::Normal,
+            );
             a.activate(0, 512).unwrap();
 
-            let mut b = DtStreamAgg::new(algorithm, vec![1,2,3], false, num_threads, DisktestQuiet::Normal);
-            b.activate((a.get_chunk_size() as u64 * a.get_default_chunk_factor() as u64) * offset,
-                       512).unwrap();
+            let mut b = DtStreamAgg::new(
+                algorithm,
+                vec![1, 2, 3],
+                false,
+                num_threads,
+                DisktestQuiet::Normal,
+            );
+            b.activate(
+                (a.get_chunk_size() as u64 * a.get_default_chunk_factor() as u64) * offset,
+                512,
+            )
+            .unwrap();
 
             // Until offset the chunks must not be equal.
             let mut bchunk = b.wait_chunk().unwrap();
@@ -303,36 +333,44 @@ mod tests {
     #[test]
     fn test_chacha8() {
         let alg = DtStreamType::ChaCha8;
-        run_base_test(alg,
-                      GeneratorChaCha8::BASE_SIZE,
-                      GeneratorChaCha8::DEFAULT_CHUNK_FACTOR);
+        run_base_test(
+            alg,
+            GeneratorChaCha8::BASE_SIZE,
+            GeneratorChaCha8::DEFAULT_CHUNK_FACTOR,
+        );
         run_offset_test(alg);
     }
 
     #[test]
     fn test_chacha12() {
         let alg = DtStreamType::ChaCha12;
-        run_base_test(alg,
-                      GeneratorChaCha12::BASE_SIZE,
-                      GeneratorChaCha12::DEFAULT_CHUNK_FACTOR);
+        run_base_test(
+            alg,
+            GeneratorChaCha12::BASE_SIZE,
+            GeneratorChaCha12::DEFAULT_CHUNK_FACTOR,
+        );
         run_offset_test(alg);
     }
 
     #[test]
     fn test_chacha20() {
         let alg = DtStreamType::ChaCha20;
-        run_base_test(alg,
-                      GeneratorChaCha20::BASE_SIZE,
-                      GeneratorChaCha20::DEFAULT_CHUNK_FACTOR);
+        run_base_test(
+            alg,
+            GeneratorChaCha20::BASE_SIZE,
+            GeneratorChaCha20::DEFAULT_CHUNK_FACTOR,
+        );
         run_offset_test(alg);
     }
 
     #[test]
     fn test_crc() {
         let alg = DtStreamType::Crc;
-        run_base_test(alg,
-                      GeneratorCrc::BASE_SIZE,
-                      GeneratorCrc::DEFAULT_CHUNK_FACTOR);
+        run_base_test(
+            alg,
+            GeneratorCrc::BASE_SIZE,
+            GeneratorCrc::DEFAULT_CHUNK_FACTOR,
+        );
         run_offset_test(alg);
     }
 }

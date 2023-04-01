@@ -20,8 +20,8 @@
 //
 
 use crate::disktest::DisktestQuiet;
-use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::HashMap;
+use std::sync::mpsc::{channel, Receiver, Sender};
 
 pub struct BufCache {
     snd: HashMap<u32, Sender<Vec<u8>>>,
@@ -39,9 +39,7 @@ impl BufCache {
     pub fn new_consumer(&mut self, cons_id: u32) -> BufCacheCons {
         let (snd, rcv) = channel();
         self.snd.insert(cons_id, snd);
-        BufCacheCons {
-            rcv,
-        }
+        BufCacheCons { rcv }
     }
 
     pub fn push(&mut self, cons_id: u32, buf: Vec<u8>) {
@@ -57,7 +55,7 @@ impl BufCache {
 }
 
 pub struct BufCacheCons {
-    rcv:    Receiver<Vec<u8>>,
+    rcv: Receiver<Vec<u8>>,
 }
 
 impl BufCacheCons {
@@ -106,7 +104,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected="Consumer 42 does not exist")]
+    #[should_panic(expected = "Consumer 42 does not exist")]
     fn test_bufcache_cons_invalid() {
         let mut cache = BufCache::new(DisktestQuiet::Normal);
         cache.push(42, vec![]);

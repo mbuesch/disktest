@@ -22,12 +22,12 @@
 mod chacha;
 mod crc;
 
-use anyhow as ah;
 use crate::util::prettybytes;
+use anyhow as ah;
 
-pub use crate::generator::chacha::GeneratorChaCha8;
 pub use crate::generator::chacha::GeneratorChaCha12;
 pub use crate::generator::chacha::GeneratorChaCha20;
+pub use crate::generator::chacha::GeneratorChaCha8;
 pub use crate::generator::crc::GeneratorCrc;
 
 pub trait NextRandom {
@@ -45,9 +45,11 @@ pub trait NextRandom {
         if byte_offset == 0 {
             Ok(())
         } else {
-            Err(ah::format_err!("The selected random number generator \
-                                does not support seeking to byte offset {}.",
-                                prettybytes(byte_offset, true, true, true)))
+            Err(ah::format_err!(
+                "The selected random number generator \
+                 does not support seeking to byte offset {}.",
+                prettybytes(byte_offset, true, true, true)
+            ))
         }
     }
 }

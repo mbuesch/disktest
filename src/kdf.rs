@@ -21,14 +21,14 @@
 
 use ring::{digest, pbkdf2};
 
-const ITERATIONS: u32   = 50000;
-const DK_SIZE: usize    = 256 / 8;
+const ITERATIONS: u32 = 50000;
+const DK_SIZE: usize = 256 / 8;
 
 /// Generate a bad salt substitution from the key.
-fn derive_salt(key: &[u8]) -> [u8; 512/8] {
+fn derive_salt(key: &[u8]) -> [u8; 512 / 8] {
     // Generate the salt from the key.
     // That's not a great salt, but good enough for our purposes.
-    let mut salt = [0; 512/8];
+    let mut salt = [0; 512 / 8];
     let mut salt_hash = digest::Context::new(&digest::SHA512);
     salt_hash.update(b"disktest salt");
     salt_hash.update(key);
@@ -44,11 +44,13 @@ pub fn kdf(seed: &[u8], thread_id: u32) -> Vec<u8> {
 
     // Calculated the DK (derived key).
     let mut dk = vec![0; DK_SIZE];
-    pbkdf2::derive(pbkdf2::PBKDF2_HMAC_SHA512,
-                   ITERATIONS.try_into().unwrap(),
-                   &derive_salt(&key),
-                   &key,
-                   &mut dk);
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA512,
+        ITERATIONS.try_into().unwrap(),
+        &derive_salt(&key),
+        &key,
+        &mut dk,
+    );
     dk
 }
 
@@ -58,24 +60,40 @@ mod tests {
 
     #[test]
     fn test_salt() {
-        assert_eq!(derive_salt(&[1,2,3]).to_vec(),
-                   derive_salt(&[1,2,3]).to_vec());
+        assert_eq!(
+            derive_salt(&[1, 2, 3]).to_vec(),
+            derive_salt(&[1, 2, 3]).to_vec()
+        );
 
-        assert_ne!(derive_salt(&[1,2,3]).to_vec(),
-                   derive_salt(&[1,2,4]).to_vec());
+        assert_ne!(
+            derive_salt(&[1, 2, 3]).to_vec(),
+            derive_salt(&[1, 2, 4]).to_vec()
+        );
     }
 
     #[test]
     fn test_kdf() {
-        assert_eq!(kdf(&[1,2,3], 42),
-                   [126, 166, 175, 110, 112, 203, 204, 118, 71, 125, 227, 115, 65, 242, 193, 117,
-                    229, 246, 164, 226, 239, 88, 119, 226, 21, 98, 166, 137, 232, 151, 243, 154]);
-        assert_eq!(kdf(&[1,2,4], 42),
-                   [141, 91, 148, 215, 223, 193, 155, 52, 32, 216, 66, 86, 110, 114, 5, 10,
-                    39, 253, 243, 146, 37, 243, 25, 238, 218, 100, 179, 204, 12, 150, 13, 102]);
-        assert_eq!(kdf(&[1,2,3], 43),
-                   [8, 206, 134, 103, 131, 239, 126, 159, 222, 12, 74, 197, 28, 44, 237, 166,
-                    152, 102, 63, 199, 93, 82, 199, 62, 97, 178, 240, 244, 24, 148, 242, 209]);
+        assert_eq!(
+            kdf(&[1, 2, 3], 42),
+            [
+                126, 166, 175, 110, 112, 203, 204, 118, 71, 125, 227, 115, 65, 242, 193, 117, 229,
+                246, 164, 226, 239, 88, 119, 226, 21, 98, 166, 137, 232, 151, 243, 154
+            ]
+        );
+        assert_eq!(
+            kdf(&[1, 2, 4], 42),
+            [
+                141, 91, 148, 215, 223, 193, 155, 52, 32, 216, 66, 86, 110, 114, 5, 10, 39, 253,
+                243, 146, 37, 243, 25, 238, 218, 100, 179, 204, 12, 150, 13, 102
+            ]
+        );
+        assert_eq!(
+            kdf(&[1, 2, 3], 43),
+            [
+                8, 206, 134, 103, 131, 239, 126, 159, 222, 12, 74, 197, 28, 44, 237, 166, 152, 102,
+                63, 199, 93, 82, 199, 62, 97, 178, 240, 244, 24, 148, 242, 209
+            ]
+        );
     }
 }
 

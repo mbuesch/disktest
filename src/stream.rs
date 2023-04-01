@@ -19,14 +19,16 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use anyhow as ah;
 use crate::bufcache::{BufCache, BufCacheCons};
-use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc, NextRandom};
+use crate::generator::{
+    GeneratorChaCha12, GeneratorChaCha20, GeneratorChaCha8, GeneratorCrc, NextRandom,
+};
 use crate::kdf::kdf;
+use anyhow as ah;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicIsize, AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
@@ -41,25 +43,25 @@ pub enum DtStreamType {
 
 /// Data chunk that contains the computed PRNG data.
 pub struct DtStreamChunk {
-    pub data:   Option<Vec<u8>>,
-    pub index:  u8,
+    pub data: Option<Vec<u8>>,
+    pub index: u8,
 }
 
 /// Thread worker function, that computes the chunks.
 #[allow(clippy::too_many_arguments)]
 fn thread_worker(
-    stype:          DtStreamType,
-    chunk_factor:   usize,
-    seed:           Vec<u8>,
-    thread_id:      u32,
+    stype: DtStreamType,
+    chunk_factor: usize,
+    seed: Vec<u8>,
+    thread_id: u32,
     mut cache_cons: BufCacheCons,
-    byte_offset:    u64,
+    byte_offset: u64,
     invert_pattern: bool,
-    abort:          Arc<AtomicBool>,
-    error:          Arc<AtomicBool>,
-    level:          Arc<AtomicIsize>,
-    sleep:          Arc<(Mutex<bool>, Condvar)>,
-    tx:             Sender<DtStreamChunk>,
+    abort: Arc<AtomicBool>,
+    error: Arc<AtomicBool>,
+    level: Arc<AtomicIsize>,
+    sleep: Arc<(Mutex<bool>, Condvar)>,
+    tx: Sender<DtStreamChunk>,
 ) {
     // Calculate the per-thread-seed from the global seed.
     let thread_seed = kdf(&seed, thread_id);
@@ -107,15 +109,12 @@ fn thread_worker(
             // Send the chunk to the main thread.
             tx.send(chunk).expect("Worker thread: Send failed.");
             cur_level = level.fetch_add(1, Ordering::Relaxed) + 1;
-
         } else {
             // The chunk buffer is full. Wait...
-            let mut sleeping = sleep.0.lock()
-                .expect("Thread Condvar lock poison");
+            let mut sleeping = sleep.0.lock().expect("Thread Condvar lock poison");
             *sleeping = true;
             while *sleeping {
-                sleeping = sleep.1.wait(sleeping)
-                    .expect("Thread Condvar wait poison");
+                sleeping = sleep.1.wait(sleeping).expect("Thread Condvar wait poison");
             }
             cur_level = level.load(Ordering::Relaxed);
         }
@@ -124,18 +123,18 @@ fn thread_worker(
 
 /// PRNG stream.
 pub struct DtStream {
-    stype:          DtStreamType,
-    seed:           Vec<u8>,
+    stype: DtStreamType,
+    seed: Vec<u8>,
     invert_pattern: bool,
-    thread_id:      u32,
-    rx:             Option<Receiver<DtStreamChunk>>,
-    cache:          Rc<RefCell<BufCache>>,
-    is_active:      bool,
-    thread_join:    Option<thread::JoinHandle<()>>,
-    abort:          Arc<AtomicBool>,
-    error:          Arc<AtomicBool>,
-    level:          Arc<AtomicIsize>,
-    sleep:          Arc<(Mutex<bool>, Condvar)>,
+    thread_id: u32,
+    rx: Option<Receiver<DtStreamChunk>>,
+    cache: Rc<RefCell<BufCache>>,
+    is_active: bool,
+    thread_join: Option<thread::JoinHandle<()>>,
+    abort: Arc<AtomicBool>,
+    error: Arc<AtomicBool>,
+    level: Arc<AtomicIsize>,
+    sleep: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl DtStream {
@@ -145,11 +144,11 @@ impl DtStream {
     const LO_THRES: isize = 6;
 
     pub fn new(
-        stype:          DtStreamType,
-        seed:           Vec<u8>,
+        stype: DtStreamType,
+        seed: Vec<u8>,
         invert_pattern: bool,
-        thread_id:      u32,
-        cache:          Rc<RefCell<BufCache>>,
+        thread_id: u32,
+        cache: Rc<RefCell<BufCache>>,
     ) -> DtStream {
         let abort = Arc::new(AtomicBool::new(false));
         let error = Arc::new(AtomicBool::new(false));
@@ -218,18 +217,20 @@ impl DtStream {
         let thread_level = Arc::clone(&self.level);
         let thread_sleep = Arc::clone(&self.sleep);
         self.thread_join = Some(thread::spawn(move || {
-            thread_worker(thread_stype,
-                          thread_chunk_factor,
-                          thread_seed,
-                          thread_id,
-                          thread_cache_cons,
-                          thread_byte_offset,
-                          thread_invert_pattern,
-                          thread_abort,
-                          thread_error,
-                          thread_level,
-                          thread_sleep,
-                          tx);
+            thread_worker(
+                thread_stype,
+                thread_chunk_factor,
+                thread_seed,
+                thread_id,
+                thread_cache_cons,
+                thread_byte_offset,
+                thread_invert_pattern,
+                thread_abort,
+                thread_error,
+                thread_level,
+                thread_sleep,
+                tx,
+            );
         }));
         self.is_active = true;
     }
@@ -241,11 +242,7 @@ impl DtStream {
     }
 
     /// Activate the worker thread.
-    pub fn activate(
-        &mut self,
-        byte_offset: u64,
-        chunk_factor: usize,
-    ) -> ah::Result<()> {
+    pub fn activate(&mut self, byte_offset: u64, chunk_factor: usize) -> ah::Result<()> {
         self.stop();
         self.start(byte_offset, chunk_factor);
 
@@ -286,7 +283,9 @@ impl DtStream {
             return Err(ah::format_err!("Generator stream is not active."));
         }
         if self.is_thread_error() {
-            return Err(ah::format_err!("Generator stream thread aborted with an error."));
+            return Err(ah::format_err!(
+                "Generator stream thread aborted with an error."
+            ));
         }
         let Some(rx) = &self.rx else {
             return Err(ah::format_err!("Generator stream RX channel not present."));
@@ -314,8 +313,8 @@ impl Drop for DtStream {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
     use crate::disktest::DisktestQuiet;
+    use std::time::Duration;
 
     impl DtStream {
         pub fn wait_chunk(&mut self) -> DtStreamChunk {
@@ -331,7 +330,7 @@ mod tests {
     fn run_base_test(algorithm: DtStreamType) {
         println!("stream base test");
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut s = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
+        let mut s = DtStream::new(algorithm, vec![1, 2, 3], false, 0, cache);
         s.activate(0, s.get_default_chunk_factor()).unwrap();
         assert!(s.is_active());
 
@@ -341,8 +340,13 @@ mod tests {
         let mut results_first = vec![];
         for count in 0..5 {
             let chunk = s.wait_chunk();
-            println!("{}: index={} data[0]={} (current level = {})",
-                     count, chunk.index, chunk.data.as_ref().unwrap()[0], s.level.load(Ordering::Relaxed));
+            println!(
+                "{}: index={} data[0]={} (current level = {})",
+                count,
+                chunk.index,
+                chunk.data.as_ref().unwrap()[0],
+                s.level.load(Ordering::Relaxed)
+            );
             results_first.push(chunk.data.as_ref().unwrap()[0]);
             assert_eq!(chunk.index, count);
         }
@@ -366,14 +370,17 @@ mod tests {
         println!("stream offset test");
         // a: start at chunk offset 0
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
+        let mut a = DtStream::new(algorithm, vec![1, 2, 3], false, 0, cache);
         a.activate(0, a.get_default_chunk_factor()).unwrap();
 
         // b: start at chunk offset 1
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut b = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
-        b.activate(a.get_chunk_size() as u64 * a.get_default_chunk_factor() as u64,
-                   a.get_default_chunk_factor()).unwrap();
+        let mut b = DtStream::new(algorithm, vec![1, 2, 3], false, 0, cache);
+        b.activate(
+            a.get_chunk_size() as u64 * a.get_default_chunk_factor() as u64,
+            a.get_default_chunk_factor(),
+        )
+        .unwrap();
 
         let achunk = a.wait_chunk();
         let bchunk = b.wait_chunk();
@@ -385,15 +392,21 @@ mod tests {
     fn run_invert_test(algorithm: DtStreamType) {
         println!("stream invert test");
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut a = DtStream::new(algorithm, vec![1,2,3], false, 0, cache);
+        let mut a = DtStream::new(algorithm, vec![1, 2, 3], false, 0, cache);
         a.activate(0, a.get_default_chunk_factor()).unwrap();
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut b = DtStream::new(algorithm, vec![1,2,3], true, 0, cache);
+        let mut b = DtStream::new(algorithm, vec![1, 2, 3], true, 0, cache);
         b.activate(0, a.get_default_chunk_factor()).unwrap();
 
         let achunk = a.wait_chunk();
         let bchunk = b.wait_chunk();
-        let inv_bchunk: Vec<u8> = bchunk.data.as_ref().unwrap().iter().map(|x| x ^ 0xFF).collect();
+        let inv_bchunk: Vec<u8> = bchunk
+            .data
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|x| x ^ 0xFF)
+            .collect();
         assert!(achunk.data.as_ref().unwrap() != bchunk.data.as_ref().unwrap());
         assert!(achunk.data.as_ref().unwrap() == &inv_bchunk);
     }

@@ -26,15 +26,19 @@ use rand::{thread_rng, Rng};
 /// length: The number of ASCII characters to return.
 pub fn gen_seed_string(length: usize) -> String {
     let rng = thread_rng();
-    rng.sample_iter(Alphanumeric).take(length).map(char::from).collect()
+    rng.sample_iter(Alphanumeric)
+        .take(length)
+        .map(char::from)
+        .collect()
 }
 
 /// Print the generated seed to the console.
 pub fn print_generated_seed(seed: &str, verbose: bool) {
     if verbose {
-        println!("\nThe generated --seed is:\n    {}\n\
-                 Use this seed for subsequent --verify.\n",
-                 seed);
+        println!(
+            "\nThe generated --seed is:\n    {}\nUse this seed for subsequent --verify.\n",
+            seed
+        );
     } else {
         println!("Generated --seed {}\n", seed);
     }

@@ -19,15 +19,15 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use anyhow as ah;
 use crate::generator::NextRandom;
 use crate::util::fold;
+use anyhow as ah;
 use crc::{crc64, Hasher64};
 
 pub struct GeneratorCrc {
-    crc:            crc64::Digest,
-    folded_seed:    [u8; GeneratorCrc::FOLDED_SEED_SIZE],
-    counter:        u64,
+    crc: crc64::Digest,
+    folded_seed: [u8; GeneratorCrc::FOLDED_SEED_SIZE],
+    counter: u64,
 }
 
 impl GeneratorCrc {
@@ -92,9 +92,11 @@ impl NextRandom for GeneratorCrc {
 
     fn seek(&mut self, byte_offset: u64) -> ah::Result<()> {
         if byte_offset % GeneratorCrc::BASE_SIZE as u64 != 0 {
-            return Err(ah::format_err!("CRC seek: Byte offset is not a \
-                                       multiple of the base size ({} bytes).",
-                                       GeneratorCrc::BASE_SIZE));
+            return Err(ah::format_err!(
+                "CRC seek: Byte offset is not a \
+                 multiple of the base size ({} bytes).",
+                GeneratorCrc::BASE_SIZE
+            ));
         }
 
         self.counter = byte_offset / GeneratorCrc::BASE_SIZE as u64;
@@ -109,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_cmp_result() {
-        let mut a = GeneratorCrc::new(&[1,2,3]);
+        let mut a = GeneratorCrc::new(&[1, 2, 3]);
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
             acc.rotate_left(i as u32) ^ (*x as u32)
         }
@@ -118,16 +120,16 @@ mod tests {
         assert_eq!(buf.iter().enumerate().fold(0, reduce), 2183862535);
         a.next(&mut buf[0..GeneratorCrc::BASE_SIZE], 1);
         assert_eq!(buf.iter().enumerate().fold(0, reduce), 2200729683);
-        a.next(&mut buf[0..GeneratorCrc::BASE_SIZE*2], 2);
+        a.next(&mut buf[0..GeneratorCrc::BASE_SIZE * 2], 2);
         assert_eq!(buf.iter().enumerate().fold(0, reduce), 17260884);
-        a.next(&mut buf[0..GeneratorCrc::BASE_SIZE*3], 3);
+        a.next(&mut buf[0..GeneratorCrc::BASE_SIZE * 3], 3);
         assert_eq!(buf.iter().enumerate().fold(0, reduce), 581162875);
     }
 
     #[test]
     fn test_seed_equal() {
-        let mut a = GeneratorCrc::new(&[1,2,3]);
-        let mut b = GeneratorCrc::new(&[1,2,3]);
+        let mut a = GeneratorCrc::new(&[1, 2, 3]);
+        let mut b = GeneratorCrc::new(&[1, 2, 3]);
         let mut res_a: Vec<Vec<u8>> = vec![];
         let mut res_b: Vec<Vec<u8>> = vec![];
         for _ in 0..2 {
@@ -146,8 +148,8 @@ mod tests {
 
     #[test]
     fn test_seed_diff() {
-        let mut a = GeneratorCrc::new(&[1,2,3]);
-        let mut b = GeneratorCrc::new(&[1,2,4]);
+        let mut a = GeneratorCrc::new(&[1, 2, 3]);
+        let mut b = GeneratorCrc::new(&[1, 2, 4]);
         let mut res_a: Vec<Vec<u8>> = vec![];
         let mut res_b: Vec<Vec<u8>> = vec![];
         for _ in 0..2 {
@@ -166,11 +168,14 @@ mod tests {
 
     #[test]
     fn test_concat_equal() {
-        let mut a = GeneratorCrc::new(&[1,2,3]);
-        let mut b = GeneratorCrc::new(&[1,2,3]);
+        let mut a = GeneratorCrc::new(&[1, 2, 3]);
+        let mut b = GeneratorCrc::new(&[1, 2, 3]);
         let mut buf_a = vec![0u8; GeneratorCrc::BASE_SIZE * 2];
         a.next(&mut buf_a[0..GeneratorCrc::BASE_SIZE], 1);
-        a.next(&mut buf_a[GeneratorCrc::BASE_SIZE..GeneratorCrc::BASE_SIZE*2], 1);
+        a.next(
+            &mut buf_a[GeneratorCrc::BASE_SIZE..GeneratorCrc::BASE_SIZE * 2],
+            1,
+        );
         let mut buf_b = vec![0u8; GeneratorCrc::BASE_SIZE * 2];
         b.next(&mut buf_b, 2);
         assert_eq!(buf_a, buf_b);
@@ -178,8 +183,8 @@ mod tests {
 
     #[test]
     fn test_seek() {
-        let mut a = GeneratorCrc::new(&[1,2,3]);
-        let mut b = GeneratorCrc::new(&[1,2,3]);
+        let mut a = GeneratorCrc::new(&[1, 2, 3]);
+        let mut b = GeneratorCrc::new(&[1, 2, 3]);
         b.seek(GeneratorCrc::BASE_SIZE as u64 * 2).unwrap();
         let mut bdata = vec![0u8; GeneratorCrc::BASE_SIZE];
         b.next(&mut bdata, 1);

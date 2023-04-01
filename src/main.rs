@@ -30,43 +30,46 @@ mod stream;
 mod stream_aggregator;
 mod util;
 
-use anyhow as ah;
-use args::{Args, parse_args};
 use crate::seed::print_generated_seed;
+use anyhow as ah;
+use args::{parse_args, Args};
 use disktest::{Disktest, DisktestFile, DisktestQuiet};
 use std::env::args_os;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 /// Install abort signal handlers and return
 /// the abort-flag that is written to true by these handlers.
 fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
     let abort = Arc::new(AtomicBool::new(false));
-    for sig in &[signal_hook::consts::signal::SIGTERM,
-                 signal_hook::consts::signal::SIGINT] {
+    for sig in &[
+        signal_hook::consts::signal::SIGTERM,
+        signal_hook::consts::signal::SIGINT,
+    ] {
         if let Err(e) = signal_hook::flag::register(*sig, Arc::clone(&abort)) {
             return Err(ah::format_err!("Failed to register signal {}: {}", sig, e));
         }
-
     }
 
     Ok(abort)
 }
 
 /// Create a new disktest core instance.
-fn new_disktest(args:  &Args,
-                write: bool,
-                abort: &Arc<AtomicBool>) -> ah::Result<(Disktest, DisktestFile)> {
+fn new_disktest(
+    args: &Args,
+    write: bool,
+    abort: &Arc<AtomicBool>,
+) -> ah::Result<(Disktest, DisktestFile)> {
     Ok((
-        Disktest::new(args.algorithm,
-                      args.seed.as_bytes().to_vec(),
-                      args.invert_pattern,
-                      args.threads,
-                      args.quiet,
-                      Some(Arc::clone(abort))),
-        DisktestFile::open(&args.device,
-                           !write,
-                           write)?,
+        Disktest::new(
+            args.algorithm,
+            args.seed.as_bytes().to_vec(),
+            args.invert_pattern,
+            args.threads,
+            args.quiet,
+            Some(Arc::clone(abort)),
+        ),
+        DisktestFile::open(&args.device, !write, write)?,
     ))
 }
 

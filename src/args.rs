@@ -19,13 +19,13 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //
 
-use anyhow as ah;
-use clap::error::ErrorKind::{DisplayHelp, DisplayVersion};
-use clap::builder::ValueParser;
-use clap::{Command, Arg, ArgAction, value_parser};
-use crate::disktest::{DtStreamType, DisktestQuiet};
+use crate::disktest::{DisktestQuiet, DtStreamType};
 use crate::seed::gen_seed_string;
 use crate::util::parsebytes;
+use anyhow as ah;
+use clap::builder::ValueParser;
+use clap::error::ErrorKind::{DisplayHelp, DisplayVersion};
+use clap::{value_parser, Arg, ArgAction, Command};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -41,11 +41,11 @@ read it back and verify it by comparing it to the expected stream.
 Example usage:
 ";
 
-#[cfg(not(target_os="windows"))]
+#[cfg(not(target_os = "windows"))]
 const EXAMPLE: &str = "\
 disktest --write --verify -j0 /dev/sdc";
 
-#[cfg(target_os="windows")]
+#[cfg(target_os = "windows")]
 const EXAMPLE: &str = "\
 disktest --write --verify -j0 D:\\testfile.img";
 
@@ -114,88 +114,109 @@ Quiet level:
 
 /// All command line arguments.
 pub struct Args {
-    pub device:         PathBuf,
-    pub write:          bool,
-    pub verify:         bool,
-    pub seek:           u64,
-    pub max_bytes:      u64,
-    pub algorithm:      DtStreamType,
-    pub seed:           String,
-    pub user_seed:      bool,
+    pub device: PathBuf,
+    pub write: bool,
+    pub verify: bool,
+    pub seek: u64,
+    pub max_bytes: u64,
+    pub algorithm: DtStreamType,
+    pub seed: String,
+    pub user_seed: bool,
     pub invert_pattern: bool,
-    pub threads:        usize,
-    pub quiet:          DisktestQuiet,
+    pub threads: usize,
+    pub quiet: DisktestQuiet,
 }
 
 /// Parse all command line arguments and put them into a structure.
 pub fn parse_args<I, T>(args: I) -> ah::Result<Args>
-where I: IntoIterator<Item = T>,
-      T: Into<OsString> + Clone
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
 {
     let about = ABOUT.to_string() + EXAMPLE;
     let args = Command::new("disktest")
         .about(about)
-        .arg(Arg::new("device")
-             .index(1)
-             .required(true)
-             .value_parser(value_parser!(PathBuf))
-             .help(HELP_DEVICE))
-        .arg(Arg::new("write")
-             .long("write")
-             .short('w')
-             .action(ArgAction::SetTrue)
-             .help(HELP_WRITE))
-        .arg(Arg::new("verify")
-             .long("verify")
-             .short('v')
-             .action(ArgAction::SetTrue)
-             .help(HELP_VERIFY))
-        .arg(Arg::new("seek")
-             .long("seek")
-             .short('s')
-             .value_name("BYTES")
-             .default_value("0")
-             .value_parser(ValueParser::new(parsebytes))
-             .help(HELP_SEEK))
-        .arg(Arg::new("bytes")
-             .long("bytes")
-             .short('b')
-             .value_name("BYTES")
-             .default_value("18446744073709551615")
-             .value_parser(ValueParser::new(parsebytes))
-             .help(HELP_BYTES))
-        .arg(Arg::new("algorithm")
-             .long("algorithm")
-             .short('A')
-             .value_name("ALG")
-             .default_value("CHACHA20")
-             .value_parser(["CHACHA8", "CHACHA12", "CHACHA20", "CRC"])
-             .ignore_case(true)
-             .help(HELP_ALGORITHM))
-        .arg(Arg::new("seed")
-             .long("seed")
-             .short('S')
-             .value_name("SEED")
-             .help(HELP_SEED))
-        .arg(Arg::new("invert-pattern")
-             .long("invert-pattern")
-             .short('i')
-             .action(ArgAction::SetTrue)
-             .help(HELP_INVERT_PATTERN))
-        .arg(Arg::new("threads")
-             .long("threads")
-             .short('j')
-             .value_name("NUM")
-             .default_value("1")
-             .value_parser(value_parser!(u32).range(0_i64..=std::u16::MAX as i64 + 1))
-             .help(HELP_THREADS))
-        .arg(Arg::new("quiet")
-             .long("quiet")
-             .short('q')
-             .value_name("LVL")
-             .default_value("0")
-             .value_parser(value_parser!(u8))
-             .help(HELP_QUIET))
+        .arg(
+            Arg::new("device")
+                .index(1)
+                .required(true)
+                .value_parser(value_parser!(PathBuf))
+                .help(HELP_DEVICE),
+        )
+        .arg(
+            Arg::new("write")
+                .long("write")
+                .short('w')
+                .action(ArgAction::SetTrue)
+                .help(HELP_WRITE),
+        )
+        .arg(
+            Arg::new("verify")
+                .long("verify")
+                .short('v')
+                .action(ArgAction::SetTrue)
+                .help(HELP_VERIFY),
+        )
+        .arg(
+            Arg::new("seek")
+                .long("seek")
+                .short('s')
+                .value_name("BYTES")
+                .default_value("0")
+                .value_parser(ValueParser::new(parsebytes))
+                .help(HELP_SEEK),
+        )
+        .arg(
+            Arg::new("bytes")
+                .long("bytes")
+                .short('b')
+                .value_name("BYTES")
+                .default_value("18446744073709551615")
+                .value_parser(ValueParser::new(parsebytes))
+                .help(HELP_BYTES),
+        )
+        .arg(
+            Arg::new("algorithm")
+                .long("algorithm")
+                .short('A')
+                .value_name("ALG")
+                .default_value("CHACHA20")
+                .value_parser(["CHACHA8", "CHACHA12", "CHACHA20", "CRC"])
+                .ignore_case(true)
+                .help(HELP_ALGORITHM),
+        )
+        .arg(
+            Arg::new("seed")
+                .long("seed")
+                .short('S')
+                .value_name("SEED")
+                .help(HELP_SEED),
+        )
+        .arg(
+            Arg::new("invert-pattern")
+                .long("invert-pattern")
+                .short('i')
+                .action(ArgAction::SetTrue)
+                .help(HELP_INVERT_PATTERN),
+        )
+        .arg(
+            Arg::new("threads")
+                .long("threads")
+                .short('j')
+                .value_name("NUM")
+                .default_value("1")
+                .value_parser(value_parser!(u32).range(0_i64..=std::u16::MAX as i64 + 1))
+                .help(HELP_THREADS),
+        )
+        .arg(
+            Arg::new("quiet")
+                .long("quiet")
+                .short('q')
+                .value_name("LVL")
+                .default_value("0")
+                .value_parser(value_parser!(u8))
+                .help(HELP_QUIET),
+        )
         .try_get_matches_from(args);
 
     let args = match args {
@@ -205,11 +226,11 @@ where I: IntoIterator<Item = T>,
                 DisplayHelp | DisplayVersion => {
                     print!("{}", e);
                     std::process::exit(0);
-                },
+                }
                 _ => (),
             };
             return Err(ah::format_err!("{}", e));
-        },
+        }
     };
 
     let quiet = *args.get_one::<u8>("quiet").unwrap();
@@ -235,7 +256,12 @@ where I: IntoIterator<Item = T>,
 
     let max_bytes = *args.get_one::<u64>("bytes").unwrap();
 
-    let algorithm = match args.get_one::<String>("algorithm").unwrap().to_ascii_uppercase().as_str() {
+    let algorithm = match args
+        .get_one::<String>("algorithm")
+        .unwrap()
+        .to_ascii_uppercase()
+        .as_str()
+    {
         "CHACHA8" => DtStreamType::ChaCha8,
         "CHACHA12" => DtStreamType::ChaCha12,
         "CHACHA20" => DtStreamType::ChaCha20,
@@ -248,9 +274,11 @@ where I: IntoIterator<Item = T>,
         None => (gen_seed_string(DEFAULT_GEN_SEED_LEN), false),
     };
     if !user_seed && verify && !write {
-        return Err(ah::format_err!("Verify-only mode requires --seed. \
-                                   Please either provide a --seed, \
-                                   or enable --verify and --write mode."));
+        return Err(ah::format_err!(
+            "Verify-only mode requires --seed. \
+             Please either provide a --seed, \
+             or enable --verify and --write mode."
+        ));
     }
 
     let invert_pattern = args.get_flag("invert-pattern");
@@ -335,7 +363,14 @@ mod tests {
         let a = parse_args(vec!["disktest", "-w", "-b", "456 MiB", "/dev/foobar"]).unwrap();
         assert_eq!(a.max_bytes, 456 * 1024 * 1024);
 
-        let a = parse_args(vec!["disktest", "-w", "--algorithm", "CHACHA8", "/dev/foobar"]).unwrap();
+        let a = parse_args(vec![
+            "disktest",
+            "-w",
+            "--algorithm",
+            "CHACHA8",
+            "/dev/foobar",
+        ])
+        .unwrap();
         assert_eq!(a.algorithm, DtStreamType::ChaCha8);
         let a = parse_args(vec!["disktest", "-w", "-A", "chacha8", "/dev/foobar"]).unwrap();
         assert_eq!(a.algorithm, DtStreamType::ChaCha8);
