@@ -53,7 +53,8 @@ const HELP_DEVICE: &str = "\
 Device node of the disk or file path to access.
 On Linux compatible systems this may be the /dev/sdX or /dev/mmcblkX or similar
 device node of the disk. It may also be an arbitrary path to a location in a filesystem.
-On Windows this may be a path to the location on the disk to be tested (e.g. D:\\testfile).";
+On Windows this may be a path to the location on the disk to be tested (e.g. D:\\testfile)
+or a raw drive (e.g. \\\\.\\E: or \\\\.\\PhysicalDrive1).";
 
 const HELP_WRITE: &str = "\
 Write pseudo random data to the device.
