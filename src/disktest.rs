@@ -326,15 +326,16 @@ impl Disktest {
             ));
         }
 
-        if let Some(sector_size) = sector_size {
+        if let Some(sector_size) = sector_size.as_ref() {
             if max_bytes < u64::MAX
-                && max_bytes % sector_size as u64 != 0
+                && max_bytes % *sector_size as u64 != 0
                 && self.quiet_level < DisktestQuiet::NoWarn
             {
+                #[cfg(target_os = "windows")]
                 eprintln!("WARNING: The desired byte count of {} is not a multiple of the sector size {}. \
                            This might result in a write or read error at the very end.",
                         prettybytes(max_bytes, true, true, true),
-                        prettybytes(sector_size as u64, true, true, true));
+                        prettybytes(*sector_size as u64, true, true, true));
             }
         }
 
