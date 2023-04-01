@@ -182,7 +182,7 @@ impl RawIoWindows {
     }
 
     fn get_last_error_string(code: Option<u32>) -> String {
-        let code = code.unwrap_or_else(|| Self::get_last_error());
+        let code = code.unwrap_or_else(Self::get_last_error);
 
         if code == ERROR_SUCCESS {
             return "Success".to_string();
@@ -209,6 +209,7 @@ impl RawIoWindows {
         msg.to_string_lossy().to_string()
     }
 
+    #[allow(clippy::unnecessary_cast)]
     fn read_disk_geometry(&mut self) -> ah::Result<()> {
         if self.is_raw {
             if self.handle == INVALID_HANDLE_VALUE {
