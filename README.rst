@@ -62,7 +62,7 @@ If your storage media under test is drive D, then the following command would wr
 
 .. code:: sh
 
-	disktest --write --verify -j0 D:\testfile.img
+	disktest --write --verify -j0 E:\testfile.img
 
 But note that testing on filesystem level like above does not test the full device.
 It will omit the disk areas the filesystem uses internally.
@@ -70,13 +70,13 @@ Therefore, you may want to write to the raw disk D with the Windows raw drive no
 
 .. code:: sh
 
-	disktest --write --verify -j0 \\.\D:
+	disktest --write --verify -j0 \\.\E:
 
 or
 
 .. code:: sh
 
-	disktest --write --verify -j0 \\.\PhysicalDrive1
+	disktest --write --verify -j0 \\.\PhysicalDrive2
 
 Doing so will completely wipe all data (including the filesystem) on this disk.
 

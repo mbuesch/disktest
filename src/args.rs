@@ -47,14 +47,21 @@ disktest --write --verify -j0 /dev/sdc";
 
 #[cfg(target_os = "windows")]
 const EXAMPLE: &str = "\
-disktest --write --verify -j0 D:\\testfile.img";
+disktest --write --verify -j0 \\\\.\\E:";
 
 const HELP_DEVICE: &str = "\
 Device node of the disk or file path to access.
-On Linux compatible systems this may be the /dev/sdX or /dev/mmcblkX or similar
-device node of the disk. It may also be an arbitrary path to a location in a filesystem.
-On Windows this may be a path to the location on the disk to be tested (e.g. D:\\testfile)
-or a raw drive (e.g. \\\\.\\E: or \\\\.\\PhysicalDrive1).";
+";
+
+#[cfg(not(target_os = "windows"))]
+const HELP_DEVICE_OS: &str = "\
+This may be the /dev/sdX or /dev/mmcblkX or similar
+device node of the disk. It may also be an arbitrary path to a location in a filesystem.";
+
+#[cfg(target_os = "windows")]
+const HELP_DEVICE_OS: &str = "\
+This may be a path to the location on the disk to be tested (e.g. E:\\testfile)
+or a raw drive (e.g. \\\\.\\E: or \\\\.\\PhysicalDrive2).";
 
 const HELP_WRITE: &str = "\
 Write pseudo random data to the device.
@@ -135,6 +142,8 @@ where
     T: Into<OsString> + Clone,
 {
     let about = ABOUT.to_string() + EXAMPLE;
+    let help_device = HELP_DEVICE.to_string() + HELP_DEVICE_OS;
+
     let args = Command::new("disktest")
         .about(about)
         .arg(
@@ -142,7 +151,7 @@ where
                 .index(1)
                 .required(true)
                 .value_parser(value_parser!(PathBuf))
-                .help(HELP_DEVICE),
+                .help(help_device),
         )
         .arg(
             Arg::new("write")
