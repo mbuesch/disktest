@@ -433,7 +433,7 @@ impl RawIoOsIntf for RawIoWindows {
                 Ok(RawIoResult::Ok(read_count as usize))
             } else {
                 Err(ah::format_err!(
-                    "Failed to read to file: {}",
+                    "Failed to read from file: {}",
                     Self::get_last_error_string(None)
                 ))
             }
