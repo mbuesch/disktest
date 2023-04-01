@@ -280,7 +280,13 @@ impl Disktest {
     }
 
     /// Initialize disktest.
-    fn init(&mut self, file: &mut DisktestFile, prefix: &str, seek: u64) -> ah::Result<u64> {
+    fn init(
+        &mut self,
+        file: &mut DisktestFile,
+        prefix: &str,
+        seek: u64,
+        max_bytes: u64,
+    ) -> ah::Result<u64> {
         file.quiet_level = self.quiet_level;
         self.log_reset();
 
@@ -318,6 +324,18 @@ impl Disktest {
                 seek,
                 e.to_string()
             ));
+        }
+
+        if let Some(sector_size) = sector_size {
+            if max_bytes < u64::MAX
+                && max_bytes % sector_size as u64 != 0
+                && self.quiet_level < DisktestQuiet::NoWarn
+            {
+                eprintln!("WARNING: The desired byte count of {} is not a multiple of the sector size {}. \
+                           This might result in a write or read error at the very end.",
+                        prettybytes(max_bytes, true, true, true),
+                        prettybytes(sector_size as u64, true, true, true));
+            }
         }
 
         Ok(res.chunk_size)
@@ -363,7 +381,7 @@ impl Disktest {
         let mut bytes_left = max_bytes;
         let mut bytes_written = 0u64;
 
-        let write_chunk_size = self.init(&mut file, "Writing", seek)?;
+        let write_chunk_size = self.init(&mut file, "Writing", seek, max_bytes)?;
         loop {
             // Get the next data chunk.
             let chunk = self.stream_agg.wait_chunk()?;
@@ -463,7 +481,7 @@ impl Disktest {
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0u64;
 
-        let readbuf_len = self.init(&mut file, "Verifying", seek)? as usize;
+        let readbuf_len = self.init(&mut file, "Verifying", seek, max_bytes)? as usize;
         let mut buffer = vec![0; readbuf_len];
         let mut read_count = 0;
         let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
