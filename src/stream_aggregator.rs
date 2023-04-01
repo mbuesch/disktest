@@ -114,7 +114,7 @@ impl DtStreamAgg {
         if chunk_size % sector_size as u64 != 0 {
             return Err(ah::format_err!(
                 "The random number generator chunk size {} \
-                                        is not a multiple of the disk sector size {}.",
+                 is not a multiple of the disk sector size {}.",
                 chunk_size,
                 sector_size
             ));
@@ -136,7 +136,7 @@ impl DtStreamAgg {
             if self.quiet_level < DisktestQuiet::NoWarn {
                 eprintln!(
                     "WARNING: The seek offset {} is not a multiple \
-                    of the chunk size {}. \n\
+                    of the random stream generator chunk size {}. \n\
                     The seek offset will be adjusted to {}.",
                     prettybytes(byte_offset, true, true, true),
                     prettybytes(chunk_size, true, true, true),
