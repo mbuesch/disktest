@@ -106,13 +106,13 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool, bytes: bool) -> Stri
 
 fn try_one_parsebytes(s: &str, suffix: &str, factor: u64) -> ah::Result<u64> {
     let Some(s) = s.strip_suffix(suffix) else {
-        return Err(ah::format_err!("Value suffix does not match."))
+        return Err(ah::format_err!("Value suffix does not match."));
     };
     let s = s.trim();
     if let Ok(value) = s.parse::<u64>() {
         // Integer value.
         let Some(prod) = value.checked_mul(factor) else {
-            return Err(ah::format_err!("Value integer overflow."))
+            return Err(ah::format_err!("Value integer overflow."));
         };
         Ok(prod)
     } else if let Ok(value) = s.parse::<f64>() {
