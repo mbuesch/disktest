@@ -1,6 +1,6 @@
 [package]
 name            = "disktest"
-description     = "Solid State Disk, Hard Disk and other storage media tester"
+description     = "Tester for Solid State Disks, Non-Volatile Memory Storage, Hard Disks, USB Sticks, SD-Cards, etc.."
 version         = "1.11.0"
 homepage        = "https://bues.ch/h/disktest"
 repository      = "https://github.com/mbuesch/disktest"

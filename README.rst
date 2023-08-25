@@ -1,5 +1,5 @@
-disktest - Solid State Disk (SSD), Hard Disk (HDD), USB Stick, SD-Card tester
-=============================================================================
+disktest - Tester for Solid State Disk (SSD), Non-Volatile Memory Storage (NVMe), Hard Disk (HDD), USB Stick, SD-Card, etc...
+=============================================================================================================================
 
 `Homepage <https://bues.ch/h/disktest>`_
 
@@ -9,7 +9,7 @@ disktest - Solid State Disk (SSD), Hard Disk (HDD), USB Stick, SD-Card tester
 
 `crates.io site <https://crates.io/crates/disktest>`_
 
-Disktest is a tool to check Solid State Disks, Hard Disks, USB sticks, SD cards or other storage media for errors.
+Disktest is a tool to check Solid State Disks, Non-Volatile Memory Storage, Hard Disks, USB sticks, SD cards or other storage media for errors.
 
 It does so by writing a pseudo random sequence to the device and then reading it back and verifying it to the same pseudo random sequence.
 
@@ -46,9 +46,21 @@ The following disktest invocation will write a secure sequence to the disk devic
 
 	disktest --write --verify -j0 /dev/sdc
 
-*WARNING*: This will irrevocably overwrite all data on the disk `/dev/sdc`! Be absolutely certain that the device path is correct before starting the command. Your data cannot be recovered.
+For NVMe:
 
-You probably need `root` permissions to write to raw disk devices (`/dev/sdX` or `/dev/mmcblkX`).
+.. code:: sh
+
+	disktest --write --verify -j0 /dev/nvme0n1
+
+For SD / MMC:
+
+.. code:: sh
+
+	disktest --write --verify -j0 /dev/mmcblk0
+
+*WARNING*: This will irrevocably overwrite all data on the storage device! Be absolutely certain that the device path is correct before starting the command. Your data cannot be recovered.
+
+You probably need `root` permissions to write to raw disk devices (`/dev/sdX`, `/dev/nvmeXn1` or `/dev/mmcblkX`).
 
 The target `device` does not have to be an actual hardware device node. It can be any file path on any file system. For example you can mount an USB stick file system and write to a file on that file system. However, please note that this leaves a couple minor untested spots in the USB stick's memory, which are reserved to the file system. Also see the `Windows` section below.
 
