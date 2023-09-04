@@ -21,9 +21,8 @@
 
 use crate::rawio::{RawIo, RawIoResult, DEFAULT_SECTOR_SIZE};
 use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
-use crate::util::prettybytes;
+use crate::util::{prettybytes, Hhmmss};
 use anyhow as ah;
-use hhmmss::Hhmmss;
 use std::cmp::min;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};

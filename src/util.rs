@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020 Michael Buesch <m@bues.ch>
+// Copyright 2020-2023 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 
 use anyhow as ah;
 use std::fmt::Write;
+use std::time::Duration;
 
 const EIB: u64 = 1024 * 1024 * 1024 * 1024 * 1024 * 1024;
 const PIB: u64 = 1024 * 1024 * 1024 * 1024 * 1024;
@@ -171,6 +172,24 @@ pub fn parsebytes(s: &str) -> ah::Result<u64> {
         Ok(v)
     } else {
         Err(ah::format_err!("Cannot parse byte count: {}", s))
+    }
+}
+
+pub trait Hhmmss {
+    fn hhmmss(&self) -> String;
+}
+
+impl Hhmmss for Duration {
+    fn hhmmss(&self) -> String {
+        let secs = self.as_secs();
+        let secs_lim = (99 * 60 * 60) + (59 * 60) + 59;
+        let lim = if secs > secs_lim { ">" } else { "" };
+        let secs = secs.min(secs_lim);
+        let h = secs / (60 * 60);
+        let rem = secs % (60 * 60);
+        let m = rem / 60;
+        let s = rem % 60;
+        format!("{}{:02}:{:02}:{:02}", lim, h, m, s)
     }
 }
 
@@ -358,6 +377,27 @@ mod tests {
         assert_eq!(
             parsebytes("1.5 EB ").unwrap(),
             1000 * 1000 * 1000 * 1000 * 1000 * 1000 + 1000 * 1000 * 1000 * 1000 * 1000 * 1000 / 2
+        );
+    }
+
+    #[test]
+    fn test_hhmmss() {
+        assert_eq!(Duration::from_secs(0).hhmmss(), "00:00:00");
+        assert_eq!(
+            Duration::from_secs((2 * 60 * 60) + (3 * 60) + 4).hhmmss(),
+            "02:03:04"
+        );
+        assert_eq!(
+            Duration::from_secs((23 * 60 * 60) + (59 * 60) + 59).hhmmss(),
+            "23:59:59"
+        );
+        assert_eq!(
+            Duration::from_secs((99 * 60 * 60) + (59 * 60) + 59).hhmmss(),
+            "99:59:59"
+        );
+        assert_eq!(
+            Duration::from_secs((99 * 60 * 60) + (59 * 60) + 59 + 1).hhmmss(),
+            ">99:59:59"
         );
     }
 
