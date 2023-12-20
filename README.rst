@@ -70,7 +70,7 @@ Windows example
 
 On Windows disktest can write to any file on any mounted storage media or raw disks.
 
-If your storage media under test is drive D, then the following command would write a test file on drive D and verify it:
+If your storage media under test is drive E, then the following command would write a test file on drive E and verify it:
 
 .. code:: sh
 
@@ -78,7 +78,7 @@ If your storage media under test is drive D, then the following command would wr
 
 But note that testing on filesystem level like above does not test the full device.
 It will omit the disk areas the filesystem uses internally.
-Therefore, you may want to write to the raw disk D with the Windows raw drive notation as follows:
+Therefore, you may want to write to the raw disk E with the Windows raw drive notation as follows:
 
 .. code:: sh
 
