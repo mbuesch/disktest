@@ -28,12 +28,10 @@ const DK_SIZE: usize = 256 / 8;
 fn derive_salt(key: &[u8]) -> [u8; 512 / 8] {
     // Generate the salt from the key.
     // That's not a great salt, but good enough for our purposes.
-    let mut salt = [0; 512 / 8];
     let mut salt_hash = digest::Context::new(&digest::SHA512);
     salt_hash.update(b"disktest salt");
     salt_hash.update(key);
-    salt.copy_from_slice(salt_hash.finish().as_ref());
-    salt
+    salt_hash.finish().as_ref().try_into().unwrap()
 }
 
 /// Key derivation function for the user supplied seed.

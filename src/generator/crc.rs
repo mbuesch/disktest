@@ -41,12 +41,10 @@ impl GeneratorCrc {
 
     pub fn new(seed: &[u8]) -> GeneratorCrc {
         assert!(!seed.is_empty());
-
         let crc = crc64::Digest::new(crc64::ECMA);
-
-        let mut folded_seed = [0u8; GeneratorCrc::FOLDED_SEED_SIZE];
-        folded_seed.copy_from_slice(&fold(seed, GeneratorCrc::FOLDED_SEED_SIZE));
-
+        let folded_seed = fold(seed, GeneratorCrc::FOLDED_SEED_SIZE)
+            .try_into()
+            .unwrap();
         GeneratorCrc {
             crc,
             folded_seed,

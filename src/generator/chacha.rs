@@ -47,11 +47,8 @@ macro_rules! GeneratorChaCha {
 
             pub fn new(seed: &[u8]) -> $Generator {
                 assert!(!seed.is_empty());
-                let mut folded_seed = [0u8; 32];
-                folded_seed.copy_from_slice(&fold(seed, 32));
-
+                let folded_seed = fold(seed, 32).try_into().unwrap();
                 let rng = $ChaChaRng::from_seed(folded_seed);
-
                 $Generator { rng }
             }
         }
