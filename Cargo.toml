@@ -24,7 +24,7 @@ movavg          = "2.0.0"
 rand            = "0.8.0"
 rand_chacha     = "0.3.0"
 regex           = "1.7.0"
-ring            = "0.16.0"
+ring            = "0.17.0"
 signal-hook     = "0.3.0"
 tempfile        = "3.0.0"
 
