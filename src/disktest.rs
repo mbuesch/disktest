@@ -184,7 +184,7 @@ pub struct Disktest {
     log_time: Instant,
     rate_count: u64,
     rate_count_start_time: Instant,
-    rate_avg: MovAvg<u64, u64, 3>,
+    rate_avg: MovAvg<u64, u64, 5>,
     begin_time: Instant,
     quiet_level: DisktestQuiet,
 }
@@ -264,25 +264,25 @@ impl Disktest {
 
                 if (expired && self.quiet_level == DisktestQuiet::Normal) || final_step {
                     let dur_elapsed = now - self.begin_time;
-                    let sec_elapsed = dur_elapsed.as_secs();
 
                     let rate = if final_step {
-                        if sec_elapsed > 0 {
-                            abs_processed / sec_elapsed
+                        let elapsed_ms = dur_elapsed.as_millis();
+                        if elapsed_ms > 0 {
+                            Some(((abs_processed as u128 * 1000) / elapsed_ms) as u64)
                         } else {
-                            0
+                            None
                         }
                     } else {
-                        let rate_period_ms = (now - self.rate_count_start_time).as_millis() as u64;
-                        let rate = if rate_period_ms > 0 {
-                            (self.rate_count * 1000) / rate_period_ms
+                        let rate_period_ms = (now - self.rate_count_start_time).as_millis();
+                        if rate_period_ms > 0 {
+                            let rate = ((self.rate_count as u128 * 1000) / rate_period_ms) as u64;
+                            Some(self.rate_avg.feed(rate))
                         } else {
-                            0
-                        };
-                        self.rate_avg.feed(rate)
+                            None
+                        }
                     };
 
-                    let rate_string = if rate > 0 {
+                    let rate_string = if let Some(rate) = rate {
                         format!(" @ {}/s", prettybytes(rate, true, false, false))
                     } else {
                         "".to_string()
