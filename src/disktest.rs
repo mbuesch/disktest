@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2023 Michael Buesch <m@bues.ch>
+// Copyright 2020-2024 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ use crate::rawio::{RawIo, RawIoResult, DEFAULT_SECTOR_SIZE};
 use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
 use crate::util::{prettybytes, Hhmmss};
 use anyhow as ah;
+use movavg::MovAvg;
 use std::cmp::min;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -181,6 +182,9 @@ pub struct Disktest {
     abort: Option<Arc<AtomicBool>>,
     log_count: u64,
     log_time: Instant,
+    rate_count: u64,
+    rate_count_start_time: Instant,
+    rate_avg: MovAvg<u64, u64, 3>,
     begin_time: Instant,
     quiet_level: DisktestQuiet,
 }
@@ -208,12 +212,16 @@ impl Disktest {
             nr_threads
         };
 
+        let now = Instant::now();
         Disktest {
             stream_agg: DtStreamAgg::new(algorithm, seed, invert_pattern, nr_threads, quiet_level),
             abort,
             log_count: 0,
-            log_time: Instant::now(),
-            begin_time: Instant::now(),
+            log_time: now,
+            rate_count: 0,
+            rate_count_start_time: now,
+            rate_avg: MovAvg::new(),
+            begin_time: now,
             quiet_level,
         }
     }
@@ -229,9 +237,13 @@ impl Disktest {
 
     /// Reset logging.
     fn log_reset(&mut self) {
+        let now = Instant::now();
         self.log_count = 0;
-        self.log_time = Instant::now();
-        self.begin_time = self.log_time;
+        self.log_time = now;
+        self.rate_count = 0;
+        self.rate_count_start_time = now;
+        self.rate_avg.reset();
+        self.begin_time = now;
     }
 
     /// Log progress.
@@ -242,6 +254,7 @@ impl Disktest {
             // Only if byte count is bigger than threshold, then check time.
             // This reduces the number of calls to Instant::now.
             self.log_count += inc_processed as u64;
+            self.rate_count += inc_processed as u64;
             if (self.log_count >= LOG_BYTE_THRES && self.quiet_level == DisktestQuiet::Normal)
                 || final_step
             {
@@ -252,11 +265,25 @@ impl Disktest {
                 if (expired && self.quiet_level == DisktestQuiet::Normal) || final_step {
                     let dur_elapsed = now - self.begin_time;
                     let sec_elapsed = dur_elapsed.as_secs();
-                    let rate = if sec_elapsed > 0 {
-                        format!(
-                            " @ {}/s",
-                            prettybytes(abs_processed / sec_elapsed, true, false, false)
-                        )
+
+                    let rate = if final_step {
+                        if sec_elapsed > 0 {
+                            abs_processed / sec_elapsed
+                        } else {
+                            0
+                        }
+                    } else {
+                        let rate_period_ms = (now - self.rate_count_start_time).as_millis() as u64;
+                        let rate = if rate_period_ms > 0 {
+                            (self.rate_count * 1000) / rate_period_ms
+                        } else {
+                            0
+                        };
+                        self.rate_avg.feed(rate)
+                    };
+
+                    let rate_string = if rate > 0 {
+                        format!(" @ {}/s", prettybytes(rate, true, false, false))
                     } else {
                         "".to_string()
                     };
@@ -267,11 +294,13 @@ impl Disktest {
                         "{}{}{} ({}){}",
                         prefix,
                         prettybytes(abs_processed, true, true, final_step),
-                        rate,
+                        rate_string,
                         dur_elapsed.hhmmss(),
                         suffix
                     );
                     self.log_time = now;
+                    self.rate_count_start_time = now;
+                    self.rate_count = 0;
                 }
                 self.log_count = 0;
             }
