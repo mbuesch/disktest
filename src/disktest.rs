@@ -686,7 +686,7 @@ mod tests {
                 let mut file = OpenOptions::new()
                     .read(true)
                     .write(true)
-                    .open(&path)
+                    .open(path)
                     .unwrap();
                 file.seek(SeekFrom::Start(10)).unwrap();
                 writeln!(&file, "X").unwrap();
