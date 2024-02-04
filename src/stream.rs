@@ -98,7 +98,7 @@ fn thread_worker(
                 for x in &mut data {
                     *x ^= 0xFFu8;
                 }
-            };
+            }
 
             let chunk = DtStreamChunk {
                 data: Some(data),

@@ -215,7 +215,7 @@ where
                 .short('j')
                 .value_name("NUM")
                 .default_value("1")
-                .value_parser(value_parser!(u32).range(0_i64..=std::u16::MAX as i64 + 1))
+                .value_parser(value_parser!(u32).range(0_i64..=u16::MAX as i64 + 1))
                 .help(HELP_THREADS),
         )
         .arg(

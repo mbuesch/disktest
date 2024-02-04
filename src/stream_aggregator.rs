@@ -80,7 +80,7 @@ impl DtStreamAgg {
         quiet_level: DisktestQuiet,
     ) -> DtStreamAgg {
         assert!(num_threads > 0);
-        assert!(num_threads <= std::u16::MAX as usize + 1);
+        assert!(num_threads <= u16::MAX as usize + 1);
 
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
         let mut streams = Vec::with_capacity(num_threads);

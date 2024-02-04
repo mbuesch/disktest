@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2023 Michael Buesch <m@bues.ch>
+// Copyright 2020-2024 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -86,19 +86,13 @@ fn main() -> ah::Result<()> {
     let mut result = Ok(());
     if args.write {
         let (mut disktest, file) = new_disktest(&args, true, &abort)?;
-        result = match disktest.write(file, args.seek, args.max_bytes) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        };
+        result = disktest.write(file, args.seek, args.max_bytes).map(|_| ());
     }
 
     // Run verify-mode, if requested.
     if args.verify && result.is_ok() {
         let (mut disktest, file) = new_disktest(&args, false, &abort)?;
-        result = match disktest.verify(file, args.seek, args.max_bytes) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        };
+        result = disktest.verify(file, args.seek, args.max_bytes).map(|_| ());
     }
 
     if !args.user_seed && args.quiet < DisktestQuiet::NoInfo {
