@@ -180,6 +180,6 @@ The read data rates are similar, because the algorithm used is exactly the same.
 License
 =======
 
-Copyright (c) 2020-2023 Michael Büsch <m@bues.ch>
+Copyright (c) 2020-2024 Michael Büsch <m@bues.ch>
 
 Licensed under the terms of the GNU General Public License version 2, or (at your option) any later version.
