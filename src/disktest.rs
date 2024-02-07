@@ -197,6 +197,7 @@ impl Disktest {
     pub fn new(
         algorithm: DtStreamType,
         seed: Vec<u8>,
+        round_id: u64,
         invert_pattern: bool,
         nr_threads: usize,
         quiet_level: DisktestQuiet,
@@ -214,7 +215,14 @@ impl Disktest {
 
         let now = Instant::now();
         Disktest {
-            stream_agg: DtStreamAgg::new(algorithm, seed, invert_pattern, nr_threads, quiet_level),
+            stream_agg: DtStreamAgg::new(
+                algorithm,
+                seed,
+                round_id,
+                invert_pattern,
+                nr_threads,
+                quiet_level,
+            ),
             abort,
             log_count: 0,
             log_time: now,
@@ -590,6 +598,7 @@ mod tests {
         let mut dt = Disktest::new(
             algorithm,
             seed,
+            0,
             false,
             nr_threads,
             DisktestQuiet::Normal,

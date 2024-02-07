@@ -57,6 +57,7 @@ fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
 /// Create a new disktest core instance.
 fn new_disktest(
     args: &Args,
+    round_id: u64,
     write: bool,
     abort: &Arc<AtomicBool>,
 ) -> ah::Result<(Disktest, DisktestFile)> {
@@ -64,6 +65,7 @@ fn new_disktest(
         Disktest::new(
             args.algorithm,
             args.seed.as_bytes().to_vec(),
+            round_id,
             args.invert_pattern,
             args.threads,
             args.quiet,
@@ -82,17 +84,38 @@ fn main() -> ah::Result<()> {
         print_generated_seed(&args.seed, true);
     }
 
-    // Run write-mode, if requested.
     let mut result = Ok(());
-    if args.write {
-        let (mut disktest, file) = new_disktest(&args, true, &abort)?;
-        result = disktest.write(file, args.seek, args.max_bytes).map(|_| ());
-    }
+    for round in args.start_round..args.rounds {
+        if args.rounds > 1 {
+            println!(
+                "Round {} in range [{}, {}) ...",
+                round, args.start_round, args.rounds
+            );
+        }
 
-    // Run verify-mode, if requested.
-    if args.verify && result.is_ok() {
-        let (mut disktest, file) = new_disktest(&args, false, &abort)?;
-        result = disktest.verify(file, args.seek, args.max_bytes).map(|_| ());
+        let round_id = if args.write {
+            round
+        } else {
+            // In verify-only mode it doesn't make sense to change the key per round.
+            args.start_round
+        };
+
+        // Run write-mode, if requested.
+        result = Ok(());
+        if args.write {
+            let (mut disktest, file) = new_disktest(&args, round_id, true, &abort)?;
+            result = disktest.write(file, args.seek, args.max_bytes).map(|_| ());
+        }
+
+        // Run verify-mode, if requested.
+        if args.verify && result.is_ok() {
+            let (mut disktest, file) = new_disktest(&args, round_id, false, &abort)?;
+            result = disktest.verify(file, args.seek, args.max_bytes).map(|_| ());
+        }
+
+        if result.is_err() {
+            break;
+        }
     }
 
     if !args.user_seed && args.quiet < DisktestQuiet::NoInfo {

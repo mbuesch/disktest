@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2022 Michael Buesch <m@bues.ch>
+// Copyright 2020-2024 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -112,6 +112,21 @@ for performance. The number of threads must be equal during corresponding
 verify and write mode runs. Otherwise the verification will fail.
 ";
 
+const HELP_ROUNDS: &str = "\
+The number of rounds to execute the whole process.
+This normally defaults to 1 to only run the write and/or verify once.
+But you may specify more than one round to repeat write and/or verify
+multiple times.
+If --write mode is active, then different random data will be written
+on each round.
+The special value of 0 rounds will execute an infinite number of rounds.
+";
+
+const HELP_START_ROUND: &str = "\
+Start at the specified round index. (= Skip this many rounds).
+Defaults to the first round (0).
+";
+
 const HELP_QUIET: &str = "\
 Quiet level:
 0: Normal verboseness.
@@ -132,6 +147,8 @@ pub struct Args {
     pub user_seed: bool,
     pub invert_pattern: bool,
     pub threads: usize,
+    pub rounds: u64,
+    pub start_round: u64,
     pub quiet: DisktestQuiet,
 }
 
@@ -219,6 +236,23 @@ where
                 .help(HELP_THREADS),
         )
         .arg(
+            Arg::new("rounds")
+                .long("rounds")
+                .short('R')
+                .value_name("NUM")
+                .default_value("1")
+                .value_parser(value_parser!(u64))
+                .help(HELP_ROUNDS),
+        )
+        .arg(
+            Arg::new("start-round")
+                .long("start-round")
+                .value_name("IDX")
+                .default_value("0")
+                .value_parser(value_parser!(u64).range(0_u64..=u64::MAX - 1))
+                .help(HELP_START_ROUND),
+        )
+        .arg(
             Arg::new("quiet")
                 .long("quiet")
                 .short('q')
@@ -295,6 +329,15 @@ where
 
     let threads = *args.get_one::<u32>("threads").unwrap_or(&1) as usize;
 
+    let mut rounds = *args.get_one::<u64>("rounds").unwrap_or(&1);
+    if rounds == 0 {
+        rounds = u64::MAX;
+    }
+    let start_round = *args.get_one::<u64>("start-round").unwrap_or(&0);
+    if start_round >= rounds {
+        rounds = start_round + 1;
+    }
+
     Ok(Args {
         device,
         write,
@@ -306,6 +349,8 @@ where
         user_seed,
         invert_pattern,
         threads,
+        rounds,
+        start_round,
         quiet,
     })
 }

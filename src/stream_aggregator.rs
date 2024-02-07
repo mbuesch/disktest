@@ -75,6 +75,7 @@ impl DtStreamAgg {
     pub fn new(
         stype: DtStreamType,
         seed: Vec<u8>,
+        round_id: u64,
         invert_pattern: bool,
         num_threads: usize,
         quiet_level: DisktestQuiet,
@@ -90,6 +91,7 @@ impl DtStreamAgg {
                 seed.to_vec(),
                 invert_pattern,
                 i as u32,
+                round_id,
                 Rc::clone(&cache),
             );
             streams.push(stream);
@@ -223,6 +225,7 @@ mod tests {
         let mut agg = DtStreamAgg::new(
             algorithm,
             vec![1, 2, 3],
+            0,
             false,
             num_threads,
             DisktestQuiet::Normal,
@@ -298,6 +301,7 @@ mod tests {
             let mut a = DtStreamAgg::new(
                 algorithm,
                 vec![1, 2, 3],
+                0,
                 false,
                 num_threads,
                 DisktestQuiet::Normal,
@@ -307,6 +311,7 @@ mod tests {
             let mut b = DtStreamAgg::new(
                 algorithm,
                 vec![1, 2, 3],
+                0,
                 false,
                 num_threads,
                 DisktestQuiet::Normal,

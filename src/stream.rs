@@ -54,6 +54,7 @@ fn thread_worker(
     chunk_factor: usize,
     seed: Vec<u8>,
     thread_id: u32,
+    round_id: u64,
     mut cache_cons: BufCacheCons,
     byte_offset: u64,
     invert_pattern: bool,
@@ -64,7 +65,7 @@ fn thread_worker(
     tx: Sender<DtStreamChunk>,
 ) {
     // Calculate the per-thread-seed from the global seed.
-    let thread_seed = kdf(&seed, thread_id);
+    let thread_seed = kdf(&seed, thread_id, round_id);
     drop(seed);
 
     // Construct the generator algorithm.
@@ -127,6 +128,7 @@ pub struct DtStream {
     seed: Vec<u8>,
     invert_pattern: bool,
     thread_id: u32,
+    round_id: u64,
     rx: Option<Receiver<DtStreamChunk>>,
     cache: Rc<RefCell<BufCache>>,
     is_active: bool,
@@ -148,6 +150,7 @@ impl DtStream {
         seed: Vec<u8>,
         invert_pattern: bool,
         thread_id: u32,
+        round_id: u64,
         cache: Rc<RefCell<BufCache>>,
     ) -> DtStream {
         let abort = Arc::new(AtomicBool::new(false));
@@ -159,6 +162,7 @@ impl DtStream {
             seed,
             invert_pattern,
             thread_id,
+            round_id,
             rx: None,
             cache,
             is_active: false,
@@ -209,6 +213,7 @@ impl DtStream {
         let thread_chunk_factor = chunk_factor;
         let thread_seed = self.seed.to_vec();
         let thread_id = self.thread_id;
+        let thread_round_id = self.round_id;
         let thread_cache_cons = self.cache.borrow_mut().new_consumer(self.thread_id);
         let thread_byte_offset = byte_offset;
         let thread_invert_pattern = self.invert_pattern;
@@ -222,6 +227,7 @@ impl DtStream {
                 thread_chunk_factor,
                 thread_seed,
                 thread_id,
+                thread_round_id,
                 thread_cache_cons,
                 thread_byte_offset,
                 thread_invert_pattern,
@@ -330,7 +336,7 @@ mod tests {
     fn run_base_test(algorithm: DtStreamType) {
         println!("stream base test");
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut s = DtStream::new(algorithm, vec![1, 2, 3], false, 0, cache);
+        let mut s = DtStream::new(algorithm, vec![1, 2, 3], false, 0, 0, cache);
         s.activate(0, s.get_default_chunk_factor()).unwrap();
         assert!(s.is_active());
 
@@ -370,12 +376,12 @@ mod tests {
         println!("stream offset test");
         // a: start at chunk offset 0
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut a = DtStream::new(algorithm, vec![1, 2, 3], false, 0, cache);
+        let mut a = DtStream::new(algorithm, vec![1, 2, 3], false, 0, 0, cache);
         a.activate(0, a.get_default_chunk_factor()).unwrap();
 
         // b: start at chunk offset 1
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut b = DtStream::new(algorithm, vec![1, 2, 3], false, 0, cache);
+        let mut b = DtStream::new(algorithm, vec![1, 2, 3], false, 0, 0, cache);
         b.activate(
             a.get_chunk_size() as u64 * a.get_default_chunk_factor() as u64,
             a.get_default_chunk_factor(),
@@ -392,10 +398,10 @@ mod tests {
     fn run_invert_test(algorithm: DtStreamType) {
         println!("stream invert test");
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut a = DtStream::new(algorithm, vec![1, 2, 3], false, 0, cache);
+        let mut a = DtStream::new(algorithm, vec![1, 2, 3], false, 0, 0, cache);
         a.activate(0, a.get_default_chunk_factor()).unwrap();
         let cache = Rc::new(RefCell::new(BufCache::new(DisktestQuiet::Normal)));
-        let mut b = DtStream::new(algorithm, vec![1, 2, 3], true, 0, cache);
+        let mut b = DtStream::new(algorithm, vec![1, 2, 3], true, 0, 0, cache);
         b.activate(0, a.get_default_chunk_factor()).unwrap();
 
         let achunk = a.wait_chunk();
