@@ -88,8 +88,11 @@ fn main() -> ah::Result<()> {
     for round in args.start_round..args.rounds {
         if args.rounds > 1 {
             println!(
-                "Round {} in range [{}, {}) ...",
-                round, args.start_round, args.rounds
+                "{}Round {} in range [{}, {}) ...",
+                if round > args.start_round { "\n" } else { "" },
+                round,
+                args.start_round,
+                args.rounds
             );
         }
 
