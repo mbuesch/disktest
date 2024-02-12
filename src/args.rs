@@ -33,7 +33,7 @@ use std::path::PathBuf;
 const DEFAULT_GEN_SEED_LEN: usize = 40;
 
 const ABOUT: &str = "\
-Hard Disk (HDD), Solid State Disk (SSD), USB Stick, Memory Card (e.g. SD-Card) tester.
+Solid State Disk (SSD), Non-Volatile Memory Storage (NVMe), Hard Disk (HDD), USB Stick, SD-Card tester.
 
 This program can write a cryptographically secure pseudo random stream to a disk,
 read it back and verify it by comparing it to the expected stream.
