@@ -2,7 +2,7 @@
 //
 // disktest - Hard drive tester
 //
-// Copyright 2020-2023 Michael Buesch <m@bues.ch>
+// Copyright 2020-2024 Michael Buesch <m@bues.ch>
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -22,10 +22,38 @@
 use crate::generator::NextRandom;
 use crate::util::fold;
 use anyhow as ah;
-use crc::{crc64, Hasher64};
+use std::sync::OnceLock;
+
+const CRC64_ECMA_POLY: u64 = 0xC96C5795D7870F42;
+static CRC64_ECMA_LUT: OnceLock<[u64; 256]> = OnceLock::new();
+
+/// Generate CRC lookup table.
+fn crc64_gen_lut(p: u64) -> [u64; 256] {
+    let mut lut = [0_u64; 256];
+    for (i, item) in lut.iter_mut().enumerate() {
+        let mut d: u64 = i.try_into().unwrap();
+        for _ in 0..8 {
+            if d & 1 == 0 {
+                d >>= 1;
+            } else {
+                d = (d >> 1) ^ p;
+            }
+        }
+        *item = d;
+    }
+    lut
+}
+
+/// CRC64 step.
+#[inline(always)]
+fn crc64(lut: &[u64; 256], mut crc: u64, data: &[u8]) -> u64 {
+    for d in data {
+        crc = lut[((crc as u8) ^ *d) as usize] ^ (crc >> 8);
+    }
+    crc
+}
 
 pub struct GeneratorCrc {
-    crc: crc64::Digest,
     folded_seed: [u8; GeneratorCrc::FOLDED_SEED_SIZE],
     counter: u64,
 }
@@ -40,13 +68,12 @@ impl GeneratorCrc {
     const FOLDED_SEED_SIZE: usize = 64 / 8;
 
     pub fn new(seed: &[u8]) -> GeneratorCrc {
+        let _ = CRC64_ECMA_LUT.get_or_init(|| crc64_gen_lut(CRC64_ECMA_POLY));
         assert!(!seed.is_empty());
-        let crc = crc64::Digest::new(crc64::ECMA);
         let folded_seed = fold(seed, GeneratorCrc::FOLDED_SEED_SIZE)
             .try_into()
             .unwrap();
         GeneratorCrc {
-            crc,
             folded_seed,
             counter: 0,
         }
@@ -61,13 +88,15 @@ impl NextRandom for GeneratorCrc {
     fn next(&mut self, buf: &mut [u8], count: usize) {
         debug_assert!(buf.len() == GeneratorCrc::BASE_SIZE * count);
 
+        let lut = CRC64_ECMA_LUT.get().unwrap();
+
         for i in 0..count {
             let chunk_offs = i * GeneratorCrc::BASE_SIZE;
 
             // Initialize CRC based on the seed and current counter.
-            self.crc.reset();
-            self.crc.write(&self.folded_seed);
-            self.crc.write(&self.counter.to_le_bytes());
+            let mut crc = !0_u64;
+            crc = crc64(lut, crc, &self.folded_seed);
+            crc = crc64(lut, crc, &self.counter.to_le_bytes());
             self.counter += 1;
 
             // Fast inner loop:
@@ -75,15 +104,15 @@ impl NextRandom for GeneratorCrc {
             for offs in 0..(GeneratorCrc::BASE_SIZE / GeneratorCrc::CRC_SIZE) {
                 // Advance CRC state.
                 debug_assert!(offs <= 0xFF);
-                self.crc.write(&(offs as u8).to_le_bytes());
+                crc = crc64(lut, crc, &(offs as u8).to_le_bytes());
 
                 // Get CRC output.
-                let crc = self.crc.sum64().to_le_bytes();
+                let crc_bytes = (!crc).to_le_bytes();
 
                 // Write CRC output to output buffer.
                 let begin = chunk_offs + (offs * GeneratorCrc::CRC_SIZE);
                 let end = chunk_offs + ((offs + 1) * GeneratorCrc::CRC_SIZE);
-                buf[begin..end].copy_from_slice(&crc);
+                buf[begin..end].copy_from_slice(&crc_bytes);
             }
         }
     }
