@@ -189,7 +189,7 @@ impl Hhmmss for Duration {
         let rem = secs % (60 * 60);
         let m = rem / 60;
         let s = rem % 60;
-        format!("{}{:02}:{:02}:{:02}", lim, h, m, s)
+        format!("{}{:02}h:{:02}m:{:02}s", lim, h, m, s)
     }
 }
 
@@ -382,22 +382,22 @@ mod tests {
 
     #[test]
     fn test_hhmmss() {
-        assert_eq!(Duration::from_secs(0).hhmmss(), "00:00:00");
+        assert_eq!(Duration::from_secs(0).hhmmss(), "00h:00m:00s");
         assert_eq!(
             Duration::from_secs((2 * 60 * 60) + (3 * 60) + 4).hhmmss(),
-            "02:03:04"
+            "02h:03m:04s"
         );
         assert_eq!(
             Duration::from_secs((23 * 60 * 60) + (59 * 60) + 59).hhmmss(),
-            "23:59:59"
+            "23h:59m:59s"
         );
         assert_eq!(
             Duration::from_secs((99 * 60 * 60) + (59 * 60) + 59).hhmmss(),
-            "99:59:59"
+            "99h:59m:59s"
         );
         assert_eq!(
             Duration::from_secs((99 * 60 * 60) + (59 * 60) + 59 + 1).hhmmss(),
-            ">99:59:59"
+            ">99h:59m:59s"
         );
     }
 

@@ -23,6 +23,7 @@ use crate::rawio::{RawIo, RawIoResult, DEFAULT_SECTOR_SIZE};
 use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
 use crate::util::{prettybytes, Hhmmss};
 use anyhow as ah;
+use chrono::prelude::*;
 use movavg::MovAvg;
 use std::cmp::min;
 use std::path::{Path, PathBuf};
@@ -271,6 +272,8 @@ impl Disktest {
                 let expired = now.duration_since(self.log_time).as_secs() >= LOG_SEC_THRES;
 
                 if (expired && self.quiet_level == DisktestQuiet::Normal) || final_step {
+                    let tod = Local::now().format("%R");
+
                     let dur_elapsed = now - self.begin_time;
 
                     let rate = if final_step {
@@ -299,11 +302,12 @@ impl Disktest {
                     let suffix = if final_step { "." } else { " ..." };
 
                     println!(
-                        "{}{}{} ({}){}",
+                        "[{} / {}] {}{}{}{}",
+                        tod,
+                        dur_elapsed.hhmmss(),
                         prefix,
                         prettybytes(abs_processed, true, true, final_step),
                         rate_string,
-                        dur_elapsed.hhmmss(),
                         suffix
                     );
                     self.log_time = now;

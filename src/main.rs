@@ -33,6 +33,7 @@ mod util;
 use crate::seed::print_generated_seed;
 use anyhow as ah;
 use args::{parse_args, Args};
+use chrono::prelude::*;
 use disktest::{Disktest, DisktestFile, DisktestQuiet};
 use std::env::args_os;
 use std::sync::atomic::AtomicBool;
@@ -87,9 +88,11 @@ fn main() -> ah::Result<()> {
     let mut result = Ok(());
     for round in args.start_round..args.rounds {
         if args.rounds > 1 {
+            let tod = Local::now().format("%F %R");
             println!(
-                "{}Round {} in range [{}, {}) ...",
+                "{}[{}] Round {} in range [{}, {}) ...",
                 if round > args.start_round { "\n" } else { "" },
+                tod,
                 round,
                 args.start_round,
                 args.rounds
