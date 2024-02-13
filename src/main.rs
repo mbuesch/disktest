@@ -89,13 +89,18 @@ fn main() -> ah::Result<()> {
     for round in args.start_round..args.rounds {
         if args.rounds > 1 {
             let tod = Local::now().format("%F %R");
+            let end = if args.rounds == u64::MAX {
+                "inf]".to_string()
+            } else {
+                format!("{})", args.rounds)
+            };
             println!(
-                "{}[{}] Round {} in range [{}, {}) ...",
+                "{}[{}] Round {} in range [{}, {} ...",
                 if round > args.start_round { "\n" } else { "" },
                 tod,
                 round,
                 args.start_round,
-                args.rounds
+                end,
             );
         }
 
