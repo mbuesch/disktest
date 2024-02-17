@@ -36,13 +36,15 @@ lto             = "thin"
 opt-level       = 2
 
 [profile.release]
-lto             = "thin"
+lto             = "fat"
+codegen-units   = 1
 
 [profile.test]
 lto             = "thin"
 opt-level       = 2
 
 [profile.bench]
-lto             = "thin"
+lto             = "fat"
+codegen-units   = 1
 
 # vim: ts=4 sw=4 expandtab
