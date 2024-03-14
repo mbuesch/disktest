@@ -4,7 +4,7 @@ description     = "Tester for Solid State Disks, Non-Volatile Memory Storage, Ha
 version         = "1.13.0"
 homepage        = "https://bues.ch/h/disktest"
 repository      = "https://github.com/mbuesch/disktest"
-license         = "GPL-2.0-or-later"
+license         = "MIT OR Apache-2.0"
 readme          = "README.md"
 authors         = ["Michael Büsch <m@bues.ch>"]
 

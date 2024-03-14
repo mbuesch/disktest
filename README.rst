@@ -182,4 +182,4 @@ License
 
 Copyright (c) 2020-2024 Michael Büsch <m@bues.ch>
 
-Licensed under the terms of the GNU General Public License version 2, or (at your option) any later version.
+Licensed under the Apache License version 2.0 or the MIT license, at your option.
