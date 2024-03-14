@@ -1,7 +1,6 @@
 #!/bin/sh
 
 srcdir="$(realpath -e "$0" | xargs dirname)"
-
 srcdir="$srcdir/.."
 
 # Import the makerelease.lib
@@ -11,7 +10,13 @@ for path in $(echo "$PATH" | tr ':' ' '); do
 	[ -f "$MAKERELEASE_LIB" ] && break
 	MAKERELEASE_LIB="$path/makerelease.lib"
 done
-[ -f "$MAKERELEASE_LIB" ] && . "$MAKERELEASE_LIB" || die "makerelease.lib not found."
 
+[ -f "$MAKERELEASE_LIB" ] && . "$MAKERELEASE_LIB" || die "makerelease.lib not found."
+srcpackage=disktest-lib
+project=disktest-lib
+makerelease "$@"
+
+[ -f "$MAKERELEASE_LIB" ] && . "$MAKERELEASE_LIB" || die "makerelease.lib not found."
+srcpackage=disktest
 project=disktest
 makerelease "$@"
