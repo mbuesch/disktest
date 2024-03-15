@@ -9,13 +9,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 //
 
-use crate::disktest::{DisktestQuiet, DtStreamType};
-use crate::seed::gen_seed_string;
-use crate::util::parsebytes;
 use anyhow as ah;
 use clap::builder::ValueParser;
 use clap::error::ErrorKind::{DisplayHelp, DisplayVersion};
 use clap::{value_parser, Arg, ArgAction, Command};
+use disktest_lib::{gen_seed_string, parsebytes, DisktestQuiet, DtStreamType};
 use std::ffi::OsString;
 use std::path::PathBuf;
 

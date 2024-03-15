@@ -10,24 +10,15 @@
 //
 
 mod args;
-mod bufcache;
-mod disktest;
-mod generator;
-mod kdf;
-mod rawio;
-mod seed;
-mod stream;
-mod stream_aggregator;
-mod util;
 
-use crate::seed::print_generated_seed;
 use anyhow as ah;
 use args::{parse_args, Args};
 use chrono::prelude::*;
-use disktest::{Disktest, DisktestFile, DisktestQuiet};
-use std::env::args_os;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use disktest_lib::{print_generated_seed, Disktest, DisktestFile, DisktestQuiet};
+use std::{
+    env::args_os,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 /// Install abort signal handlers and return
 /// the abort-flag that is written to true by these handlers.

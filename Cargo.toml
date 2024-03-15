@@ -5,19 +5,22 @@ members = [ "disktest", "disktest-lib" ]
 resolver = "2"
 
 [profile.dev]
-lto             = "thin"
-opt-level       = 2
+lto = "thin"
+opt-level = 2
 
 [profile.release]
-lto             = "fat"
-codegen-units   = 1
+lto = "fat"
+codegen-units = 1
 
 [profile.test]
-lto             = "thin"
-opt-level       = 2
+lto = "thin"
+opt-level = 2
 
 [profile.bench]
-lto             = "fat"
-codegen-units   = 1
+lto = "fat"
+codegen-units = 1
+
+[patch.crates-io]
+disktest-lib = { path = "./disktest-lib" }
 
 # vim: ts=4 sw=4 expandtab
