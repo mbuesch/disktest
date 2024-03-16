@@ -22,18 +22,6 @@ pub fn gen_seed_string(length: usize) -> String {
         .collect()
 }
 
-/// Print the generated seed to the console.
-pub fn print_generated_seed(seed: &str, verbose: bool) {
-    if verbose {
-        println!(
-            "\nThe generated --seed is:\n    {}\nUse this seed for subsequent --verify.\n",
-            seed
-        );
-    } else {
-        println!("Generated --seed {}\n", seed);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -44,13 +32,6 @@ mod tests {
         let seed = gen_seed_string(42);
         assert_eq!(seed.len(), 42);
         assert_eq!(seed.chars().count(), 42);
-    }
-
-    #[test]
-    fn test_print() {
-        // Just check if it doesn't panic.
-        print_generated_seed("foo", false);
-        print_generated_seed("bar", true);
     }
 }
 

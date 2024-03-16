@@ -20,7 +20,7 @@ mod stream_aggregator;
 mod util;
 
 pub use disktest::{Disktest, DisktestFile, DisktestQuiet, DtStreamType};
-pub use seed::{gen_seed_string, print_generated_seed};
+pub use seed::gen_seed_string;
 pub use util::parsebytes;
 
 // vim: ts=4 sw=4 expandtab

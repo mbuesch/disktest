@@ -14,7 +14,7 @@ mod args;
 use anyhow as ah;
 use args::{parse_args, Args};
 use chrono::prelude::*;
-use disktest_lib::{print_generated_seed, Disktest, DisktestFile, DisktestQuiet};
+use disktest_lib::{Disktest, DisktestFile, DisktestQuiet};
 use std::{
     env::args_os,
     sync::{atomic::AtomicBool, Arc},
@@ -34,6 +34,18 @@ fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
     }
 
     Ok(abort)
+}
+
+/// Print the generated seed to the console.
+pub fn print_generated_seed(seed: &str, verbose: bool) {
+    if verbose {
+        println!(
+            "\nThe generated --seed is:\n    {}\nUse this seed for subsequent --verify.\n",
+            seed
+        );
+    } else {
+        println!("Generated --seed {}\n", seed);
+    }
 }
 
 /// Create a new disktest core instance.
