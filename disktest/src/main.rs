@@ -39,7 +39,7 @@ fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
 }
 
 /// Print the generated seed to the console.
-pub fn print_generated_seed(seed: &str, verbose: bool) {
+fn print_generated_seed(seed: &str, verbose: bool) {
     if verbose {
         println!(
             "\nThe generated --seed is:\n    {}\nUse this seed for subsequent --verify.\n",
