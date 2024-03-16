@@ -192,6 +192,24 @@ impl Disktest {
     pub const UNLIMITED: u64 = u64::MAX;
 
     /// Create a new Disktest instance.
+    ///
+    /// Parameters:
+    ///
+    /// - algorithm: Select the algorithm to generate the random data stream
+    ///              that is written to disk.
+    ///              If unsure, use `Default::default()`.
+    /// - seed: The seed for the random data stream generator.
+    /// - round_id: The disk test round. Every round gets a unique data stream.
+    ///             If unsure, use `0` (first round).
+    /// - invert_pattern: Bitwise invert the random data stream.
+    ///                   If unsure, use `false` (don't invert).
+    /// - nr_threads: The number of threads to spawn when generating the random data stream.
+    ///               The special value `0` means: Use all CPUs available in the system.
+    ///               If unsure, use `1` (One CPU).
+    /// - quiet_level: The console verbosity of the Disktest code. See [DisktestQuiet].
+    /// - abort: If this optional flag is set to `true` (e.g. by another thread) the Disktest
+    ///          process will abort as soon as possible.
+    ///          If unsure, use `None`.
     pub fn new(
         algorithm: DtStreamType,
         seed: &[u8],

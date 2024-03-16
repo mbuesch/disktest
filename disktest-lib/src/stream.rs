@@ -23,11 +23,16 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
 /// Random data stream algorithm type.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum DtStreamType {
+    /// Very weak version of the ChaCha random number generator.
     ChaCha8,
+    /// Weak version of the ChaCha random number generator.
     ChaCha12,
+    /// Cryptographically secure version of the ChaCha random number generator.
+    #[default]
     ChaCha20,
+    /// Very fast by cryptographically unsecure CRC based random number generator.
     Crc,
 }
 
