@@ -13,6 +13,7 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
 /// Generate a new alphanumeric truly random seed.
+///
 /// length: The number of ASCII characters to return.
 pub fn gen_seed_string(length: usize) -> String {
     let rng = thread_rng();

@@ -118,6 +118,7 @@ fn try_one_parsebytes(s: &str, suffix: &str, factor: u64) -> ah::Result<u64> {
     }
 }
 
+/// Parse a string describing a byte size into a number.
 pub fn parsebytes(s: &str) -> ah::Result<u64> {
     let s = s.trim().to_lowercase();
 

@@ -22,7 +22,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
-/// Stream algorithm type.
+/// Random data stream algorithm type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DtStreamType {
     ChaCha8,

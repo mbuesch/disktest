@@ -27,14 +27,20 @@ pub use crate::stream_aggregator::DtStreamType;
 const LOG_BYTE_THRES: u64 = 1024 * 1024;
 const LOG_SEC_THRES: u64 = 10;
 
+/// Disktest console print verbosity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DisktestQuiet {
+    /// Print all messages to the console.
     Normal = 0,
+    /// Be less verbose when printing to the console.
     Reduced = 1,
+    /// Only print warnings to the console.
     NoInfo = 2,
+    /// Do not print anything to the console.
     NoWarn = 3,
 }
 
+/// Handle for a device or file to write to and/or read from.
 pub struct DisktestFile {
     path: PathBuf,
     read: bool,
@@ -168,6 +174,7 @@ impl Drop for DisktestFile {
     }
 }
 
+/// Disktest core.
 pub struct Disktest {
     stream_agg: DtStreamAgg,
     abort: Option<Arc<AtomicBool>>,
