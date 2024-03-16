@@ -9,11 +9,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 //
 
+#![forbid(unsafe_code)]
+
 mod bufcache;
 mod disktest;
 mod generator;
 mod kdf;
-mod rawio;
 mod seed;
 mod stream;
 mod stream_aggregator;
