@@ -12,11 +12,13 @@ for path in $(echo "$PATH" | tr ':' ' '); do
 done
 
 [ -f "$MAKERELEASE_LIB" ] && . "$MAKERELEASE_LIB" || die "makerelease.lib not found."
-srcpackage=disktest-lib
 project=disktest-lib
+conf_package=disktest-lib
+conf_notag=1
 makerelease "$@"
 
 [ -f "$MAKERELEASE_LIB" ] && . "$MAKERELEASE_LIB" || die "makerelease.lib not found."
-srcpackage=disktest
 project=disktest
+conf_package=disktest
+conf_notag=0
 makerelease "$@"
