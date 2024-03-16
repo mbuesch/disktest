@@ -194,7 +194,7 @@ impl Disktest {
     /// Create a new Disktest instance.
     pub fn new(
         algorithm: DtStreamType,
-        seed: Vec<u8>,
+        seed: &[u8],
         round_id: u64,
         invert_pattern: bool,
         nr_threads: usize,
@@ -598,7 +598,7 @@ mod tests {
         let nr_threads = 2;
         let mut dt = Disktest::new(
             algorithm,
-            seed,
+            &seed,
             0,
             false,
             nr_threads,

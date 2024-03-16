@@ -60,7 +60,7 @@ fn new_disktest(
     Ok((
         Disktest::new(
             args.algorithm,
-            args.seed.as_bytes().to_vec(),
+            args.seed.as_bytes(),
             round_id,
             args.invert_pattern,
             args.threads,

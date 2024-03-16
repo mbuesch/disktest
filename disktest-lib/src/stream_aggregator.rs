@@ -64,7 +64,7 @@ pub struct DtStreamAgg {
 impl DtStreamAgg {
     pub fn new(
         stype: DtStreamType,
-        seed: Vec<u8>,
+        seed: &[u8],
         round_id: u64,
         invert_pattern: bool,
         num_threads: usize,
@@ -214,7 +214,7 @@ mod tests {
         let num_threads = 2;
         let mut agg = DtStreamAgg::new(
             algorithm,
-            vec![1, 2, 3],
+            &[1, 2, 3],
             0,
             false,
             num_threads,
@@ -290,7 +290,7 @@ mod tests {
         for offset in 0..5 {
             let mut a = DtStreamAgg::new(
                 algorithm,
-                vec![1, 2, 3],
+                &[1, 2, 3],
                 0,
                 false,
                 num_threads,
@@ -300,7 +300,7 @@ mod tests {
 
             let mut b = DtStreamAgg::new(
                 algorithm,
-                vec![1, 2, 3],
+                &[1, 2, 3],
                 0,
                 false,
                 num_threads,
