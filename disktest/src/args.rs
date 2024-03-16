@@ -346,7 +346,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::disktest::Disktest;
+    use disktest_lib::Disktest;
 
     #[test]
     fn test_parse_args() {
