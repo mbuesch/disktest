@@ -15,7 +15,7 @@ edition = "2021"
 anyhow = "1"
 chrono = "0.4"
 clap = "4"
-disktest-lib = "1.13"
+disktest-lib = "1"
 signal-hook = "0.3"
 
 # vim: ts=4 sw=4 expandtab
