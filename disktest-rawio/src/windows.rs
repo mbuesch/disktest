@@ -86,6 +86,13 @@ impl RawIoWindows {
             OPEN_EXISTING
         };
 
+        // Open the device or file.
+        //
+        // SAFETY: Opening is safe, because:
+        // - The passed path is a valid C string with NUL termination.
+        // - All buffers outlive the use.
+        // - There are no side effects that affect safety.
+        // - The returned handle is checked and not used, if it is invalid.
         let handle = unsafe {
             CreateFileA(
                 cpath.as_ptr(),
@@ -106,6 +113,13 @@ impl RawIoWindows {
         };
 
         let volume_locked = if is_raw {
+            // Lock the volume to get exclusive access.
+            //
+            // SAFETY: Volume locking is safe, because:
+            // - The handle is valid (checked above).
+            // - The DWORD holding the result is initialized memory.
+            // - All buffers outlive the use.
+            // - There are no side effects that affect safety.
             let mut result: DWORD = Default::default();
             let ok = unsafe {
                 DeviceIoControl(
@@ -168,6 +182,9 @@ impl RawIoWindows {
     }
 
     fn get_last_error() -> u32 {
+        // SAFETY: GetLastError() is thread safe.
+        // Its internal state is managed per-thread.
+        // There are no side effects that affect safety.
         unsafe { GetLastError() as _ }
     }
 
@@ -178,6 +195,12 @@ impl RawIoWindows {
             return "Success".to_string();
         }
 
+        // SAFETY: The FormatMessageW() call is safe, because:
+        // - The passed buffer pointer points to valid and initialized memory.
+        // - The passed buffer length is not bigger than the buffer's size.
+        // - All buffers outlive the use.
+        // - The flags do not enable buffer allocation.
+        // - There are no side effects that affect safety.
         let mut msg: [wchar_t; 512] = [Default::default(); 512];
         let count = unsafe {
             FormatMessageW(
@@ -186,7 +209,7 @@ impl RawIoWindows {
                 code,
                 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT) as _,
                 msg.as_mut_ptr() as _,
-                (msg.len() - 1) as _,
+                (msg.len() - 1) as _, // Minus one should not be needed. Do it anyway.
                 null_mut(),
             )
         };
@@ -206,6 +229,14 @@ impl RawIoWindows {
                 return Err(ah::format_err!("File handle is invalid."));
             }
 
+            // Get the disk geometry information.
+            //
+            // SAFETY: This DeviceIoControl() is safe, because:
+            // - The handle is valid (checked above).
+            // - The DISK_GEOMETRY structure outlives the call and is initialized.
+            // - The result DWORD outlives the call and is initialized.
+            // - All buffers outlive the use.
+            // - There are no side effects that affect safety.
             let mut dg: DISK_GEOMETRY = Default::default();
             let mut result: DWORD = Default::default();
             let ok = unsafe {
@@ -227,6 +258,8 @@ impl RawIoWindows {
                     Self::get_last_error_string(None)
                 ));
             }
+            // SAFETY: Reading Cylinders is safe.
+            // The memory is properly initialized.
             self.disk_size = dg.BytesPerSector as u64
                 * dg.SectorsPerTrack as u64
                 * dg.TracksPerCylinder as u64
@@ -255,6 +288,12 @@ impl RawIoOsIntf for RawIoWindows {
 
         // Open the file with FILE_FLAG_NO_BUFFERING.
         // That drops all caches.
+        //
+        // SAFETY: This open is the same as the initial CreateFileA()
+        // but with an additional FILE_FLAG_NO_BUFFERING.
+        // - The passed path is a valid C string with NUL termination.
+        // - There are no side effects that affect safety.
+        // - The returned handle is checked and not used, if it is invalid.
         let handle = unsafe {
             CreateFileA(
                 self.cpath.as_ptr(),
@@ -273,6 +312,9 @@ impl RawIoOsIntf for RawIoWindows {
                 Self::get_last_error_string(None)
             ))
         } else {
+            // SAFETY: CloseHandle() is safe, because:
+            // - The handle is valid (checked above).
+            // - There are no side effects that affect safety.
             let ok = unsafe { CloseHandle(handle) };
             if ok == 0 {
                 Err(ah::format_err!(
@@ -295,6 +337,12 @@ impl RawIoOsIntf for RawIoWindows {
 
         // Unlock the volume.
         if self.volume_locked {
+            // SAFETY: Volume unlocking is safe, because:
+            // - Unlocking is only performed, if the volume is locked.
+            // - The handle is valid (checked above).
+            // - The DWORD holding the result is initialized memory.
+            // - All buffers outlive the use.
+            // - There are no side effects that affect safety.
             let mut result: DWORD = Default::default();
             let ok = unsafe {
                 DeviceIoControl(
@@ -318,6 +366,11 @@ impl RawIoOsIntf for RawIoWindows {
         }
 
         // Close the file.
+        //
+        // SAFETY: CloseHandle() is safe, because:
+        // - The handle is valid (checked above).
+        // - self.handle is set to invalid after closing.
+        // - There are no side effects that affect safety.
         let ok = unsafe { CloseHandle(self.handle) };
         if ok == 0 {
             return Err(ah::format_err!(
@@ -338,6 +391,11 @@ impl RawIoOsIntf for RawIoWindows {
             return Ok(());
         }
 
+        // Synchronize to disk.
+        //
+        // SAFETY: FlushFileBuffers() is safe, because:
+        // - The handle is valid (checked above).
+        // - There are no side effects that affect safety.
         let ok = unsafe { FlushFileBuffers(self.handle) };
 
         if ok == 0 {
@@ -362,6 +420,9 @@ impl RawIoOsIntf for RawIoWindows {
         }
 
         self.seek(size)?;
+        // SAFETY: SetEndOfFile() is safe, because:
+        // - The handle is valid (checked above).
+        // - There are no side effects that affect safety.
         let ok = unsafe { SetEndOfFile(self.handle) };
 
         if ok == 0 {
@@ -382,7 +443,14 @@ impl RawIoOsIntf for RawIoWindows {
         let mut off_li: LARGE_INTEGER = Default::default();
         assert!(offset <= i64::MAX as u64);
         let ok = unsafe {
+            // SAFETY: The LARGE_INTEGER is properly allocated,
+            // correctly sized and outlives the use. The offset value
+            // range is checked above.
             *off_li.QuadPart_mut() = offset as i64;
+
+            // SAFETY: SetFilePointerEx() is safe, because:
+            // - The handle is valid (checked above).
+            // - There are no side effects that affect safety.
             SetFilePointerEx(self.handle, off_li, null_mut(), FILE_BEGIN)
         };
         if ok == 0 {
@@ -408,6 +476,12 @@ impl RawIoOsIntf for RawIoWindows {
             return Ok(RawIoResult::Ok(0));
         }
 
+        // SAFETY: The ReadFile() call is safe, because:
+        // - The passed buffer pointer points to valid and initialized memory.
+        // - The passed buffer length is not bigger than the buffer's size.
+        // - The passed read_count points to valid and initialized memory.
+        // - All buffers outlive the use.
+        // - There are no side effects that affect safety.
         let mut read_count: DWORD = Default::default();
         let ok = unsafe {
             ReadFile(
@@ -444,6 +518,12 @@ impl RawIoOsIntf for RawIoWindows {
             return Ok(RawIoResult::Ok(0));
         }
 
+        // SAFETY: The WriteFile() call is safe, because:
+        // - The passed buffer pointer points to valid and initialized memory.
+        // - The passed buffer length is not bigger than the buffer's size.
+        // - The passed write_count points to valid and initialized memory.
+        // - All buffers outlive the use.
+        // - There are no side effects that affect safety.
         let mut write_count: DWORD = Default::default();
         let ok = unsafe {
             WriteFile(

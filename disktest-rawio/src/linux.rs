@@ -85,6 +85,10 @@ impl RawIoLinux {
                 return Err(ah::format_err!("No file object"));
             };
 
+            // SAFETY: The ioctl call is safe, because:
+            // - The raw file descriptor is valid. (Closing sets self.file to None).
+            // - sector_size points to a valid and initialized c_int.
+            // - The ioctl only fetches the sector size and has no other side effects.
             let mut sector_size: c_int = 0;
             let res = unsafe {
                 libc::ioctl(
@@ -136,6 +140,10 @@ impl RawIoOsIntf for RawIoLinux {
         }
 
         // Try FADV_DONTNEED to drop caches.
+        //
+        // SAFETY: The ioctl call is safe, because:
+        // - The raw file descriptor is valid. (Closing sets self.file to None).
+        // - fadvise DONTNEED has no safety relevant side effects.
         let ret = unsafe {
             libc::posix_fadvise(
                 file.as_raw_fd(),
