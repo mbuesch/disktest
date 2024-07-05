@@ -1,20 +1,20 @@
 [package]
 name = "disktest-rawio"
-description = "Raw disk I/O for the disktest crate"
 version = "1.0.0"
-homepage = "https://bues.ch/h/disktest"
-repository = "https://github.com/mbuesch/disktest"
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-authors = ["Michael Büsch <m@bues.ch>"]
-categories = ["command-line-utilities", "filesystem", "hardware-support"]
-keywords = ["disk", "HDD", "SSD", "flash", "SD-card"]
-edition = "2021"
+description = "Raw disk I/O for the disktest crate"
+homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+authors = { workspace = true }
+categories = { workspace = true }
+keywords = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-anyhow = "1"
-libc = "0.2"
+anyhow = { workspace = true }
+libc = { workspace = true }
 
 [target.'cfg(target_os="windows")'.dependencies]
-regex = "1"
-winapi = { version = "0.3", features = ["std", "impl-default", "minwindef", "ntdef", "winerror", "errhandlingapi", "fileapi", "handleapi", "ioapiset", "winbase", "winnt", "winioctl"] }
+regex = { workspace = true }
+winapi = { workspace = true }

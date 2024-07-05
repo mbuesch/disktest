@@ -1,21 +1,21 @@
 [package]
 name = "disktest"
-description = "Tester for Solid State Disks, Non-Volatile Memory Storage, Hard Disks, USB Sticks, SD-Cards, etc.."
 version = "1.14.0"
-homepage = "https://bues.ch/h/disktest"
-repository = "https://github.com/mbuesch/disktest"
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-authors = ["Michael Büsch <m@bues.ch>"]
-categories = ["command-line-utilities", "filesystem", "hardware-support"]
-keywords = ["disk", "HDD", "SSD", "flash", "SD-card"]
-edition = "2021"
+description = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+authors = { workspace = true }
+categories = { workspace = true }
+keywords = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
-anyhow = "1"
-chrono = "0.4"
-clap = "4"
-disktest-lib = "1"
-signal-hook = "0.3"
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+disktest-lib = { workspace = true }
+signal-hook = { workspace = true }
 
 # vim: ts=4 sw=4 expandtab
