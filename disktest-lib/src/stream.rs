@@ -39,6 +39,7 @@ pub enum DtStreamType {
 /// Data chunk that contains the computed PRNG data.
 pub struct DtStreamChunk {
     pub data: Option<Vec<u8>>,
+    #[allow(dead_code)] // used in test only.
     pub index: u8,
 }
 
