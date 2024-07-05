@@ -2,10 +2,10 @@
 name = "disktest-rawio"
 version = "1.0.0"
 description = "Raw disk I/O for the disktest crate"
+readme = "README.md"
 homepage = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-readme = { workspace = true }
 authors = { workspace = true }
 categories = { workspace = true }
 keywords = { workspace = true }
