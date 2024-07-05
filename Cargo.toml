@@ -27,7 +27,7 @@ regex = "1"
 ring = "0.17"
 signal-hook = "0.3"
 tempfile = "3"
-winapi = { version = "0.3", features = ["std", "impl-default", "minwindef", "ntdef", "winerror", "errhandlingapi", "fileapi", "handleapi", "ioapiset", "winbase", "winnt", "winioctl"] }
+winapi = "0.3"
 
 disktest-lib = { version = "1", path = "./disktest-lib" }
 disktest-rawio = { version = "1", path = "./disktest-rawio" }
