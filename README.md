@@ -97,7 +97,7 @@ Therefore, the `\\\\.\X:` (where X is the drive letter) notation is preferred.
 
 # Dependencies
 
-- [Rust 1.65.0](https://www.rust-lang.org/) or later.
+- [Rust 1.75.0](https://www.rust-lang.org/) or later.
 - Crate dependencies will automatically be downloaded by cargo.
 
 
