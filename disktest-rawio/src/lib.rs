@@ -9,10 +9,17 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 //
 
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "windows")))]
+std::compile_error!(
+    "Your operating system is not supported, yet. \
+     Please open an issue on GitHub: \
+     https://github.com/mbuesch/disktest/issues"
+);
+
 use anyhow as ah;
 use std::path::Path;
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod linux;
 
 #[cfg(target_os = "windows")]
@@ -48,7 +55,7 @@ pub struct RawIo {
 impl RawIo {
     /// Open a file or device.
     pub fn new(path: &Path, create: bool, read: bool, write: bool) -> ah::Result<Self> {
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         let os = Box::new(linux::RawIoLinux::new(path, create, read, write)?);
 
         #[cfg(target_os = "windows")]
