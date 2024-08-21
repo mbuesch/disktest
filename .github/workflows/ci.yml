@@ -10,15 +10,22 @@ env:
 jobs:
   build_and_test:
     name: Build and test
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         toolchain:
-          - 1.75.0
+          - 1.75.0 # MSRV
+          - 1.80.0
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add clippy
       - run: cargo build --verbose
+      - run: cargo clippy -- --deny warnings
+      - run: cargo clippy --tests -- --deny warnings
       - run: cargo test --verbose
 
 # vim: ts=2 sw=2 expandtab
