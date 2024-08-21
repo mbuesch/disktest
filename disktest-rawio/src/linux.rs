@@ -11,13 +11,20 @@
 
 use super::{RawIoOsIntf, RawIoResult};
 use anyhow as ah;
-use libc::{c_int, off_t, POSIX_FADV_DONTNEED, S_IFBLK, S_IFCHR, S_IFMT};
+use libc::{c_int, off_t, POSIX_FADV_DONTNEED};
 use std::{
     fs::{metadata, File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
     os::unix::{fs::MetadataExt as _, io::AsRawFd as _},
     path::{Path, PathBuf},
 };
+
+#[allow(clippy::unnecessary_cast)]
+const S_IFBLK: u32 = libc::S_IFBLK as u32;
+#[allow(clippy::unnecessary_cast)]
+const S_IFCHR: u32 = libc::S_IFCHR as u32;
+#[allow(clippy::unnecessary_cast)]
+const S_IFMT: u32 = libc::S_IFMT as u32;
 
 /// Raw device I/O for Linux OS.
 pub struct RawIoLinux {
