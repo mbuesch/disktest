@@ -12,6 +12,11 @@ for path in $(echo "$PATH" | tr ':' ' '); do
 done
 [ -f "$MAKERELEASE_LIB" ] && . "$MAKERELEASE_LIB" || die "makerelease.lib not found."
 
-project=disktest-rawio
-conf_package=disktest-rawio
+hook_get_version()
+{
+	version="$(cargo_local_pkg_version disktest)"
+}
+
+project=disktest
+conf_upload_packages="disktest-rawio disktest-lib disktest"
 makerelease "$@"
