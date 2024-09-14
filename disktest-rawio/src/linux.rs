@@ -92,11 +92,11 @@ impl RawIoLinux {
                 return Err(ah::format_err!("No file object"));
             };
 
+            let mut sector_size: c_int = 0;
             // SAFETY: The ioctl call is safe, because:
             // - The raw file descriptor is valid. (Closing sets self.file to None).
             // - sector_size points to a valid and initialized c_int.
             // - The ioctl only fetches the sector size and has no other side effects.
-            let mut sector_size: c_int = 0;
             let res = unsafe {
                 libc::ioctl(
                     file.as_raw_fd(),
