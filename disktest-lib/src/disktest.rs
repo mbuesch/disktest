@@ -365,13 +365,9 @@ impl Disktest {
             );
         }
 
-        let res = match self
+        let res = self
             .stream_agg
-            .activate(seek, sector_size.unwrap_or(DEFAULT_SECTOR_SIZE))
-        {
-            Ok(res) => res,
-            Err(e) => return Err(e),
-        };
+            .activate(seek, sector_size.unwrap_or(DEFAULT_SECTOR_SIZE))?;
 
         if let Err(e) = file.seek(res.byte_offset) {
             return Err(ah::format_err!(
