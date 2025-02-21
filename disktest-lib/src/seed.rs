@@ -9,14 +9,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 //
 
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::distr::Alphanumeric;
+use rand::Rng;
 
 /// Generate a new alphanumeric truly random seed.
 ///
 /// length: The number of ASCII characters to return.
 pub fn gen_seed_string(length: usize) -> String {
-    let rng = thread_rng();
+    let rng = rand::rng();
     rng.sample_iter(Alphanumeric)
         .take(length)
         .map(char::from)
