@@ -370,11 +370,7 @@ impl Disktest {
             .activate(seek, sector_size.unwrap_or(DEFAULT_SECTOR_SIZE))?;
 
         if let Err(e) = file.seek(res.byte_offset) {
-            return Err(ah::format_err!(
-                "File seek to {} failed: {}",
-                seek,
-                e.to_string()
-            ));
+            return Err(ah::format_err!("File seek to {seek} failed: {e}"));
         }
 
         if let Some(sector_size) = sector_size.as_ref() {
