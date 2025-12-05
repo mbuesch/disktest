@@ -1,10 +1,14 @@
-name: Cargo Build & Test
+name: Build, Test, and Release
 
 on:
-  push:
+  workflow_dispatch:
   pull_request:
+  push:
 
-env: 
+permissions:
+  contents: write
+
+env:
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -40,5 +44,75 @@ jobs:
       - run: cargo clippy -- --deny warnings
       - run: cargo clippy --tests -- --deny warnings
       - run: cargo test --verbose
+
+  release:
+    name: Build Release Binaries and Upload Artifacts
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            use_cross: true
+            ext: ""
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            use_cross: true
+            ext: ""
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            use_cross: true
+            ext: ""
+#         - os: macos-latest
+#           target: aarch64-apple-darwin
+#           use_cross: false
+#           ext: ""
+#         - os: macos-latest
+#           target: x86_64-apple-darwin
+#           use_cross: false
+#           ext: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            use_cross: false
+            ext: ".exe"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross
+
+      - name: Build release binary with cross
+        if: matrix.use_cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build release binary with cargo
+        if: ${{ !matrix.use_cross }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload build as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: disktest-${{ matrix.target }}${{ matrix.ext }}
+          path: target/${{ matrix.target }}/release/disktest${{ matrix.ext }}
+          if-no-files-found: error
+
+      - name: Rename artifact
+        shell: bash
+        run: mv target/${{ matrix.target }}/release/disktest${{ matrix.ext }} disktest-${{ matrix.target }}${{ matrix.ext }}
+
+      - name: Attach artifacts to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: disktest-${{ matrix.target }}${{ matrix.ext }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
 # vim: ts=2 sw=2 expandtab
