@@ -79,16 +79,17 @@ fn thread_worker(
         return;
     }
 
+    let chunk_size = generator.get_base_size() * chunk_factor;
+
     // Run the generator work loop.
     let mut index = 0;
     let mut cur_level = level.load(Ordering::Relaxed);
     while !abort.load(Ordering::SeqCst) {
         if cur_level < DtStream::MAX_THRES {
             // Get the next chunk from the generator.
-            let size = generator.get_base_size() * chunk_factor;
-            let mut data = cache_cons.pull(size);
+            let mut data = cache_cons.pull(chunk_size);
             generator.next(&mut data, chunk_factor);
-            debug_assert_eq!(data.len(), size);
+            debug_assert_eq!(data.len(), chunk_size);
 
             // Invert the bit pattern, if requested.
             if invert_pattern {
