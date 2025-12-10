@@ -1,4 +1,4 @@
-# disktest - Tester for Solid State Disk (SSD), Non-Volatile Memory Storage (NVMe), Hard Disk (HDD), USB Stick, SD-Card, etc...
+# disktest - Tester for Solid State Disks (SSDs), Non-Volatile Memory Storage (NVMe), Hard Disks (HDDs), USB Sticks, SD-Cards, etc.
 
 [Homepage](https://bues.ch/h/disktest)
 
@@ -9,7 +9,7 @@
 [crates.io site](https://crates.io/crates/disktest-lib)
 
 
-This is the raw-I/O library crate for the
+This is the raw I/O library crate for the
 [disktest](https://crates.io/crates/disktest)
 application.
 
@@ -20,6 +20,6 @@ crate for further information and documentation.
 
 # License
 
-Copyright (c) 2020-2024 Michael Büsch <m@bues.ch>
+Copyright (c) 2020-2025 Michael Büsch <m@bues.ch> and contributors
 
 Licensed under the Apache License version 2.0 or the MIT license, at your option.
