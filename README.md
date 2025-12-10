@@ -168,6 +168,6 @@ The read data rates are similar, because the algorithm used is exactly the same.
 
 # License
 
-Copyright (c) 2020-2024 Michael Büsch <m@bues.ch>
+Copyright (c) 2020-2025 Michael Büsch <m@bues.ch> and contributors
 
 Licensed under the Apache License version 2.0 or the MIT license, at your option.
