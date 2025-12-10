@@ -35,18 +35,24 @@ disktest-rawio = { version = "1", path = "./disktest-rawio" }
 
 [profile.dev]
 lto = "thin"
+panic = "abort"
+debug = "limited"
 opt-level = 2
 
 [profile.release]
 lto = "fat"
+panic = "abort"
+strip = "symbols"
 codegen-units = 1
 
 [profile.test]
 lto = "thin"
+debug = "limited"
 opt-level = 2
 
 [profile.bench]
 lto = "fat"
+strip = "symbols"
 codegen-units = 1
 
 # vim: ts=4 sw=4 expandtab
