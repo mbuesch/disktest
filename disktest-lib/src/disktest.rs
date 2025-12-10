@@ -13,7 +13,7 @@ use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
 use crate::util::{prettybytes, Hhmmss};
 use anyhow as ah;
 use chrono::prelude::*;
-use disktest_rawio::{RawIo, RawIoResult, DEFAULT_SECTOR_SIZE};
+use disktest_rawio::{RawIo, RawIoOsIntf, RawIoResult, DEFAULT_SECTOR_SIZE};
 use movavg::MovAvg;
 use std::cmp::min;
 use std::path::{Path, PathBuf};

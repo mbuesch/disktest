@@ -38,44 +38,6 @@ pub struct RawIoLinux {
 }
 
 impl RawIoLinux {
-    pub fn new(path: &Path, mut create: bool, read: bool, write: bool) -> ah::Result<Self> {
-        if path.starts_with("/dev/") {
-            // Do not create dev nodes by accident.
-            // This check is not meant to catch all possible cases,
-            // but only the common ones.
-            create = false;
-        }
-
-        let file = match OpenOptions::new()
-            .create(create)
-            .read(read)
-            .write(write)
-            .open(path)
-        {
-            Ok(f) => f,
-            Err(e) => {
-                return Err(ah::format_err!("Failed to open file {:?}: {}", path, e));
-            }
-        };
-
-        let mut self_ = Self {
-            path: path.into(),
-            file: Some(file),
-            read_mode: read,
-            write_mode: write,
-            is_blk: false,
-            is_chr: false,
-            sector_size: None,
-        };
-
-        if let Err(e) = self_.read_disk_geometry() {
-            let _ = self_.close();
-            return Err(e);
-        }
-
-        Ok(self_)
-    }
-
     fn read_disk_geometry(&mut self) -> ah::Result<()> {
         if let Ok(meta) = metadata(&self.path) {
             let mode_ifmt = meta.mode() & S_IFMT;
@@ -124,6 +86,44 @@ impl RawIoLinux {
 }
 
 impl RawIoOsIntf for RawIoLinux {
+    fn new(path: &Path, mut create: bool, read: bool, write: bool) -> ah::Result<Self> {
+        if path.starts_with("/dev/") {
+            // Do not create dev nodes by accident.
+            // This check is not meant to catch all possible cases,
+            // but only the common ones.
+            create = false;
+        }
+
+        let file = match OpenOptions::new()
+            .create(create)
+            .read(read)
+            .write(write)
+            .open(path)
+        {
+            Ok(f) => f,
+            Err(e) => {
+                return Err(ah::format_err!("Failed to open file {:?}: {}", path, e));
+            }
+        };
+
+        let mut self_ = Self {
+            path: path.into(),
+            file: Some(file),
+            read_mode: read,
+            write_mode: write,
+            is_blk: false,
+            is_chr: false,
+            sector_size: None,
+        };
+
+        if let Err(e) = self_.read_disk_geometry() {
+            let _ = self_.close();
+            return Err(e);
+        }
+
+        Ok(self_)
+    }
+
     fn get_sector_size(&self) -> Option<u32> {
         self.sector_size
     }

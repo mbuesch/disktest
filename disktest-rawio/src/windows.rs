@@ -62,110 +62,6 @@ pub struct RawIoWindows {
 }
 
 impl RawIoWindows {
-    pub fn new(path: &Path, create: bool, read: bool, write: bool) -> ah::Result<Self> {
-        let Some(pathstr) = path.to_str() else {
-            return Err(ah::format_err!("Failed to convert file name (str)."));
-        };
-        let Ok(cpath) = CString::new(pathstr) else {
-            return Err(ah::format_err!("Failed to convert file name (CString)."));
-        };
-
-        let is_raw = Self::is_raw_dev(path);
-
-        let mut access_flags: DWORD = Default::default();
-        if read {
-            access_flags |= GENERIC_READ;
-        }
-        if write {
-            access_flags |= GENERIC_WRITE;
-        }
-
-        let create_mode = if create && !is_raw {
-            OPEN_ALWAYS
-        } else {
-            OPEN_EXISTING
-        };
-
-        // Open the device or file.
-        //
-        // SAFETY: Opening is safe, because:
-        // - The passed path is a valid C string with NUL termination.
-        // - All buffers outlive the use.
-        // - There are no side effects that affect safety.
-        // - The returned handle is checked and not used, if it is invalid.
-        let handle = unsafe {
-            CreateFileA(
-                cpath.as_ptr(),
-                access_flags,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                null_mut(),
-                create_mode,
-                0,
-                null_mut(),
-            )
-        };
-        if handle == INVALID_HANDLE_VALUE {
-            return Err(ah::format_err!(
-                "Failed to open file {:?}: {}",
-                path,
-                Self::get_last_error_string(None)
-            ));
-        };
-
-        let volume_locked = if is_raw {
-            let mut result: DWORD = Default::default();
-            // Lock the volume to get exclusive access.
-            //
-            // SAFETY: Volume locking is safe, because:
-            // - The handle is valid (checked above).
-            // - The DWORD holding the result is initialized memory.
-            // - All buffers outlive the use.
-            // - There are no side effects that affect safety.
-            let ok = unsafe {
-                DeviceIoControl(
-                    handle,
-                    FSCTL_LOCK_VOLUME,
-                    null_mut(),
-                    0,
-                    null_mut(),
-                    0,
-                    &mut result as _,
-                    null_mut(),
-                )
-            };
-            if ok == 0 {
-                return Err(ah::format_err!(
-                    "Failed to lock the raw volume: {}",
-                    Self::get_last_error_string(None)
-                ));
-            }
-
-            true
-        } else {
-            false
-        };
-
-        let mut self_ = Self {
-            path: path.into(),
-            cpath,
-            handle,
-            read_mode: read,
-            write_mode: write,
-            is_raw,
-            volume_locked,
-            sector_size: None,
-            disk_size: 0,
-            cur_offset: 0,
-        };
-
-        if let Err(e) = self_.read_disk_geometry() {
-            let _ = self_.close();
-            return Err(e);
-        }
-
-        Ok(self_)
-    }
-
     fn is_raw_dev(path: &Path) -> bool {
         let mut is_raw = false;
 
@@ -275,6 +171,110 @@ impl RawIoWindows {
 }
 
 impl RawIoOsIntf for RawIoWindows {
+    fn new(path: &Path, create: bool, read: bool, write: bool) -> ah::Result<Self> {
+        let Some(pathstr) = path.to_str() else {
+            return Err(ah::format_err!("Failed to convert file name (str)."));
+        };
+        let Ok(cpath) = CString::new(pathstr) else {
+            return Err(ah::format_err!("Failed to convert file name (CString)."));
+        };
+
+        let is_raw = Self::is_raw_dev(path);
+
+        let mut access_flags: DWORD = Default::default();
+        if read {
+            access_flags |= GENERIC_READ;
+        }
+        if write {
+            access_flags |= GENERIC_WRITE;
+        }
+
+        let create_mode = if create && !is_raw {
+            OPEN_ALWAYS
+        } else {
+            OPEN_EXISTING
+        };
+
+        // Open the device or file.
+        //
+        // SAFETY: Opening is safe, because:
+        // - The passed path is a valid C string with NUL termination.
+        // - All buffers outlive the use.
+        // - There are no side effects that affect safety.
+        // - The returned handle is checked and not used, if it is invalid.
+        let handle = unsafe {
+            CreateFileA(
+                cpath.as_ptr(),
+                access_flags,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                null_mut(),
+                create_mode,
+                0,
+                null_mut(),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(ah::format_err!(
+                "Failed to open file {:?}: {}",
+                path,
+                Self::get_last_error_string(None)
+            ));
+        };
+
+        let volume_locked = if is_raw {
+            let mut result: DWORD = Default::default();
+            // Lock the volume to get exclusive access.
+            //
+            // SAFETY: Volume locking is safe, because:
+            // - The handle is valid (checked above).
+            // - The DWORD holding the result is initialized memory.
+            // - All buffers outlive the use.
+            // - There are no side effects that affect safety.
+            let ok = unsafe {
+                DeviceIoControl(
+                    handle,
+                    FSCTL_LOCK_VOLUME,
+                    null_mut(),
+                    0,
+                    null_mut(),
+                    0,
+                    &mut result as _,
+                    null_mut(),
+                )
+            };
+            if ok == 0 {
+                return Err(ah::format_err!(
+                    "Failed to lock the raw volume: {}",
+                    Self::get_last_error_string(None)
+                ));
+            }
+
+            true
+        } else {
+            false
+        };
+
+        let mut self_ = Self {
+            path: path.into(),
+            cpath,
+            handle,
+            read_mode: read,
+            write_mode: write,
+            is_raw,
+            volume_locked,
+            sector_size: None,
+            disk_size: 0,
+            cur_offset: 0,
+        };
+
+        if let Err(e) = self_.read_disk_geometry() {
+            let _ = self_.close();
+            return Err(e);
+        }
+
+        Ok(self_)
+    }
+
     fn get_sector_size(&self) -> Option<u32> {
         self.sector_size
     }
