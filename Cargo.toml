@@ -15,6 +15,7 @@ categories = ["command-line-utilities", "filesystem", "hardware-support"]
 keywords = ["disk", "HDD", "SSD", "flash", "SD-card"]
 edition = "2021"
 rust-version = "1.75.0"
+version = "2.0.0"
 
 [workspace.dependencies]
 anyhow = "1"
@@ -30,8 +31,8 @@ signal-hook = "0.3"
 tempfile = "3"
 winapi = "0.3"
 
-disktest-lib = { version = "1", path = "./disktest-lib" }
-disktest-rawio = { version = "1", path = "./disktest-rawio" }
+disktest-lib = { version = "2", path = "./disktest-lib" }
+disktest-rawio = { version = "2", path = "./disktest-rawio" }
 
 [profile.dev]
 lto = "thin"
