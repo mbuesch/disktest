@@ -158,10 +158,10 @@ These speed tests don't write to an actual disk, but only to the `/dev/null` dev
 | disktest -j4 -ACHACHA12 -w /dev/null  | ChaCha12  | Intel i5-3320M; 2x2 cores       | 3.2 GiB/s         |
 | disktest -j4 -ACHACHA8 -w /dev/null   | ChaCha8   | Intel i5-3320M; 2x2 cores       | 4.4 GiB/s         |
 | disktest -j4 -ACRC -w /dev/null       | CRC       | Intel i5-3320M; 2x2 cores       | 7.5 GiB/s         |
-| disktest -j4 -ACHACHA20 -w /dev/null  | ChaCha20  | Raspberry Pi 4; 4 cores 1.5 GHz | 420 MiB/s         |
-| disktest -j4 -ACHACHA12 -w /dev/null  | ChaCha12  | Raspberry Pi 4; 4 cores 1.5 GHz | 670 MiB/s         |
-| disktest -j4 -ACHACHA8 -w /dev/null   | ChaCha8   | Raspberry Pi 4; 4 cores 1.5 GHz | 920 MiB/s         |
-| disktest -j4 -ACRC -w /dev/null       | CRC       | Raspberry Pi 4; 4 cores 1.5 GHz | 2.5 GiB/s         |
+| disktest -j4 -ACHACHA20 -w /dev/null  | ChaCha20  | Raspberry Pi 4; 4 cores 1.5 GHz | 455 MiB/s         |
+| disktest -j4 -ACHACHA12 -w /dev/null  | ChaCha12  | Raspberry Pi 4; 4 cores 1.5 GHz | 720 MiB/s         |
+| disktest -j4 -ACHACHA8 -w /dev/null   | ChaCha8   | Raspberry Pi 4; 4 cores 1.5 GHz | 990 MiB/s         |
+| disktest -j4 -ACRC -w /dev/null       | CRC       | Raspberry Pi 4; 4 cores 1.5 GHz | 3.1 GiB/s         |
 
 The read data rates are similar because the algorithm used is exactly the same.
 
