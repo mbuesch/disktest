@@ -155,9 +155,9 @@ These speed tests don't write to an actual disk, but only to the `/dev/null` dev
 | disktest -j12 -ACHACHA8 -w /dev/null  | ChaCha8   | AMD Ryzen 5 5500U; 6x2 cores    | 8.3 GiB/s         |
 | disktest -j12 -ACRC -w /dev/null      | CRC       | AMD Ryzen 5 5500U; 6x2 cores    | 8.4 GiB/s         |
 | disktest -j4 -ACHACHA20 -w /dev/null  | ChaCha20  | Intel i5-3320M; 2x2 cores       | 2.1 GiB/s         |
-| disktest -j4 -ACHACHA12 -w /dev/null  | ChaCha12  | Intel i5-3320M; 2x2 cores       | 3.2 GiB/s         |
-| disktest -j4 -ACHACHA8 -w /dev/null   | ChaCha8   | Intel i5-3320M; 2x2 cores       | 4.4 GiB/s         |
-| disktest -j4 -ACRC -w /dev/null       | CRC       | Intel i5-3320M; 2x2 cores       | 7.5 GiB/s         |
+| disktest -j4 -ACHACHA12 -w /dev/null  | ChaCha12  | Intel i5-3320M; 2x2 cores       | 3.3 GiB/s         |
+| disktest -j4 -ACHACHA8 -w /dev/null   | ChaCha8   | Intel i5-3320M; 2x2 cores       | 4.5 GiB/s         |
+| disktest -j4 -ACRC -w /dev/null       | CRC       | Intel i5-3320M; 2x2 cores       | 8.2 GiB/s         |
 | disktest -j4 -ACHACHA20 -w /dev/null  | ChaCha20  | Raspberry Pi 4; 4 cores 1.5 GHz | 455 MiB/s         |
 | disktest -j4 -ACHACHA12 -w /dev/null  | ChaCha12  | Raspberry Pi 4; 4 cores 1.5 GHz | 720 MiB/s         |
 | disktest -j4 -ACHACHA8 -w /dev/null   | ChaCha8   | Raspberry Pi 4; 4 cores 1.5 GHz | 990 MiB/s         |
