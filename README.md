@@ -150,10 +150,10 @@ These speed tests don't write to an actual disk, but only to the `/dev/null` dev
 
 | Command                               | Algorithm | Hardware                        | Data rate written |
 | ------------------------------------- | --------- | ------------------------------- | ----------------- |
-| disktest -j12 -ACHACHA20 -w /dev/null | ChaCha20  | AMD Ryzen 5 5500U; 6x2 cores    | 8.1 GiB/s         |
-| disktest -j12 -ACHACHA12 -w /dev/null | ChaCha12  | AMD Ryzen 5 5500U; 6x2 cores    | 8.2 GiB/s         |
-| disktest -j12 -ACHACHA8 -w /dev/null  | ChaCha8   | AMD Ryzen 5 5500U; 6x2 cores    | 8.3 GiB/s         |
-| disktest -j12 -ACRC -w /dev/null      | CRC       | AMD Ryzen 5 5500U; 6x2 cores    | 8.4 GiB/s         |
+| disktest -j12 -ACHACHA20 -w /dev/null | ChaCha20  | AMD Ryzen 5 5500U; 6x2 cores    | 8.4 GiB/s         |
+| disktest -j12 -ACHACHA12 -w /dev/null | ChaCha12  | AMD Ryzen 5 5500U; 6x2 cores    | 8.7 GiB/s         |
+| disktest -j12 -ACHACHA8 -w /dev/null  | ChaCha8   | AMD Ryzen 5 5500U; 6x2 cores    | 8.7 GiB/s         |
+| disktest -j12 -ACRC -w /dev/null      | CRC       | AMD Ryzen 5 5500U; 6x2 cores    | 8.8 GiB/s         |
 | disktest -j4 -ACHACHA20 -w /dev/null  | ChaCha20  | Intel i5-3320M; 2x2 cores       | 2.1 GiB/s         |
 | disktest -j4 -ACHACHA12 -w /dev/null  | ChaCha12  | Intel i5-3320M; 2x2 cores       | 3.3 GiB/s         |
 | disktest -j4 -ACHACHA8 -w /dev/null   | ChaCha8   | Intel i5-3320M; 2x2 cores       | 4.5 GiB/s         |
