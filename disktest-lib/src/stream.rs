@@ -98,7 +98,7 @@ fn thread_worker(
     #[cfg(test)]
     let mut index = 0;
     let mut cur_level = level.load(Ordering::Relaxed);
-    while !abort.load(Ordering::SeqCst) {
+    while !abort.load(Ordering::Acquire) {
         if cur_level < DtStream::MAX_THRES {
             // Get the next chunk from the generator.
             let mut data = cache_cons.pull(chunk_size);
@@ -202,12 +202,12 @@ impl DtStream {
     /// Does nothing, if the thread is not running.
     fn stop(&mut self) {
         self.is_active = false;
-        self.abort.store(true, Ordering::SeqCst);
+        self.abort.store(true, Ordering::Release);
         self.wake_thread();
         if let Some(thread_join) = self.thread_join.take() {
             thread_join.join().expect("Thread join failed");
         }
-        self.abort.store(false, Ordering::SeqCst);
+        self.abort.store(false, Ordering::Release);
     }
 
     /// Spawn the worker thread.
@@ -217,9 +217,9 @@ impl DtStream {
         assert!(self.thread_join.is_none());
 
         // Initialize thread communication
-        self.abort.store(false, Ordering::SeqCst);
-        self.error.store(false, Ordering::SeqCst);
-        self.level.store(0, Ordering::SeqCst);
+        self.abort.store(false, Ordering::Release);
+        self.error.store(false, Ordering::Release);
+        self.level.store(0, Ordering::Release);
         let (tx, rx) = channel();
         self.rx = Some(rx);
 
