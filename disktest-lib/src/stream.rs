@@ -39,7 +39,7 @@ pub enum DtStreamType {
 /// Data chunk that contains the computed PRNG data.
 pub struct DtStreamChunk {
     pub data: Option<Vec<u8>>,
-    #[allow(dead_code)] // used in test only.
+    #[cfg(test)]
     pub index: u8,
 }
 
@@ -95,6 +95,7 @@ fn thread_worker(
     try_lower_thread_priority();
 
     // Run the generator work loop.
+    #[cfg(test)]
     let mut index = 0;
     let mut cur_level = level.load(Ordering::Relaxed);
     while !abort.load(Ordering::SeqCst) {
@@ -113,9 +114,13 @@ fn thread_worker(
 
             let chunk = DtStreamChunk {
                 data: Some(data),
+                #[cfg(test)]
                 index,
             };
-            index = index.wrapping_add(1);
+            #[cfg(test)]
+            {
+                index = index.wrapping_add(1);
+            }
 
             // Send the chunk to the main thread.
             tx.send(chunk).expect("Worker thread: Send failed.");
