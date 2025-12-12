@@ -166,6 +166,14 @@ These speed tests don't write to an actual disk, but only to the `/dev/null` dev
 The read data rates are similar because the algorithm used is exactly the same.
 
 
+# CPU native optimization
+
+Note that the default [cargo configuration](.cargo/config.toml) supplied with this package sets the Rust compiler option `-Ctarget-cpu=native` to optimize for the best performance on your CPU.
+
+But this means that binaries compiled with this optimizations are non-portable to older CPUs.
+If you want portable binaries, then you probably want to remove this optimization option.
+
+
 # License
 
 Copyright (c) 2020-2025 Michael Büsch <m@bues.ch> and contributors
