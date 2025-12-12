@@ -17,11 +17,15 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 disktest-rawio = { workspace = true }
+libc = { workspace = true }
 movavg = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 ring = { workspace = true }
 signal-hook = { workspace = true }
 tempfile = { workspace = true }
+
+[lints.clippy]
+undocumented_unsafe_blocks = "warn"
 
 # vim: ts=4 sw=4 expandtab

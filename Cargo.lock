@@ -195,6 +195,7 @@ dependencies = [
  "chrono",
  "clap",
  "disktest-rawio",
+ "libc",
  "movavg",
  "rand",
  "rand_chacha",

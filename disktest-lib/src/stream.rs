@@ -43,6 +43,15 @@ pub struct DtStreamChunk {
     pub index: u8,
 }
 
+/// Try to lower the thread priority.
+fn try_lower_thread_priority() {
+    // SAFETY: nice (2) does not affect memory safety.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    unsafe {
+        libc::nice(7);
+    }
+}
+
 /// Thread worker function, that computes the chunks.
 #[allow(clippy::too_many_arguments)]
 fn thread_worker(
@@ -80,6 +89,10 @@ fn thread_worker(
     }
 
     let chunk_size = generator.get_base_size() * chunk_factor;
+
+    // Try to lower the thread priority
+    // to give the main thread a better chance to run.
+    try_lower_thread_priority();
 
     // Run the generator work loop.
     let mut index = 0;
