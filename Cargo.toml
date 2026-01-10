@@ -27,7 +27,7 @@ rand = "0.9"
 rand_chacha = "0.9"
 regex = "1"
 ring = "0.17"
-signal-hook = "0.3"
+signal-hook = "0.4"
 tempfile = "3"
 winapi = "0.3"
 
