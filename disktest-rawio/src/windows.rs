@@ -10,7 +10,7 @@
 //
 
 use super::{RawIoOsIntf, RawIoResult};
-use anyhow as ah;
+use anyhow::{self as ah, Context as _};
 use std::{
     ffi::{CString, OsString},
     mem::size_of,
@@ -92,6 +92,8 @@ impl RawIoWindows {
         }
 
         let mut msg: [wchar_t; 512] = [Default::default(); 512];
+        let msg_len = msg.len() - 1; // Minus one should not be needed. Do it anyway.
+
         // SAFETY: The FormatMessageW() call is safe, because:
         // - The passed buffer pointer points to valid and initialized memory.
         // - The passed buffer length is not bigger than the buffer's size.
@@ -103,9 +105,9 @@ impl RawIoWindows {
                 FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                 null_mut(),
                 code,
-                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT) as _,
-                msg.as_mut_ptr() as _,
-                (msg.len() - 1) as _, // Minus one should not be needed. Do it anyway.
+                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT).into(),
+                msg.as_mut_ptr().cast(),
+                msg_len.try_into().expect("msg_len u32 overflow"),
                 null_mut(),
             )
         };
@@ -126,7 +128,9 @@ impl RawIoWindows {
             }
 
             let mut dg: DISK_GEOMETRY = Default::default();
+            let dg_size = size_of::<DISK_GEOMETRY>();
             let mut result: DWORD = Default::default();
+
             // Get the disk geometry information.
             //
             // SAFETY: This DeviceIoControl() is safe, because:
@@ -141,9 +145,9 @@ impl RawIoWindows {
                     IOCTL_DISK_GET_DRIVE_GEOMETRY,
                     null_mut(),
                     0,
-                    &mut dg as *mut _ as *mut c_void,
-                    size_of::<DISK_GEOMETRY>() as _,
-                    &mut result as _,
+                    (&raw mut dg).cast::<c_void>(),
+                    dg_size.try_into().expect("DISK_GEOMETRY u32 overflow"),
+                    std::ptr::from_mut(&mut result),
                     null_mut(),
                 )
             };
@@ -154,13 +158,16 @@ impl RawIoWindows {
                     Self::get_last_error_string(None)
                 ));
             }
+
             // SAFETY: Reading Cylinders is safe.
             // The memory is properly initialized.
             let cylinders = unsafe { *dg.Cylinders.QuadPart() };
-            self.disk_size = dg.BytesPerSector as u64
-                * dg.SectorsPerTrack as u64
-                * dg.TracksPerCylinder as u64
-                * cylinders as u64;
+            let cylinders = u64::try_from(cylinders).context("Cylinders u32 overflow")?;
+
+            self.disk_size = u64::from(dg.BytesPerSector)
+                * u64::from(dg.SectorsPerTrack)
+                * u64::from(dg.TracksPerCylinder)
+                * cylinders;
             self.sector_size = Some(dg.BytesPerSector as u32);
         } else {
             self.disk_size = u64::MAX;
@@ -215,11 +222,11 @@ impl RawIoOsIntf for RawIoWindows {
         };
         if handle == INVALID_HANDLE_VALUE {
             return Err(ah::format_err!(
-                "Failed to open file {:?}: {}",
-                path,
+                "Failed to open file {}: {}",
+                path.display(),
                 Self::get_last_error_string(None)
             ));
-        };
+        }
 
         let volume_locked = if is_raw {
             let mut result: DWORD = Default::default();
@@ -238,7 +245,7 @@ impl RawIoOsIntf for RawIoWindows {
                     0,
                     null_mut(),
                     0,
-                    &mut result as _,
+                    std::ptr::from_mut(&mut result),
                     null_mut(),
                 )
             };
@@ -339,6 +346,7 @@ impl RawIoOsIntf for RawIoWindows {
         // Unlock the volume.
         if self.volume_locked {
             let mut result: DWORD = Default::default();
+
             // SAFETY: Volume unlocking is safe, because:
             // - Unlocking is only performed, if the volume is locked.
             // - The handle is valid (checked above).
@@ -353,7 +361,7 @@ impl RawIoOsIntf for RawIoWindows {
                     0,
                     null_mut(),
                     0,
-                    &mut result as _,
+                    std::ptr::from_mut(&mut result),
                     null_mut(),
                 )
             };
@@ -373,6 +381,7 @@ impl RawIoOsIntf for RawIoWindows {
         // - self.handle is set to invalid after closing.
         // - There are no side effects that affect safety.
         let ok = unsafe { CloseHandle(self.handle) };
+
         if ok == 0 {
             return Err(ah::format_err!(
                 "Failed to close file handle: {}",
@@ -421,6 +430,7 @@ impl RawIoOsIntf for RawIoWindows {
         }
 
         self.seek(size)?;
+
         // SAFETY: SetEndOfFile() is safe, because:
         // - The handle is valid (checked above).
         // - There are no side effects that affect safety.
@@ -442,19 +452,22 @@ impl RawIoOsIntf for RawIoWindows {
         }
 
         let mut off_li: LARGE_INTEGER = Default::default();
-        assert!(offset <= i64::MAX as u64);
+        let offset_i64 = i64::try_from(offset).context("File offset i64 overflow")?;
+
         // SAFETY: The LARGE_INTEGER is properly allocated,
         // correctly sized and outlives the use. The offset value
         // range is checked above.
-        unsafe { *off_li.QuadPart_mut() = offset as i64 };
+        unsafe { *off_li.QuadPart_mut() = offset_i64 };
+
         // SAFETY: SetFilePointerEx() is safe, because:
         // - The handle is valid (checked above).
         // - There are no side effects that affect safety.
         let ok = unsafe { SetFilePointerEx(self.handle, off_li, null_mut(), FILE_BEGIN) };
+
         if ok == 0 {
             Err(ah::format_err!(
-                "SetFilePointerEx({:?}) seek failed: {}",
-                self.path,
+                "SetFilePointerEx({}) seek failed: {}",
+                self.path.display(),
                 Self::get_last_error_string(None),
             ))
         } else {
@@ -475,6 +488,8 @@ impl RawIoOsIntf for RawIoWindows {
         }
 
         let mut read_count: DWORD = Default::default();
+        let buffer_len = buffer.len();
+
         // SAFETY: The ReadFile() call is safe, because:
         // - The passed buffer pointer points to valid and initialized memory.
         // - The passed buffer length is not bigger than the buffer's size.
@@ -484,13 +499,17 @@ impl RawIoOsIntf for RawIoWindows {
         let ok = unsafe {
             ReadFile(
                 self.handle,
-                buffer.as_mut_ptr() as _,
-                buffer.len() as _,
-                &mut read_count as _,
+                buffer.as_mut_ptr().cast(),
+                buffer_len
+                    .try_into()
+                    .context("Read buffer length u32 overflow")?,
+                std::ptr::from_mut(&mut read_count),
                 null_mut(),
             )
         };
-        self.cur_offset += read_count as u64;
+
+        self.cur_offset += u64::from(read_count);
+
         if ok == 0 {
             if self.cur_offset >= self.disk_size {
                 Ok(RawIoResult::Ok(read_count as usize))
@@ -517,6 +536,8 @@ impl RawIoOsIntf for RawIoWindows {
         }
 
         let mut write_count: DWORD = Default::default();
+        let buffer_len = buffer.len();
+
         // SAFETY: The WriteFile() call is safe, because:
         // - The passed buffer pointer points to valid and initialized memory.
         // - The passed buffer length is not bigger than the buffer's size.
@@ -526,13 +547,17 @@ impl RawIoOsIntf for RawIoWindows {
         let ok = unsafe {
             WriteFile(
                 self.handle,
-                buffer.as_ptr() as _,
-                buffer.len() as _,
-                &mut write_count as _,
+                buffer.as_ptr().cast(),
+                buffer_len
+                    .try_into()
+                    .context("Write buffer length u32 overflow")?,
+                std::ptr::from_mut(&mut write_count),
                 null_mut(),
             )
         };
-        self.cur_offset += write_count as u64;
+
+        self.cur_offset += u64::from(write_count);
+
         if ok == 0 {
             if self.cur_offset >= self.disk_size {
                 if write_count == 0 {
@@ -560,7 +585,7 @@ impl RawIoOsIntf for RawIoWindows {
 impl Drop for RawIoWindows {
     fn drop(&mut self) {
         if let Err(e) = self.close() {
-            eprintln!("Warning: Failed to close device: {}", e);
+            eprintln!("Warning: Failed to close device: {e}");
         }
     }
 }
