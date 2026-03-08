@@ -10,7 +10,7 @@
 //
 
 use rand::distr::Alphanumeric;
-use rand::Rng;
+use rand::RngExt;
 
 /// Generate a new alphanumeric truly random seed.
 ///
