@@ -20,25 +20,12 @@ const GIB: u64 = 1024 * 1024 * 1024;
 const MIB: u64 = 1024 * 1024;
 const KIB: u64 = 1024;
 
-const EIBM1: u64 = EIB - 1;
-const PIBM1: u64 = PIB - 1;
-const TIBM1: u64 = TIB - 1;
-const GIBM1: u64 = GIB - 1;
-const MIBM1: u64 = MIB - 1;
-//const KIBM1: u64 = KIB - 1;
-
 const EB: u64 = 1000 * 1000 * 1000 * 1000 * 1000 * 1000;
 const PB: u64 = 1000 * 1000 * 1000 * 1000 * 1000;
 const TB: u64 = 1000 * 1000 * 1000 * 1000;
 const GB: u64 = 1000 * 1000 * 1000;
 const MB: u64 = 1000 * 1000;
 const KB: u64 = 1000;
-
-const EBM1: u64 = EB - 1;
-const PBM1: u64 = PB - 1;
-const TBM1: u64 = TB - 1;
-const GBM1: u64 = GB - 1;
-const MBM1: u64 = MB - 1;
 
 pub fn prettybytes(count: u64, binary: bool, decimal: bool, bytes: bool) -> String {
     let mut ret = String::new();
@@ -55,11 +42,11 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool, bytes: bool) -> Stri
     if binary {
         let _ = match count {
             EIB..=u64::MAX => write!(ret, "{:.4} EiB", ((count / TIB) as f64) / (MIB as f64)),
-            PIB..=EIBM1 => write!(ret, "{:.4} PiB", ((count / GIB) as f64) / (MIB as f64)),
-            TIB..=PIBM1 => write!(ret, "{:.4} TiB", ((count / MIB) as f64) / (MIB as f64)),
-            GIB..=TIBM1 => write!(ret, "{:.2} GiB", ((count / MIB) as f64) / (KIB as f64)),
-            MIB..=GIBM1 => write!(ret, "{:.1} MiB", (count as f64) / (MIB as f64)),
-            0..=MIBM1 => write!(ret, "{:.1} kiB", (count as f64) / (KIB as f64)),
+            PIB..EIB => write!(ret, "{:.4} PiB", ((count / GIB) as f64) / (MIB as f64)),
+            TIB..PIB => write!(ret, "{:.4} TiB", ((count / MIB) as f64) / (MIB as f64)),
+            GIB..TIB => write!(ret, "{:.2} GiB", ((count / MIB) as f64) / (KIB as f64)),
+            MIB..GIB => write!(ret, "{:.1} MiB", (count as f64) / (MIB as f64)),
+            0..MIB => write!(ret, "{:.1} kiB", (count as f64) / (KIB as f64)),
         };
     }
 
@@ -73,11 +60,11 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool, bytes: bool) -> Stri
     if decimal {
         let _ = match count {
             EB..=u64::MAX => write!(ret, "{:.4} EB", ((count / TB) as f64) / (MB as f64)),
-            PB..=EBM1 => write!(ret, "{:.4} PB", ((count / GB) as f64) / (MB as f64)),
-            TB..=PBM1 => write!(ret, "{:.4} TB", ((count / MB) as f64) / (MB as f64)),
-            GB..=TBM1 => write!(ret, "{:.2} GB", ((count / MB) as f64) / (KB as f64)),
-            MB..=GBM1 => write!(ret, "{:.1} MB", (count as f64) / (MB as f64)),
-            0..=MBM1 => write!(ret, "{:.1} kB", (count as f64) / (KB as f64)),
+            PB..EB => write!(ret, "{:.4} PB", ((count / GB) as f64) / (MB as f64)),
+            TB..PB => write!(ret, "{:.4} TB", ((count / MB) as f64) / (MB as f64)),
+            GB..TB => write!(ret, "{:.2} GB", ((count / MB) as f64) / (KB as f64)),
+            MB..GB => write!(ret, "{:.1} MB", (count as f64) / (MB as f64)),
+            0..MB => write!(ret, "{:.1} kB", (count as f64) / (KB as f64)),
         };
     }
 
