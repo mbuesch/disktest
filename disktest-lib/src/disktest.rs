@@ -10,10 +10,10 @@
 //
 
 use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
-use crate::util::{Hhmmss, prettybytes};
+use crate::util::{Hhmmss as _, prettybytes};
 use anyhow as ah;
 use chrono::prelude::*;
-use disktest_rawio::{DEFAULT_SECTOR_SIZE, RawIo, RawIoOsIntf, RawIoResult};
+use disktest_rawio::{DEFAULT_SECTOR_SIZE, RawIo, RawIoOsIntf as _, RawIoResult};
 use movavg::MovAvg;
 use std::cmp::min;
 use std::path::{Path, PathBuf};
@@ -87,7 +87,7 @@ impl DisktestFile {
             // If bytes have been written, try to drop the operating system caches.
             if drop_count > 0 {
                 if let Err(e) = io.drop_file_caches(drop_offset, drop_count) {
-                    return Err(ah::format_err!("Cache drop error: {}", e));
+                    return Err(ah::format_err!("Cache drop error: {e}"));
                 }
             } else {
                 io.close()?;
@@ -155,7 +155,7 @@ impl DisktestFile {
         }
     }
 
-    /// Get a reference to the PathBuf in use.
+    /// Get a reference to the `PathBuf` in use.
     fn get_path(&self) -> &PathBuf {
         &self.path
     }
@@ -168,7 +168,7 @@ impl Drop for DisktestFile {
                 eprintln!("WARNING: File not closed. Closing now...");
             }
             if let Err(e) = self.close() {
-                panic!("Failed to drop operating system caches: {}", e);
+                panic!("Failed to drop operating system caches: {e}");
             }
         }
     }
@@ -188,7 +188,7 @@ pub struct Disktest {
 }
 
 impl Disktest {
-    /// Unlimited max_bytes.
+    /// Unlimited `max_bytes`.
     pub const UNLIMITED: u64 = u64::MAX;
 
     /// Create a new Disktest instance.
@@ -199,14 +199,14 @@ impl Disktest {
     ///   that is written to disk.
     ///   If unsure, use `Default::default()`.
     /// - seed: The seed for the random data stream generator.
-    /// - round_id: The disk test round. Every round gets a unique data stream.
+    /// - `round_id`: The disk test round. Every round gets a unique data stream.
     ///   If unsure, use `0` (first round).
-    /// - invert_pattern: Bitwise invert the random data stream.
+    /// - `invert_pattern`: Bitwise invert the random data stream.
     ///   If unsure, use `false` (don't invert).
-    /// - nr_threads: The number of threads to spawn when generating the random data stream.
+    /// - `nr_threads`: The number of threads to spawn when generating the random data stream.
     ///   The special value `0` means: Use all CPUs available in the system.
     ///   If unsure, use `1` (One CPU).
-    /// - quiet_level: The console verbosity of the Disktest code. See [DisktestQuiet].
+    /// - `quiet_level`: The console verbosity of the Disktest code. See [`DisktestQuiet`].
     /// - abort: If this optional flag is set to `true` (e.g. by another thread) the Disktest
     ///   process will abort as soon as possible.
     ///   If unsure, use `None`.
@@ -402,7 +402,7 @@ impl Disktest {
             println!("Writing stopped. Syncing...");
         }
         if let Err(e) = file.sync() {
-            return Err(ah::format_err!("Sync failed: {}", e));
+            return Err(ah::format_err!("Sync failed: {e}"));
         }
 
         self.log(
@@ -414,8 +414,7 @@ impl Disktest {
 
         if let Err(e) = file.close() {
             return Err(ah::format_err!(
-                "Failed to drop operating system caches: {}",
-                e
+                "Failed to drop operating system caches: {e}"
             ));
         }
         if success && self.quiet_level < DisktestQuiet::NoInfo {
@@ -429,7 +428,7 @@ impl Disktest {
     pub fn write(&mut self, file: DisktestFile, seek: u64, max_bytes: u64) -> ah::Result<u64> {
         let mut file = file;
         let mut bytes_left = max_bytes;
-        let mut bytes_written = 0u64;
+        let mut bytes_written = 0_u64;
 
         let write_chunk_size = self.init(&mut file, "Writing", seek, max_bytes)?;
         loop {
@@ -490,7 +489,7 @@ impl Disktest {
             true,
         );
         if let Err(e) = file.close() {
-            return Err(ah::format_err!("Failed to close device: {}", e));
+            return Err(ah::format_err!("Failed to close device: {e}"));
         }
         Ok(())
     }
@@ -506,7 +505,7 @@ impl Disktest {
     ) -> ah::Error {
         if let Err(e) = self.verify_finalize(file, false, bytes_read) {
             if self.quiet_level < DisktestQuiet::NoWarn {
-                eprintln!("{}", e);
+                eprintln!("{e}");
             }
         }
         for (i, buffer_byte) in buffer.iter().enumerate().take(read_count) {
@@ -517,9 +516,8 @@ impl Disktest {
                         "Data MISMATCH at {}!",
                         prettybytes(pos, true, true, true)
                     );
-                } else {
-                    return ah::format_err!("Data MISMATCH at byte {}!", pos);
                 }
+                return ah::format_err!("Data MISMATCH at byte {pos}!");
             }
         }
         panic!("Internal error: verify_failed() no mismatch.");
@@ -529,7 +527,7 @@ impl Disktest {
     pub fn verify(&mut self, file: DisktestFile, seek: u64, max_bytes: u64) -> ah::Result<u64> {
         let mut file = file;
         let mut bytes_left = max_bytes;
-        let mut bytes_read = 0u64;
+        let mut bytes_read = 0_u64;
 
         let readbuf_len = self.init(&mut file, "Verifying", seek, max_bytes)? as usize;
         let mut buffer = vec![0; readbuf_len];
@@ -580,7 +578,7 @@ impl Disktest {
                         e
                     ));
                 }
-            };
+            }
 
             if self.abort_requested() {
                 let _ = self.verify_finalize(&mut file, false, bytes_read);
@@ -597,7 +595,7 @@ mod tests {
     use super::*;
     use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc};
     use std::fs::OpenOptions;
-    use std::io::{Seek, SeekFrom, Write};
+    use std::io::{Seek as _, SeekFrom, Write as _};
     use std::path::PathBuf;
     use tempfile::tempdir;
 
@@ -620,7 +618,7 @@ mod tests {
 
         let mk_filepath = |num| {
             let mut path = PathBuf::from(tdir_path);
-            path.push(format!("tmp-{}.img", num));
+            path.push(format!("tmp-{num}.img"));
             path
         };
 

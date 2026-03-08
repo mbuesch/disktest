@@ -105,10 +105,8 @@ impl DtStreamAgg {
 
         if chunk_size % sector_size as u64 != 0 {
             return Err(ah::format_err!(
-                "The random number generator chunk size {} \
-                 is not a multiple of the disk sector size {}.",
-                chunk_size,
-                sector_size
+                "The random number generator chunk size {chunk_size} \
+                 is not a multiple of the disk sector size {sector_size}."
             ));
         }
 
@@ -192,9 +190,7 @@ impl DtStreamAgg {
     }
 
     pub fn wait_chunk(&mut self) -> ah::Result<DtStreamAggChunk> {
-        if !self.is_active() {
-            panic!("wait_chunk() called, but stream aggregator is stopped.");
-        }
+        assert!(self.is_active(), "wait_chunk() called, but stream aggregator is stopped.");
         loop {
             if let Some(chunk) = self.get_chunk()? {
                 break Ok(chunk);

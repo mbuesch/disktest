@@ -21,7 +21,7 @@ pub use crate::generator::chacha::GeneratorChaCha20;
 pub use crate::generator::crc::GeneratorCrc;
 
 pub trait NextRandom {
-    /// Get the size of the next() output with count = 1, in bytes.
+    /// Get the size of the `next()` output with count = 1, in bytes.
     fn get_base_size(&self) -> usize;
 
     /// Generate the next chunks.

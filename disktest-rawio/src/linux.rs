@@ -14,7 +14,7 @@ use anyhow as ah;
 use libc::{POSIX_FADV_DONTNEED, c_int, off_t};
 use std::{
     fs::{File, OpenOptions, metadata},
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Read as _, Seek as _, SeekFrom, Write as _},
     os::unix::{fs::MetadataExt as _, io::AsRawFd as _},
     path::{Path, PathBuf},
 };
@@ -63,7 +63,7 @@ impl RawIoLinux {
                 libc::ioctl(
                     file.as_raw_fd(),
                     libc::BLKPBSZGET, // get physical sector size.
-                    &mut sector_size as *mut c_int,
+                    (&raw mut sector_size).cast::<c_int>(),
                 )
             };
             if res < 0 {
@@ -102,7 +102,10 @@ impl RawIoOsIntf for RawIoLinux {
         {
             Ok(f) => f,
             Err(e) => {
-                return Err(ah::format_err!("Failed to open file {:?}: {}", path, e));
+                return Err(ah::format_err!(
+                    "Failed to open file {}: {e}",
+                    path.display()
+                ));
             }
         };
 
@@ -142,7 +145,7 @@ impl RawIoOsIntf for RawIoLinux {
         if self.write_mode {
             // fsync()
             if let Err(e) = file.sync_all() {
-                return Err(ah::format_err!("Failed to flush: {}", e));
+                return Err(ah::format_err!("Failed to flush: {e}"));
             }
         }
 
@@ -173,10 +176,10 @@ impl RawIoOsIntf for RawIoLinux {
 
             match OpenOptions::new().write(true).open(proc_file) {
                 Ok(mut file) => match file.write_all(proc_value) {
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(ah::format_err!("{}", e)),
+                    Ok(()) => Ok(()),
+                    Err(e) => Err(ah::format_err!("{e}")),
                 },
-                Err(e) => Err(ah::format_err!("{}", e)),
+                Err(e) => Err(ah::format_err!("{e}")),
             }
         }
     }
@@ -187,7 +190,7 @@ impl RawIoOsIntf for RawIoLinux {
         };
         if self.write_mode && !self.is_chr {
             if let Err(e) = file.sync_all() {
-                return Err(ah::format_err!("Failed to flush: {}", e));
+                return Err(ah::format_err!("Failed to flush: {e}"));
             }
         }
         Ok(())
@@ -232,7 +235,7 @@ impl RawIoOsIntf for RawIoLinux {
         };
         match file.read(buffer) {
             Ok(count) => Ok(RawIoResult::Ok(count)),
-            Err(e) => Err(ah::format_err!("Read error: {}", e)),
+            Err(e) => Err(ah::format_err!("Read error: {e}")),
         }
     }
 
@@ -249,7 +252,7 @@ impl RawIoOsIntf for RawIoLinux {
                     return Ok(RawIoResult::Enospc);
                 }
             }
-            return Err(ah::format_err!("Write error: {}", e));
+            return Err(ah::format_err!("Write error: {e}"));
         }
         Ok(RawIoResult::Ok(buffer.len()))
     }
@@ -258,7 +261,7 @@ impl RawIoOsIntf for RawIoLinux {
 impl Drop for RawIoLinux {
     fn drop(&mut self) {
         if let Err(e) = self.close() {
-            eprintln!("Warning: Failed to close device: {}", e);
+            eprintln!("Warning: Failed to close device: {e}");
         }
     }
 }

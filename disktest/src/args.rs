@@ -147,7 +147,7 @@ struct CliArgs {
     max_bytes: u64,
 
     /// Select the random number generator algorithm.
-    /// ChaCha12 and ChaCha8 are less cryptographically secure than ChaCha20, but
+    /// `ChaCha12` and `ChaCha8` are less cryptographically secure than `ChaCha20`, but
     /// faster. CRC is even faster, but not cryptographically secure at all.
     #[arg(
         verbatim_doc_comment,
@@ -287,8 +287,7 @@ fn parse_quiet(value: &str) -> Result<DisktestQuiet, String> {
         x if x == DisktestQuiet::NoWarn as u8 => DisktestQuiet::NoWarn,
         _ => {
             return Err(format!(
-                "Invalid quiet level '{}'. Allowed: 0, 1, 2, 3.",
-                value
+                "Invalid quiet level '{value}'. Allowed: 0, 1, 2, 3."
             ));
         }
     };
@@ -306,12 +305,12 @@ where
         Err(e) => {
             match e.kind() {
                 DisplayHelp | DisplayVersion => {
-                    print!("{}", e);
+                    print!("{e}");
                     std::process::exit(0);
                 }
                 _ => (),
-            };
-            Err(ah::format_err!("{}", e))
+            }
+            Err(ah::format_err!("{e}"))
         }
     }
 }

@@ -25,11 +25,11 @@ use std::thread;
 /// Random data stream algorithm type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum DtStreamType {
-    /// Very weak version of the ChaCha random number generator.
+    /// Very weak version of the `ChaCha` random number generator.
     ChaCha8,
-    /// Weak version of the ChaCha random number generator.
+    /// Weak version of the `ChaCha` random number generator.
     ChaCha12,
-    /// Cryptographically secure version of the ChaCha random number generator.
+    /// Cryptographically secure version of the `ChaCha` random number generator.
     #[default]
     ChaCha20,
     /// Very fast by cryptographically unsecure CRC based random number generator.
@@ -63,11 +63,11 @@ fn thread_worker(
     mut cache_cons: BufCacheCons,
     byte_offset: u64,
     invert_pattern: bool,
-    abort: Arc<AtomicBool>,
-    error: Arc<AtomicBool>,
-    level: Arc<AtomicIsize>,
-    sleep: Arc<(Mutex<bool>, Condvar)>,
-    tx: Sender<DtStreamChunk>,
+    abort: &AtomicBool,
+    error: &AtomicBool,
+    level: &AtomicIsize,
+    sleep: &(Mutex<bool>, Condvar),
+    tx: &Sender<DtStreamChunk>,
 ) {
     // Calculate the per-thread-seed from the global seed.
     let thread_seed = kdf(&seed, thread_id, round_id);
@@ -83,7 +83,7 @@ fn thread_worker(
 
     // Seek the generator to the specified byte offset.
     if let Err(e) = generator.seek(byte_offset) {
-        eprintln!("ERROR in generator thread {}: {}", thread_id, e);
+        eprintln!("ERROR in generator thread {thread_id}: {e}");
         error.store(true, Ordering::Relaxed);
         return;
     }
@@ -108,7 +108,7 @@ fn thread_worker(
             // Invert the bit pattern, if requested.
             if invert_pattern {
                 for x in &mut data {
-                    *x ^= 0xFFu8;
+                    *x ^= 0xFF_u8;
                 }
             }
 
@@ -246,11 +246,11 @@ impl DtStream {
                 thread_cache_cons,
                 thread_byte_offset,
                 thread_invert_pattern,
-                thread_abort,
-                thread_error,
-                thread_level,
-                thread_sleep,
-                tx,
+                &thread_abort,
+                &thread_error,
+                &thread_level,
+                &thread_sleep,
+                &tx,
             );
         }));
         self.is_active = true;

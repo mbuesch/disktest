@@ -27,7 +27,7 @@ signal-hook = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 
-[lints.clippy]
-undocumented_unsafe_blocks = "warn"
+[lints]
+workspace = true
 
 # vim: ts=4 sw=4 expandtab

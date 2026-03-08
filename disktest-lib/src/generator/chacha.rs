@@ -81,24 +81,25 @@ macro_rules! GeneratorChaCha {
 
             #[test]
             fn test_cmp_result() {
-                let mut a = $Generator::new(&[1, 2, 3]);
                 fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
                     acc.rotate_left(i as u32) ^ (*x as u32)
                 }
 
-                let mut buf = vec![0u8; $Generator::BASE_SIZE * (1024 + 512)];
+                let mut a = $Generator::new(&[1, 2, 3]);
+
+                let mut buf = vec![0_u8; $Generator::BASE_SIZE * (1024 + 512)];
                 a.next(&mut buf, 1024 + 512);
                 assert_eq!(buf.iter().enumerate().fold(0, reduce), $testresult0);
 
-                let mut buf = vec![0u8; $Generator::BASE_SIZE * (1024 + 512)];
+                let mut buf = vec![0_u8; $Generator::BASE_SIZE * (1024 + 512)];
                 a.next(&mut buf, 1024 + 512);
                 assert_eq!(buf.iter().enumerate().fold(0, reduce), $testresult1);
 
-                let mut buf = vec![0u8; $Generator::BASE_SIZE * (1024 + 512) * 2];
+                let mut buf = vec![0_u8; $Generator::BASE_SIZE * (1024 + 512) * 2];
                 a.next(&mut buf, (1024 + 512) * 2);
                 assert_eq!(buf.iter().enumerate().fold(0, reduce), $testresult2);
 
-                let mut buf = vec![0u8; $Generator::BASE_SIZE * (1024 + 512) * 3];
+                let mut buf = vec![0_u8; $Generator::BASE_SIZE * (1024 + 512) * 3];
                 a.next(&mut buf, (1024 + 512) * 3);
                 assert_eq!(buf.iter().enumerate().fold(0, reduce), $testresult3);
             }
@@ -110,10 +111,10 @@ macro_rules! GeneratorChaCha {
                 let mut res_a: Vec<Vec<u8>> = vec![];
                 let mut res_b: Vec<Vec<u8>> = vec![];
                 for _ in 0..2 {
-                    let mut buf = vec![0u8; $Generator::BASE_SIZE];
+                    let mut buf = vec![0_u8; $Generator::BASE_SIZE];
                     a.next(&mut buf, 1);
                     res_a.push(buf);
-                    let mut buf = vec![0u8; $Generator::BASE_SIZE];
+                    let mut buf = vec![0_u8; $Generator::BASE_SIZE];
                     b.next(&mut buf, 1);
                     res_b.push(buf);
                 }
@@ -130,10 +131,10 @@ macro_rules! GeneratorChaCha {
                 let mut res_a: Vec<Vec<u8>> = vec![];
                 let mut res_b: Vec<Vec<u8>> = vec![];
                 for _ in 0..2 {
-                    let mut buf = vec![0u8; $Generator::BASE_SIZE];
+                    let mut buf = vec![0_u8; $Generator::BASE_SIZE];
                     a.next(&mut buf, 1);
                     res_a.push(buf);
-                    let mut buf = vec![0u8; $Generator::BASE_SIZE];
+                    let mut buf = vec![0_u8; $Generator::BASE_SIZE];
                     b.next(&mut buf, 1);
                     res_b.push(buf);
                 }
@@ -147,13 +148,13 @@ macro_rules! GeneratorChaCha {
             fn test_concat_equal() {
                 let mut a = $Generator::new(&[1, 2, 3]);
                 let mut b = $Generator::new(&[1, 2, 3]);
-                let mut buf_a = vec![0u8; $Generator::BASE_SIZE * 2];
+                let mut buf_a = vec![0_u8; $Generator::BASE_SIZE * 2];
                 a.next(&mut buf_a[0..$Generator::BASE_SIZE], 1);
                 a.next(
                     &mut buf_a[$Generator::BASE_SIZE..$Generator::BASE_SIZE * 2],
                     1,
                 );
-                let mut buf_b = vec![0u8; $Generator::BASE_SIZE * 2];
+                let mut buf_b = vec![0_u8; $Generator::BASE_SIZE * 2];
                 b.next(&mut buf_b, 2);
                 assert_eq!(buf_a, buf_b);
             }
@@ -163,9 +164,9 @@ macro_rules! GeneratorChaCha {
                 let mut a = $Generator::new(&[1, 2, 3]);
                 let mut b = $Generator::new(&[1, 2, 3]);
                 b.seek($Generator::BASE_SIZE as u64 * 2).unwrap();
-                let mut bdata = vec![0u8; $Generator::BASE_SIZE];
+                let mut bdata = vec![0_u8; $Generator::BASE_SIZE];
                 b.next(&mut bdata, 1);
-                let mut adata = vec![0u8; $Generator::BASE_SIZE];
+                let mut adata = vec![0_u8; $Generator::BASE_SIZE];
                 a.next(&mut adata, 1);
                 assert_ne!(adata, bdata);
                 a.next(&mut adata, 1);
@@ -183,30 +184,30 @@ GeneratorChaCha!(
     GeneratorChaCha20,
     ChaCha20Rng,
     tests_chacha20,
-    331195744,
-    1401252284,
-    1567136089,
-    3153433807
+    331_195_744,
+    1_401_252_284,
+    1_567_136_089,
+    3_153_433_807
 );
 
 GeneratorChaCha!(
     GeneratorChaCha12,
     ChaCha12Rng,
     tests_chacha12,
-    477482776,
-    774733417,
-    473700519,
-    3620480628
+    477_482_776,
+    774_733_417,
+    473_700_519,
+    3_620_480_628
 );
 
 GeneratorChaCha!(
     GeneratorChaCha8,
     ChaCha8Rng,
     tests_chacha8,
-    3691419247,
-    1996469034,
-    1245532037,
-    1660157839
+    3_691_419_247,
+    1_996_469_034,
+    1_245_532_037,
+    1_660_157_839
 );
 
 // vim: ts=4 sw=4 expandtab

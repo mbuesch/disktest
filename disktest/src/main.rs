@@ -31,7 +31,7 @@ fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
         signal_hook::consts::signal::SIGINT,
     ] {
         if let Err(e) = signal_hook::flag::register(*sig, Arc::clone(&abort)) {
-            return Err(ah::format_err!("Failed to register signal {}: {}", sig, e));
+            return Err(ah::format_err!("Failed to register signal {sig}: {e}"));
         }
     }
 
@@ -42,11 +42,10 @@ fn install_abort_handlers() -> ah::Result<Arc<AtomicBool>> {
 fn print_generated_seed(seed: &str, verbose: bool) {
     if verbose {
         println!(
-            "\nThe generated --seed is:\n    {}\nUse this seed for subsequent --verify.\n",
-            seed
+            "\nThe generated --seed is:\n    {seed}\nUse this seed for subsequent --verify.\n"
         );
     } else {
-        println!("Generated --seed {}\n", seed);
+        println!("Generated --seed {seed}\n");
     }
 }
 

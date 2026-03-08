@@ -10,7 +10,7 @@
 //
 
 use anyhow as ah;
-use std::fmt::Write;
+use std::fmt::Write as _;
 use std::time::Duration;
 
 const EIB: u64 = 1024 * 1024 * 1024 * 1024 * 1024 * 1024;
@@ -27,6 +27,7 @@ const GB: u64 = 1000 * 1000 * 1000;
 const MB: u64 = 1000 * 1000;
 const KB: u64 = 1000;
 
+#[allow(clippy::cast_precision_loss)]
 pub fn prettybytes(count: u64, binary: bool, decimal: bool, bytes: bool) -> String {
     let mut ret = String::new();
 
@@ -35,7 +36,7 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool, bytes: bool) -> Stri
     }
 
     if count < KIB {
-        let _ = write!(ret, "{} bytes", count);
+        let _ = write!(ret, "{count} bytes");
         return ret;
     }
 
@@ -72,7 +73,7 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool, bytes: bool) -> Stri
         if decimal {
             ret.push_str(", ");
         }
-        let _ = write!(ret, "{} bytes", count);
+        let _ = write!(ret, "{count} bytes");
     }
 
     if paren {
@@ -82,6 +83,7 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool, bytes: bool) -> Stri
     ret
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn try_one_parsebytes(s: &str, suffix: &str, factor: u64) -> ah::Result<u64> {
     let Some(s) = s.strip_suffix(suffix) else {
         return Err(ah::format_err!("Value suffix does not match."));
@@ -149,7 +151,7 @@ pub fn parsebytes(s: &str) -> ah::Result<u64> {
         // byte count w/o suffix.
         Ok(v)
     } else {
-        Err(ah::format_err!("Cannot parse byte count: {}", s))
+        Err(ah::format_err!("Cannot parse byte count: {s}"))
     }
 }
 
@@ -167,12 +169,12 @@ impl Hhmmss for Duration {
         let rem = secs % (60 * 60);
         let m = rem / 60;
         let s = rem % 60;
-        format!("{}{:02}h:{:02}m:{:02}s", lim, h, m, s)
+        format!("{lim}{h:02}h:{m:02}m:{s:02}s")
     }
 }
 
 /// Fold a byte vector into a smaller byte vector using XOR operation.
-/// If output_size is bigger than input.len(), the trailing bytes
+/// If `output_size` is bigger than `input.len()`, the trailing bytes
 /// will be filled with zeros.
 pub fn fold(input: &[u8], output_size: usize) -> Vec<u8> {
     let mut output = vec![0; output_size];

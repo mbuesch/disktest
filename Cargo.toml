@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 [workspace]
-members = [ "disktest", "disktest-lib" , "disktest-rawio"]
+members = [ "disktest", "disktest-lib" , "disktest-rawio" ]
 resolver = "3"
 
 [workspace.package]
@@ -10,9 +10,9 @@ homepage = "https://bues.ch/h/disktest"
 repository = "https://github.com/mbuesch/disktest"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-authors = ["Michael Büsch <m@bues.ch>"]
-categories = ["command-line-utilities", "filesystem", "hardware-support"]
-keywords = ["disk", "HDD", "SSD", "flash", "SD-card"]
+authors = [ "Michael Büsch <m@bues.ch>" ]
+categories = [ "command-line-utilities", "filesystem", "hardware-support" ]
+keywords = [ "disk", "HDD", "SSD", "flash", "SD-card" ]
 edition = "2024"
 rust-version = "1.85"
 version = "2.0.0"
@@ -20,7 +20,7 @@ version = "2.0.0"
 [workspace.dependencies]
 anyhow = "1"
 chrono = "0.4"
-clap = { version = "4", features = ["derive", "color", "wrap_help"] }
+clap = { version = "4", features = [ "derive", "color", "wrap_help" ] }
 libc = "0.2"
 movavg = "2"
 rand = "0.10"
@@ -33,6 +33,36 @@ winapi = "0.3"
 
 disktest-lib = { version = "2", path = "./disktest-lib" }
 disktest-rawio = { version = "2", path = "./disktest-rawio" }
+
+[workspace.lints.clippy]
+# Lints from `cargo` group
+cargo = "warn"
+multiple-crate-versions = { level = "allow", priority = 1 }
+
+# Lints from `pedantic` group
+#pedantic = "warn"
+default_trait_access = { level = "allow", priority = 1 }
+implicit_clone = { level = "allow", priority = 1 }
+manual_string_new = { level = "allow", priority = 1 }
+missing-errors-doc = { level = "allow", priority = 1 }
+missing-panics-doc = { level = "allow", priority = 1 }
+must_use_candidate = { level = "allow", priority = 1 }
+similar-names = { level = "allow", priority = 1 }
+struct-excessive-bools = { level = "allow", priority = 1 }
+unnecessary_wraps = { level = "allow", priority = 1 }
+
+# Lints from `restriction` group
+clone_on_ref_ptr = "warn"
+dbg_macro = "warn"
+mem_forget = "warn"
+precedence_bits = "warn"
+todo = "warn"
+try_err = "warn"
+undocumented_unsafe_blocks = "warn"
+unimplemented = "warn"
+unseparated_literal_suffix = "warn"
+unused_result_ok = "warn"
+unused_trait_names = "warn"
 
 [profile.dev]
 lto = "thin"

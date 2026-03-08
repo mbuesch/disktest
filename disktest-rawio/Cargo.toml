@@ -20,5 +20,5 @@ libc = { workspace = true }
 regex = { workspace = true }
 winapi = { workspace = true, features = ["std", "impl-default", "minwindef", "ntdef", "winerror", "errhandlingapi", "fileapi", "handleapi", "ioapiset", "winbase", "winnt", "winioctl"] }
 
-[lints.clippy]
-undocumented_unsafe_blocks = "warn"
+[lints]
+workspace = true

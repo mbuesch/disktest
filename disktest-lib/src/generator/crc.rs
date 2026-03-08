@@ -14,7 +14,7 @@ use crate::util::fold;
 use anyhow as ah;
 use std::sync::OnceLock;
 
-const CRC64_ECMA_POLY: u64 = 0xC96C5795D7870F42;
+const CRC64_ECMA_POLY: u64 = 0xC96C_5795_D787_0F42;
 static CRC64_ECMA_LUT: OnceLock<[u64; 256]> = OnceLock::new();
 
 /// Generate CRC lookup table.
@@ -36,6 +36,8 @@ fn crc64_gen_lut(p: u64) -> [u64; 256] {
 
 /// CRC64 step.
 #[inline(always)]
+#[allow(clippy::inline_always)]
+#[allow(clippy::cast_possible_truncation)]
 fn crc64(lut: &[u64; 256], mut crc: u64, data: &[u8]) -> u64 {
     for d in data {
         crc = lut[((crc as u8) ^ *d) as usize] ^ (crc >> 8);
@@ -132,15 +134,15 @@ mod tests {
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
             acc.rotate_left(i as u32) ^ (*x as u32)
         }
-        let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE * 3];
+        let mut buf = vec![0_u8; GeneratorCrc::BASE_SIZE * 3];
         a.next(&mut buf[0..GeneratorCrc::BASE_SIZE], 1);
-        assert_eq!(buf.iter().enumerate().fold(0, reduce), 2183862535);
+        assert_eq!(buf.iter().enumerate().fold(0, reduce), 2_183_862_535);
         a.next(&mut buf[0..GeneratorCrc::BASE_SIZE], 1);
-        assert_eq!(buf.iter().enumerate().fold(0, reduce), 2200729683);
+        assert_eq!(buf.iter().enumerate().fold(0, reduce), 2_200_729_683);
         a.next(&mut buf[0..GeneratorCrc::BASE_SIZE * 2], 2);
-        assert_eq!(buf.iter().enumerate().fold(0, reduce), 17260884);
+        assert_eq!(buf.iter().enumerate().fold(0, reduce), 17_260_884);
         a.next(&mut buf[0..GeneratorCrc::BASE_SIZE * 3], 3);
-        assert_eq!(buf.iter().enumerate().fold(0, reduce), 581162875);
+        assert_eq!(buf.iter().enumerate().fold(0, reduce), 581_162_875);
     }
 
     #[test]
@@ -150,10 +152,10 @@ mod tests {
         let mut res_a: Vec<Vec<u8>> = vec![];
         let mut res_b: Vec<Vec<u8>> = vec![];
         for _ in 0..2 {
-            let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE];
+            let mut buf = vec![0_u8; GeneratorCrc::BASE_SIZE];
             a.next(&mut buf, 1);
             res_a.push(buf);
-            let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE];
+            let mut buf = vec![0_u8; GeneratorCrc::BASE_SIZE];
             b.next(&mut buf, 1);
             res_b.push(buf);
         }
@@ -170,10 +172,10 @@ mod tests {
         let mut res_a: Vec<Vec<u8>> = vec![];
         let mut res_b: Vec<Vec<u8>> = vec![];
         for _ in 0..2 {
-            let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE];
+            let mut buf = vec![0_u8; GeneratorCrc::BASE_SIZE];
             a.next(&mut buf, 1);
             res_a.push(buf);
-            let mut buf = vec![0u8; GeneratorCrc::BASE_SIZE];
+            let mut buf = vec![0_u8; GeneratorCrc::BASE_SIZE];
             b.next(&mut buf, 1);
             res_b.push(buf);
         }
@@ -187,13 +189,13 @@ mod tests {
     fn test_concat_equal() {
         let mut a = GeneratorCrc::new(&[1, 2, 3]);
         let mut b = GeneratorCrc::new(&[1, 2, 3]);
-        let mut buf_a = vec![0u8; GeneratorCrc::BASE_SIZE * 2];
+        let mut buf_a = vec![0_u8; GeneratorCrc::BASE_SIZE * 2];
         a.next(&mut buf_a[0..GeneratorCrc::BASE_SIZE], 1);
         a.next(
             &mut buf_a[GeneratorCrc::BASE_SIZE..GeneratorCrc::BASE_SIZE * 2],
             1,
         );
-        let mut buf_b = vec![0u8; GeneratorCrc::BASE_SIZE * 2];
+        let mut buf_b = vec![0_u8; GeneratorCrc::BASE_SIZE * 2];
         b.next(&mut buf_b, 2);
         assert_eq!(buf_a, buf_b);
     }
@@ -203,9 +205,9 @@ mod tests {
         let mut a = GeneratorCrc::new(&[1, 2, 3]);
         let mut b = GeneratorCrc::new(&[1, 2, 3]);
         b.seek(GeneratorCrc::BASE_SIZE as u64 * 2).unwrap();
-        let mut bdata = vec![0u8; GeneratorCrc::BASE_SIZE];
+        let mut bdata = vec![0_u8; GeneratorCrc::BASE_SIZE];
         b.next(&mut bdata, 1);
-        let mut adata = vec![0u8; GeneratorCrc::BASE_SIZE];
+        let mut adata = vec![0_u8; GeneratorCrc::BASE_SIZE];
         a.next(&mut adata, 1);
         assert_ne!(adata, bdata);
         a.next(&mut adata, 1);
