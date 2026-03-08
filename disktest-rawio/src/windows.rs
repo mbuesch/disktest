@@ -14,7 +14,7 @@ use anyhow as ah;
 use std::{
     ffi::{CString, OsString},
     mem::size_of,
-    os::windows::ffi::OsStringExt,
+    os::windows::ffi::OsStringExt as _,
     path::{Path, PathBuf},
     ptr::null_mut,
 };
