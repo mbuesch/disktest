@@ -2,7 +2,7 @@
 
 [workspace]
 members = [ "disktest", "disktest-lib" , "disktest-rawio"]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 description = "Tester for Solid State Disks, Non-Volatile Memory Storage, Hard Disks, USB Sticks, SD-Cards, etc.."
@@ -13,7 +13,7 @@ readme = "README.md"
 authors = ["Michael Büsch <m@bues.ch>"]
 categories = ["command-line-utilities", "filesystem", "hardware-support"]
 keywords = ["disk", "HDD", "SSD", "flash", "SD-card"]
-edition = "2021"
+edition = "2024"
 rust-version = "1.85"
 version = "2.0.0"
 

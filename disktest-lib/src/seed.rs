@@ -9,8 +9,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 //
 
-use rand::distr::Alphanumeric;
 use rand::RngExt;
+use rand::distr::Alphanumeric;
 
 /// Generate a new alphanumeric truly random seed.
 ///

@@ -11,7 +11,7 @@
 
 use crate::disktest::DisktestQuiet;
 use std::collections::HashMap;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 
 pub struct BufCache {
     snd: HashMap<u32, Sender<Vec<u8>>>,

@@ -14,12 +14,12 @@
 mod args;
 
 use anyhow as ah;
-use args::{parse_args, Args};
+use args::{Args, parse_args};
 use chrono::prelude::*;
 use disktest_lib::{Disktest, DisktestFile, DisktestQuiet};
 use std::{
     env::args_os,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
 };
 
 /// Install abort signal handlers and return

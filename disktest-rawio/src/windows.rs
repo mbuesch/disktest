@@ -28,14 +28,14 @@ use winapi::{
     um::{
         errhandlingapi::GetLastError,
         fileapi::{
-            CreateFileA, FlushFileBuffers, ReadFile, SetEndOfFile, SetFilePointerEx, WriteFile,
-            OPEN_ALWAYS, OPEN_EXISTING,
+            CreateFileA, FlushFileBuffers, OPEN_ALWAYS, OPEN_EXISTING, ReadFile, SetEndOfFile,
+            SetFilePointerEx, WriteFile,
         },
         handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
         ioapiset::DeviceIoControl,
         winbase::{
-            FormatMessageW, FILE_BEGIN, FILE_FLAG_NO_BUFFERING, FORMAT_MESSAGE_FROM_SYSTEM,
-            FORMAT_MESSAGE_IGNORE_INSERTS,
+            FILE_BEGIN, FILE_FLAG_NO_BUFFERING, FORMAT_MESSAGE_FROM_SYSTEM,
+            FORMAT_MESSAGE_IGNORE_INSERTS, FormatMessageW,
         },
         winioctl::{
             DISK_GEOMETRY, FSCTL_LOCK_VOLUME, FSCTL_UNLOCK_VOLUME, IOCTL_DISK_GET_DRIVE_GEOMETRY,

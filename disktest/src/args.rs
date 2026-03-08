@@ -12,8 +12,8 @@
 use anyhow as ah;
 use clap::builder::ValueParser;
 use clap::error::ErrorKind::{DisplayHelp, DisplayVersion};
-use clap::{value_parser, Parser, ValueEnum};
-use disktest_lib::{gen_seed_string, parsebytes, Disktest, DisktestQuiet, DtStreamType};
+use clap::{Parser, ValueEnum, value_parser};
+use disktest_lib::{Disktest, DisktestQuiet, DtStreamType, gen_seed_string, parsebytes};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -289,7 +289,7 @@ fn parse_quiet(value: &str) -> Result<DisktestQuiet, String> {
             return Err(format!(
                 "Invalid quiet level '{}'. Allowed: 0, 1, 2, 3.",
                 value
-            ))
+            ));
         }
     };
     Ok(quiet)

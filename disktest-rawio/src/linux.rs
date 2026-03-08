@@ -11,9 +11,9 @@
 
 use super::{RawIoOsIntf, RawIoResult};
 use anyhow as ah;
-use libc::{c_int, off_t, POSIX_FADV_DONTNEED};
+use libc::{POSIX_FADV_DONTNEED, c_int, off_t};
 use std::{
-    fs::{metadata, File, OpenOptions},
+    fs::{File, OpenOptions, metadata},
     io::{Read, Seek, SeekFrom, Write},
     os::unix::{fs::MetadataExt as _, io::AsRawFd as _},
     path::{Path, PathBuf},

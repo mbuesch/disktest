@@ -10,15 +10,15 @@
 //
 
 use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
-use crate::util::{prettybytes, Hhmmss};
+use crate::util::{Hhmmss, prettybytes};
 use anyhow as ah;
 use chrono::prelude::*;
-use disktest_rawio::{RawIo, RawIoOsIntf, RawIoResult, DEFAULT_SECTOR_SIZE};
+use disktest_rawio::{DEFAULT_SECTOR_SIZE, RawIo, RawIoOsIntf, RawIoResult};
 use movavg::MovAvg;
 use std::cmp::min;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::available_parallelism;
 use std::time::Instant;
 
@@ -379,10 +379,12 @@ impl Disktest {
                 && self.quiet_level < DisktestQuiet::NoWarn
             {
                 #[cfg(target_os = "windows")]
-                eprintln!("WARNING: The desired byte count of {} is not a multiple of the sector size {}. \
-                           This might result in a write or read error at the very end.",
-                        prettybytes(max_bytes, true, true, true),
-                        prettybytes(*sector_size as u64, true, true, true));
+                eprintln!(
+                    "WARNING: The desired byte count of {} is not a multiple of the sector size {}. \
+                    This might result in a write or read error at the very end.",
+                    prettybytes(max_bytes, true, true, true),
+                    prettybytes(*sector_size as u64, true, true, true)
+                );
             }
         }
 
@@ -593,7 +595,7 @@ impl Disktest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generator::{GeneratorChaCha12, GeneratorChaCha20, GeneratorChaCha8, GeneratorCrc};
+    use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc};
     use std::fs::OpenOptions;
     use std::io::{Seek, SeekFrom, Write};
     use std::path::PathBuf;

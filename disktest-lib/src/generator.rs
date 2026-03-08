@@ -15,9 +15,9 @@ mod crc;
 use crate::util::prettybytes;
 use anyhow as ah;
 
+pub use crate::generator::chacha::GeneratorChaCha8;
 pub use crate::generator::chacha::GeneratorChaCha12;
 pub use crate::generator::chacha::GeneratorChaCha20;
-pub use crate::generator::chacha::GeneratorChaCha8;
 pub use crate::generator::crc::GeneratorCrc;
 
 pub trait NextRandom {

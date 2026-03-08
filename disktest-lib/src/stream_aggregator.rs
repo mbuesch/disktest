@@ -207,7 +207,7 @@ impl DtStreamAgg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generator::{GeneratorChaCha12, GeneratorChaCha20, GeneratorChaCha8, GeneratorCrc};
+    use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc};
 
     fn run_base_test(algorithm: DtStreamType, gen_base_size: usize, chunk_factor: usize) {
         println!("stream aggregator base test");
