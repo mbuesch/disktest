@@ -2,12 +2,9 @@
 
 [Homepage](https://bues.ch/h/disktest)
 
-[Git repository](https://bues.ch/cgit/disktest.git)
-
-[Github repository](https://github.com/mbuesch/disktest)
-
 [crates.io site](https://crates.io/crates/disktest)
 
+[Github repository](https://github.com/mbuesch/disktest)
 
 Disktest is a tool to check Solid State Disks, Non-Volatile Memory Storage, Hard Disks, USB sticks, SD cards or other storage media for errors.
 
@@ -70,7 +67,7 @@ On Windows disktest can write to any file on any mounted storage media or raw di
 
 If your storage media under test is drive E, then the following command would write a test file on drive E and verify it:
 
-```sh
+```cmd
 disktest --write --verify -j0 E:\testfile.img
 ```
 
@@ -78,13 +75,13 @@ But note that testing on the filesystem level, as shown above, does not test the
 It will omit the disk areas that the filesystem uses internally.
 Therefore, you may want to write to the raw disk E using the Windows raw drive notation, as follows:
 
-```sh
+```cmd
 disktest --write --verify -j0 \\.\E:
 ```
 
 or
 
-```sh
+```cmd
 disktest --write --verify -j0 \\.\PhysicalDrive2
 ```
 
@@ -97,7 +94,7 @@ Therefore, the `\\\\.\X:` (where X is the drive letter) notation is preferred.
 
 # Dependencies
 
-- [Rust 1.75.0](https://www.rust-lang.org/) or later.
+- [Rust 1.85.0](https://www.rust-lang.org/) or later.
 - Crate dependencies are automatically downloaded by Cargo.
 
 
@@ -176,6 +173,6 @@ If you want portable binaries, then you probably want to remove this optimizatio
 
 # License
 
-Copyright (c) 2020-2025 Michael Büsch <m@bues.ch> and contributors
+Copyright (c) 2020-2026 Michael Büsch <m@bues.ch> and contributors
 
 Licensed under the Apache License version 2.0 or the MIT license, at your option.

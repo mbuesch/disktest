@@ -20,6 +20,6 @@ crate for further information and documentation.
 
 # License
 
-Copyright (c) 2020-2025 Michael Büsch <m@bues.ch> and contributors
+Copyright (c) 2020-2026 Michael Büsch <m@bues.ch> and contributors
 
 Licensed under the Apache License version 2.0 or the MIT license, at your option.
