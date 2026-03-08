@@ -69,7 +69,7 @@ macro_rules! GeneratorChaCha {
                 }
 
                 let word_offset = byte_offset / 4;
-                self.rng.set_word_pos(word_offset as u128);
+                self.rng.set_word_pos(word_offset.into());
 
                 Ok(())
             }
@@ -82,7 +82,7 @@ macro_rules! GeneratorChaCha {
             #[test]
             fn test_cmp_result() {
                 fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
-                    acc.rotate_left(i as u32) ^ (*x as u32)
+                    acc.rotate_left(u32::try_from(i).unwrap()) ^ (u32::from(*x))
                 }
 
                 let mut a = $Generator::new(&[1, 2, 3]);

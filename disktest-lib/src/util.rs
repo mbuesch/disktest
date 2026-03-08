@@ -84,6 +84,7 @@ pub fn prettybytes(count: u64, binary: bool, decimal: bool, bytes: bool) -> Stri
 }
 
 #[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 fn try_one_parsebytes(s: &str, suffix: &str, factor: u64) -> ah::Result<u64> {
     let Some(s) = s.strip_suffix(suffix) else {
         return Err(ah::format_err!("Value suffix does not match."));
@@ -101,7 +102,8 @@ fn try_one_parsebytes(s: &str, suffix: &str, factor: u64) -> ah::Result<u64> {
         if value.log2() + factor.log2() >= 61.0 {
             return Err(ah::format_err!("Value float overflow."));
         }
-        Ok((value * factor).round() as u64)
+        let value = (value * factor).round().max(0.0);
+        Ok(value as u64)
     } else {
         Err(ah::format_err!("Value is neither integer nor float."))
     }

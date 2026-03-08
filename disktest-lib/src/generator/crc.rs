@@ -77,6 +77,7 @@ impl NextRandom for GeneratorCrc {
         GeneratorCrc::BASE_SIZE
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     fn next(&mut self, buf: &mut [u8], count: usize) {
         debug_assert!(buf.len() == GeneratorCrc::BASE_SIZE * count);
 
@@ -130,10 +131,10 @@ mod tests {
 
     #[test]
     fn test_cmp_result() {
-        let mut a = GeneratorCrc::new(&[1, 2, 3]);
         fn reduce(acc: u32, (i, x): (usize, &u8)) -> u32 {
-            acc.rotate_left(i as u32) ^ (*x as u32)
+            acc.rotate_left(u32::try_from(i).unwrap()) ^ (u32::from(*x))
         }
+        let mut a = GeneratorCrc::new(&[1, 2, 3]);
         let mut buf = vec![0_u8; GeneratorCrc::BASE_SIZE * 3];
         a.next(&mut buf[0..GeneratorCrc::BASE_SIZE], 1);
         assert_eq!(buf.iter().enumerate().fold(0, reduce), 2_183_862_535);

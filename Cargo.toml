@@ -40,7 +40,8 @@ cargo = "warn"
 multiple-crate-versions = { level = "allow", priority = 1 }
 
 # Lints from `pedantic` group
-#pedantic = "warn"
+pedantic = "warn"
+cast_precision_loss = { level = "allow", priority = 1 }
 default_trait_access = { level = "allow", priority = 1 }
 implicit_clone = { level = "allow", priority = 1 }
 manual_string_new = { level = "allow", priority = 1 }
@@ -49,6 +50,7 @@ missing-panics-doc = { level = "allow", priority = 1 }
 must_use_candidate = { level = "allow", priority = 1 }
 similar-names = { level = "allow", priority = 1 }
 struct-excessive-bools = { level = "allow", priority = 1 }
+too_many_lines = { level = "allow", priority = 1 }
 unnecessary_wraps = { level = "allow", priority = 1 }
 
 # Lints from `restriction` group

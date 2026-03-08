@@ -13,7 +13,7 @@ use crate::bufcache::BufCache;
 use crate::disktest::DisktestQuiet;
 use crate::stream::{DtStream, DtStreamChunk};
 use crate::util::prettybytes;
-use anyhow as ah;
+use anyhow::{self as ah, Context as _};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -43,7 +43,8 @@ impl Drop for DtStreamAggChunk {
             .data
             .take()
             .expect("DtStreamChunk data was None during drop!");
-        self.cache.borrow_mut().push(self.thread_id as u32, buf);
+        let thread_id: u32 = self.thread_id.try_into().expect("thread_id overflow");
+        self.cache.borrow_mut().push(thread_id, buf);
     }
 }
 
@@ -80,7 +81,7 @@ impl DtStreamAgg {
                 stype,
                 seed.to_vec(),
                 invert_pattern,
-                i as u32,
+                i.try_into().expect("num_threads overflow"),
                 round_id,
                 Rc::clone(&cache),
             );
@@ -98,12 +99,19 @@ impl DtStreamAgg {
     }
 
     fn calc_chunk_size(&self, sector_size: u32) -> ah::Result<(u64, u64)> {
-        let chunk_factor = self.get_default_chunk_factor() as u64;
-        let base_chunk_size = self.get_chunk_size() as u64;
+        let chunk_factor: u64 = self
+            .get_default_chunk_factor()
+            .try_into()
+            .context("chunk_factor overflow")?;
+        let base_chunk_size: u64 = self
+            .get_chunk_size()
+            .try_into()
+            .context("chunk_size overflow")?;
+        let sector_size: u64 = sector_size.into();
 
         let chunk_size = base_chunk_size * chunk_factor;
 
-        if chunk_size % sector_size as u64 != 0 {
+        if chunk_size % sector_size != 0 {
             return Err(ah::format_err!(
                 "The random number generator chunk size {chunk_size} \
                  is not a multiple of the disk sector size {sector_size}."
@@ -119,6 +127,10 @@ impl DtStreamAgg {
         sector_size: u32,
     ) -> ah::Result<DtStreamAggActivateResult> {
         let (chunk_size, chunk_factor) = self.calc_chunk_size(sector_size)?;
+        let num_threads: u64 = self
+            .num_threads
+            .try_into()
+            .context("num_threads overflow")?;
 
         // Calculate the stream index from the byte_offset.
         if byte_offset % chunk_size != 0 {
@@ -136,11 +148,13 @@ impl DtStreamAgg {
             byte_offset = good_offset;
         }
         let chunk_index = byte_offset / chunk_size;
-        self.current_index = (chunk_index % self.num_threads as u64) as usize;
+        self.current_index = (chunk_index % num_threads)
+            .try_into()
+            .context("current_index overflow")?;
 
         // Calculate the per stream byte offset and activate all streams.
         for (i, stream) in self.streams.iter_mut().enumerate() {
-            let iteration = chunk_index / self.num_threads as u64;
+            let iteration = chunk_index / num_threads;
 
             let thread_offset = if i < self.current_index {
                 (iteration + 1) * chunk_size
@@ -148,7 +162,10 @@ impl DtStreamAgg {
                 iteration * chunk_size
             };
 
-            stream.activate(thread_offset, chunk_factor as _)?;
+            stream.activate(
+                thread_offset,
+                chunk_factor.try_into().context("chunk_factor overflow")?,
+            )?;
         }
 
         self.is_active = true;
@@ -190,7 +207,10 @@ impl DtStreamAgg {
     }
 
     pub fn wait_chunk(&mut self) -> ah::Result<DtStreamAggChunk> {
-        assert!(self.is_active(), "wait_chunk() called, but stream aggregator is stopped.");
+        assert!(
+            self.is_active(),
+            "wait_chunk() called, but stream aggregator is stopped."
+        );
         loop {
             if let Some(chunk) = self.get_chunk()? {
                 break Ok(chunk);
@@ -205,6 +225,8 @@ mod tests {
     use super::*;
     use crate::generator::{GeneratorChaCha8, GeneratorChaCha12, GeneratorChaCha20, GeneratorCrc};
 
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
     fn run_base_test(algorithm: DtStreamType, gen_base_size: usize, chunk_factor: usize) {
         println!("stream aggregator base test");
         let num_threads = 2;

@@ -11,7 +11,7 @@
 
 use crate::stream_aggregator::{DtStreamAgg, DtStreamAggChunk};
 use crate::util::{Hhmmss as _, prettybytes};
-use anyhow as ah;
+use anyhow::{self as ah, Context as _};
 use chrono::prelude::*;
 use disktest_rawio::{DEFAULT_SECTOR_SIZE, RawIo, RawIoOsIntf as _, RawIoResult};
 use movavg::MovAvg;
@@ -294,15 +294,16 @@ impl Disktest {
                     let rate = if final_step {
                         let elapsed_ms = dur_elapsed.as_millis();
                         if elapsed_ms > 0 {
-                            Some(((abs_processed as u128 * 1000) / elapsed_ms) as u64)
+                            let rate = (u128::from(abs_processed) * 1000) / elapsed_ms;
+                            Some(u64::try_from(rate).unwrap_or(u64::MAX))
                         } else {
                             None
                         }
                     } else {
                         let rate_period_ms = (now - self.rate_count_start_time).as_millis();
                         if rate_period_ms > 0 {
-                            let rate = ((self.rate_count as u128 * 1000) / rate_period_ms) as u64;
-                            Some(self.rate_avg.feed(rate))
+                            let rate = (u128::from(self.rate_count) * 1000) / rate_period_ms;
+                            Some(self.rate_avg.feed(u64::try_from(rate).unwrap_or(u64::MAX)))
                         } else {
                             None
                         }
@@ -351,7 +352,7 @@ impl Disktest {
             let sector_str = if let Some(sector_size) = sector_size.as_ref() {
                 format!(
                     " ({} sectors)",
-                    prettybytes(*sector_size as _, true, false, false),
+                    prettybytes((*sector_size).into(), true, false, false),
                 )
             } else {
                 "".to_string()
@@ -375,7 +376,7 @@ impl Disktest {
 
         if let Some(sector_size) = sector_size.as_ref() {
             if max_bytes < u64::MAX
-                && max_bytes % *sector_size as u64 != 0
+                && max_bytes % u64::from(*sector_size) != 0
                 && self.quiet_level < DisktestQuiet::NoWarn
             {
                 #[cfg(target_os = "windows")]
@@ -383,7 +384,7 @@ impl Disktest {
                     "WARNING: The desired byte count of {} is not a multiple of the sector size {}. \
                     This might result in a write or read error at the very end.",
                     prettybytes(max_bytes, true, true, true),
-                    prettybytes(*sector_size as u64, true, true, true)
+                    prettybytes(u64::from(*sector_size), true, true, true)
                 );
             }
         }
@@ -434,7 +435,8 @@ impl Disktest {
         loop {
             // Get the next data chunk.
             let chunk = self.stream_agg.wait_chunk()?;
-            let write_len = min(write_chunk_size, bytes_left) as usize;
+            let this_chunk = min(write_chunk_size, bytes_left);
+            let write_len = usize::try_from(this_chunk).unwrap_or(usize::MAX);
 
             // Write the chunk to disk.
             match file.write(&chunk.get_data()[0..write_len]) {
@@ -529,10 +531,13 @@ impl Disktest {
         let mut bytes_left = max_bytes;
         let mut bytes_read = 0_u64;
 
-        let readbuf_len = self.init(&mut file, "Verifying", seek, max_bytes)? as usize;
+        let readbuf_len = self.init(&mut file, "Verifying", seek, max_bytes)?;
+        let readbuf_len =
+            usize::try_from(readbuf_len).context("Number of bytes overflows usize")?;
         let mut buffer = vec![0; readbuf_len];
         let mut read_count = 0;
-        let mut read_len = min(readbuf_len as u64, bytes_left) as usize;
+        let read_len = min(readbuf_len as u64, bytes_left);
+        let mut read_len = usize::try_from(read_len).context("Number of bytes overflows usize")?;
 
         loop {
             // Read the next chunk from disk.
@@ -552,15 +557,16 @@ impl Disktest {
                         }
 
                         // Account for the read bytes.
-                        bytes_read += read_count as u64;
-                        bytes_left -= read_count as u64;
+                        bytes_read += u64::try_from(read_count).context("u64 overflow")?;
+                        bytes_left -= u64::try_from(read_count).context("u64 overflow")?;
                         if bytes_left == 0 {
                             self.verify_finalize(&mut file, true, bytes_read)?;
                             break;
                         }
                         self.log("Verified ", read_count, bytes_read, false);
                         read_count = 0;
-                        read_len = min(readbuf_len as u64, bytes_left) as usize;
+                        read_len = usize::try_from(min(readbuf_len as u64, bytes_left))
+                            .context("Number of bytes overflows usize")?;
                     }
 
                     // End of the disk?

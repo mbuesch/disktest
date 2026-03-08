@@ -10,8 +10,8 @@
 //
 
 use super::{RawIoOsIntf, RawIoResult};
-use anyhow as ah;
-use libc::{POSIX_FADV_DONTNEED, c_int, off_t};
+use anyhow::{self as ah, Context as _};
+use libc::{POSIX_FADV_DONTNEED, c_int};
 use std::{
     fs::{File, OpenOptions, metadata},
     io::{Read as _, Seek as _, SeekFrom, Write as _},
@@ -77,7 +77,7 @@ impl RawIoLinux {
                 ));
             }
 
-            self.sector_size = Some(sector_size as u32);
+            self.sector_size = Some(sector_size.try_into().unwrap_or(0));
         } else {
             self.sector_size = None;
         }
@@ -157,8 +157,8 @@ impl RawIoOsIntf for RawIoLinux {
         let ret = unsafe {
             libc::posix_fadvise(
                 file.as_raw_fd(),
-                offset as off_t,
-                size as off_t,
+                offset.try_into().context("File offset overflows off_t")?,
+                size.try_into().context("File size overflows off_t")?,
                 POSIX_FADV_DONTNEED,
             )
         };
