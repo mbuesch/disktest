@@ -14,7 +14,7 @@ authors = ["Michael Büsch <m@bues.ch>"]
 categories = ["command-line-utilities", "filesystem", "hardware-support"]
 keywords = ["disk", "HDD", "SSD", "flash", "SD-card"]
 edition = "2021"
-rust-version = "1.75.0"
+rust-version = "1.85"
 version = "2.0.0"
 
 [workspace.dependencies]

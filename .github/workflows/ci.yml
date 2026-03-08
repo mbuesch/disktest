@@ -14,7 +14,7 @@ jobs:
       matrix:
         toolchain:
           - name: msrv
-            version: 1.75
+            version: 1.85
           - name: stable
             version: 1.94
         os:
