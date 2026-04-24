@@ -16,7 +16,9 @@ jobs:
           - name: msrv
             version: 1.85
           - name: stable
-            version: 1.94
+            version: stable
+          - name: nightly
+            version: nightly
         os:
           - name: linux
             version: ubuntu-latest
