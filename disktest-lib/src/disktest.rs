@@ -293,20 +293,14 @@ impl Disktest {
 
                     let rate = if final_step {
                         let elapsed_ms = dur_elapsed.as_millis();
-                        if elapsed_ms > 0 {
-                            let rate = (u128::from(abs_processed) * 1000) / elapsed_ms;
-                            Some(u64::try_from(rate).unwrap_or(u64::MAX))
-                        } else {
-                            None
-                        }
+                        (u128::from(abs_processed) * 1000)
+                            .checked_div(elapsed_ms)
+                            .map(|rate| u64::try_from(rate).unwrap_or(u64::MAX))
                     } else {
                         let rate_period_ms = (now - self.rate_count_start_time).as_millis();
-                        if rate_period_ms > 0 {
-                            let rate = (u128::from(self.rate_count) * 1000) / rate_period_ms;
-                            Some(self.rate_avg.feed(u64::try_from(rate).unwrap_or(u64::MAX)))
-                        } else {
-                            None
-                        }
+                        (u128::from(self.rate_count) * 1000)
+                            .checked_div(rate_period_ms)
+                            .map(|rate| self.rate_avg.feed(u64::try_from(rate).unwrap_or(u64::MAX)))
                     };
 
                     let rate_string = if let Some(rate) = rate {
