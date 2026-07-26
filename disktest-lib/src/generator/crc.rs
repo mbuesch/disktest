@@ -79,7 +79,7 @@ impl NextRandom for GeneratorCrc {
 
     #[allow(clippy::cast_possible_truncation)]
     fn next(&mut self, buf: &mut [u8], count: usize) {
-        debug_assert!(buf.len() == GeneratorCrc::BASE_SIZE * count);
+        debug_assert_eq!(buf.len(), GeneratorCrc::BASE_SIZE * count);
 
         let lut = CRC64_ECMA_LUT.get().unwrap();
 
