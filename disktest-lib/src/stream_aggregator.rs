@@ -333,11 +333,11 @@ mod tests {
             // Until offset the chunks must not be equal.
             let mut bchunk = b.wait_chunk().unwrap();
             for _ in 0..offset {
-                assert!(a.wait_chunk().unwrap().get_data() != bchunk.get_data());
+                assert_ne!(a.wait_chunk().unwrap().get_data(), bchunk.get_data());
             }
             // The rest must be equal.
             for _ in 0..20 {
-                assert!(a.wait_chunk().unwrap().get_data() == bchunk.get_data());
+                assert_eq!(a.wait_chunk().unwrap().get_data(), bchunk.get_data());
                 bchunk = b.wait_chunk().unwrap();
             }
         }

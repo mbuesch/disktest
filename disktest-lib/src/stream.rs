@@ -405,9 +405,9 @@ mod tests {
 
         let achunk = a.wait_chunk();
         let bchunk = b.wait_chunk();
-        assert!(achunk.data.as_ref().unwrap() != bchunk.data.as_ref().unwrap());
+        assert_ne!(achunk.data.as_ref().unwrap(), bchunk.data.as_ref().unwrap());
         let achunk = a.wait_chunk();
-        assert!(achunk.data.as_ref().unwrap() == bchunk.data.as_ref().unwrap());
+        assert_eq!(achunk.data.as_ref().unwrap(), bchunk.data.as_ref().unwrap());
     }
 
     fn run_invert_test(algorithm: DtStreamType) {
@@ -428,8 +428,8 @@ mod tests {
             .iter()
             .map(|x| x ^ 0xFF)
             .collect();
-        assert!(achunk.data.as_ref().unwrap() != bchunk.data.as_ref().unwrap());
-        assert!(achunk.data.as_ref().unwrap() == &inv_bchunk);
+        assert_ne!(achunk.data.as_ref().unwrap(), bchunk.data.as_ref().unwrap());
+        assert_eq!(achunk.data.as_ref().unwrap(), &inv_bchunk);
     }
 
     #[test]
