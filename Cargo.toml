@@ -37,7 +37,7 @@ disktest-rawio = { version = "2", path = "./disktest-rawio" }
 [workspace.lints.clippy]
 # Lints from `cargo` group
 cargo = "warn"
-multiple-crate-versions = { level = "allow", priority = 1 }
+multiple_crate_versions = { level = "allow", priority = 1 }
 
 # Lints from `pedantic` group
 pedantic = "warn"
@@ -45,11 +45,11 @@ cast_precision_loss = { level = "allow", priority = 1 }
 default_trait_access = { level = "allow", priority = 1 }
 implicit_clone = { level = "allow", priority = 1 }
 manual_string_new = { level = "allow", priority = 1 }
-missing-errors-doc = { level = "allow", priority = 1 }
-missing-panics-doc = { level = "allow", priority = 1 }
+missing_errors_doc = { level = "allow", priority = 1 }
+missing_panics_doc = { level = "allow", priority = 1 }
 must_use_candidate = { level = "allow", priority = 1 }
-similar-names = { level = "allow", priority = 1 }
-struct-excessive-bools = { level = "allow", priority = 1 }
+similar_names = { level = "allow", priority = 1 }
+struct_excessive_bools = { level = "allow", priority = 1 }
 too_many_lines = { level = "allow", priority = 1 }
 unnecessary_wraps = { level = "allow", priority = 1 }
 
