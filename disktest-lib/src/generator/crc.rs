@@ -61,7 +61,7 @@ impl GeneratorCrc {
 
     pub fn new(seed: &[u8]) -> GeneratorCrc {
         let _ = CRC64_ECMA_LUT.get_or_init(|| crc64_gen_lut(CRC64_ECMA_POLY));
-        assert!(!seed.is_empty());
+        assert_ne!(seed, []);
         let folded_seed = fold(seed, GeneratorCrc::FOLDED_SEED_SIZE)
             .try_into()
             .unwrap();
